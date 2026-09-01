@@ -37,13 +37,26 @@ public class EditMusicEntryModalScreen extends Screen {
         return false;
     }
 
+    private double getLayoutScale() {
+        int targetW = 460;
+        int targetH = 300;
+        if (this.width <= 0 || this.height <= 0) return 1.0;
+        double scaleX = (double) this.width / targetW;
+        double scaleY = (double) this.height / targetH;
+        return Math.min(1.0, Math.min(scaleX, scaleY));
+    }
+
     @Override
     protected void init() {
+        double scale = getLayoutScale();
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
         int panelWidth = 440;
         int panelHeight = 280;
 
-        int panelLeft = (this.width - panelWidth) / 2;
-        int panelTop = (this.height - panelHeight) / 2;
+        int panelLeft = (effWidth - panelWidth) / 2;
+        int panelTop = (effHeight - panelHeight) / 2;
 
         int currentY = panelTop + 32;
 
@@ -136,13 +149,58 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+            dragX /= scale;
+            dragY /= scale;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
+        return super.mouseScrolled(mouseX, mouseY, amount);
+    }
+
+    @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(guiGraphics);
+        double scale = getLayoutScale();
+        guiGraphics.pose().pushPose();
+        int scaledMouseX = mouseX;
+        int scaledMouseY = mouseY;
+        if (scale < 1.0) {
+            guiGraphics.pose().scale((float) scale, (float) scale, 1.0f);
+            scaledMouseX = (int) (mouseX / scale);
+            scaledMouseY = (int) (mouseY / scale);
+        }
+
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
+        guiGraphics.fill(0, 0, effWidth, effHeight, 0xBB000000);
 
         int panelWidth = 440;
         int panelHeight = 280;
-        int panelLeft = (this.width - panelWidth) / 2;
-        int panelTop = (this.height - panelHeight) / 2;
+        int panelLeft = (effWidth - panelWidth) / 2;
+        int panelTop = (effHeight - panelHeight) / 2;
 
         guiGraphics.fill(panelLeft, panelTop, panelLeft + panelWidth, panelTop + panelHeight, CYAN_BG);
         guiGraphics.fill(panelLeft, panelTop, panelLeft + panelWidth, panelTop + 1, CYAN_MAIN);
@@ -161,6 +219,12 @@ public class EditMusicEntryModalScreen extends Screen {
         currentY += 36;
         guiGraphics.drawString(this.font, "Description / Note:", panelLeft + 20, currentY, 0xFFAABBCC, false);
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        super.render(guiGraphics, scaledMouseX, scaledMouseY, partialTick);
+
+        if (typeDropdown != null) {
+            typeDropdown.renderOverlay(guiGraphics, scaledMouseX, scaledMouseY);
+        }
+
+        guiGraphics.pose().popPose();
     }
 }

@@ -30,12 +30,25 @@ public class RenameMusicSequenceModalScreen extends Screen {
         return false;
     }
 
+    private double getLayoutScale() {
+        int targetW = 360;
+        int targetH = 180;
+        if (this.width <= 0 || this.height <= 0) return 1.0;
+        double scaleX = (double) this.width / targetW;
+        double scaleY = (double) this.height / targetH;
+        return Math.min(1.0, Math.min(scaleX, scaleY));
+    }
+
     @Override
     protected void init() {
+        double scale = getLayoutScale();
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
         int panelWidth = 340;
         int panelHeight = 160;
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
+        int left = (effWidth - panelWidth) / 2;
+        int top = (effHeight - panelHeight) / 2;
 
         this.nameEditBox = new EditBox(this.font, left + 20, top + 56, panelWidth - 40, 20, Component.literal("New Name"));
         this.nameEditBox.setMaxLength(64);
@@ -71,13 +84,36 @@ public class RenameMusicSequenceModalScreen extends Screen {
     }
 
     @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
+        double scale = getLayoutScale();
+        graphics.pose().pushPose();
+        int scaledMouseX = mouseX;
+        int scaledMouseY = mouseY;
+        if (scale < 1.0) {
+            graphics.pose().scale((float) scale, (float) scale, 1.0f);
+            scaledMouseX = (int) (mouseX / scale);
+            scaledMouseY = (int) (mouseY / scale);
+        }
+
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
+        graphics.fill(0, 0, effWidth, effHeight, 0xBB000000);
 
         int panelWidth = 340;
         int panelHeight = 160;
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
+        int left = (effWidth - panelWidth) / 2;
+        int top = (effHeight - panelHeight) / 2;
 
         graphics.fill(left, top, left + panelWidth, top + panelHeight, CYAN_BG);
         graphics.fill(left, top, left + panelWidth, top + 1, CYAN_MAIN);
@@ -88,6 +124,7 @@ public class RenameMusicSequenceModalScreen extends Screen {
         graphics.drawString(this.font, "RENAME MUSIC SEQUENCE FILE", left + 16, top + 12, CYAN_MAIN, false);
         graphics.drawString(this.font, "Enter new file name for '" + currentFileName + "':", left + 20, top + 38, 0xFFAABBCC, false);
 
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, scaledMouseX, scaledMouseY, partialTick);
+        graphics.pose().popPose();
     }
 }

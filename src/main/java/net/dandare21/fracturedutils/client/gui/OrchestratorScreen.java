@@ -208,22 +208,35 @@ public class OrchestratorScreen extends Screen {
         return false;
     }
 
+    public double getLayoutScale() {
+        int targetW = 640;
+        int targetH = 360;
+        if (this.width <= 0 || this.height <= 0) return 1.0;
+        double scaleX = (double) this.width / targetW;
+        double scaleY = (double) this.height / targetH;
+        return Math.min(1.0, Math.min(scaleX, scaleY));
+    }
+
     @Override
     protected void init() {
         super.init();
 
+        double scale = getLayoutScale();
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
         this.leftPanelLeft = 12;
-        this.leftPanelWidth = Math.max(200, (int) (this.width * 0.32));
+        this.leftPanelWidth = Math.max(200, (int) (effWidth * 0.32));
         this.rightPanelLeft = leftPanelLeft + leftPanelWidth + 12;
-        this.rightPanelWidth = this.width - rightPanelLeft - 12;
+        this.rightPanelWidth = effWidth - rightPanelLeft - 12;
 
         this.mainTop = 42;
-        this.mainHeight = this.height - mainTop - 12;
+        this.mainHeight = effHeight - mainTop - 12;
 
         // Upper-Right Close "✕" Button
         int closeW = 20;
         int closeH = 20;
-        int closeX = this.width - closeW - 8;
+        int closeX = effWidth - closeW - 8;
         int closeY = 8;
         WaitingRoomScreen.CyberpunkCloseButton closeBtn = new WaitingRoomScreen.CyberpunkCloseButton(closeX, closeY, closeW, closeH, b -> this.onClose());
         closeBtn.setTooltip(Tooltip.create(Component.literal("Close UI")));
@@ -663,6 +676,11 @@ public class OrchestratorScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
         int sidebarTop = mainTop + 32;
         int sidebarBottom = mainTop + mainHeight - 75;
 
@@ -679,6 +697,11 @@ public class OrchestratorScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
         if (button == 0) {
             double maxScroll = getMaxSidebarScroll();
             int sidebarTop = mainTop + 32;
@@ -718,6 +741,13 @@ public class OrchestratorScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+            dragX /= scale;
+            dragY /= scale;
+        }
         if (this.isDraggingSidebarScrollbar) {
             double maxScroll = getMaxSidebarScroll();
             int scrollbarY = mainTop + 32;
@@ -745,23 +775,23 @@ public class OrchestratorScreen extends Screen {
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
-    private void drawGridOverlay(GuiGraphics guiGraphics) {
+    private void drawGridOverlay(GuiGraphics guiGraphics, int effW, int effH) {
         int gridSize = 32;
         long time = System.currentTimeMillis();
         int offsetX = (int) ((time / 40) % gridSize);
         int offsetY = (int) ((time / 40) % gridSize);
 
-        for (int x = -gridSize + offsetX; x < this.width + gridSize; x += gridSize) {
-            guiGraphics.fill(x, 0, x + 1, this.height, 0x1200E5FF);
+        for (int x = -gridSize + offsetX; x < effW + gridSize; x += gridSize) {
+            guiGraphics.fill(x, 0, x + 1, effH, 0x1200E5FF);
         }
-        for (int y = -gridSize + offsetY; y < this.height + gridSize; y += gridSize) {
-            guiGraphics.fill(0, y, this.width, y + 1, 0x1200E5FF);
+        for (int y = -gridSize + offsetY; y < effH + gridSize; y += gridSize) {
+            guiGraphics.fill(0, y, effW, y + 1, 0x1200E5FF);
         }
     }
 
-    private void drawTopHeader(GuiGraphics guiGraphics) {
-        guiGraphics.fill(0, 0, this.width, 32, 0xEE04080D);
-        guiGraphics.fill(0, 31, this.width, 32, CYAN_MAIN);
+    private void drawTopHeader(GuiGraphics guiGraphics, int effW) {
+        guiGraphics.fill(0, 0, effW, 32, 0xEE04080D);
+        guiGraphics.fill(0, 31, effW, 32, CYAN_MAIN);
 
         guiGraphics.fill(12, 10, 24, 26, CYAN_MAIN);
         guiGraphics.drawString(this.font, Component.literal("COMMAND ORCHESTRATOR").withStyle(ChatFormatting.BOLD), 30, 14, CYAN_MAIN, false);
@@ -782,7 +812,7 @@ public class OrchestratorScreen extends Screen {
 
         int badgeColor = isRunning ? 0xFF00FF55 : (isUnsaved ? 0xFFFFAA00 : CYAN_MAIN);
         int badgeWidth = this.font.width(badgeText) + 16;
-        int badgeX = (this.width - badgeWidth) / 2;
+        int badgeX = (effW - badgeWidth) / 2;
 
         drawBorderBox(guiGraphics, badgeX, 6, badgeWidth, 24, badgeColor, 0xFF050B10);
         guiGraphics.drawCenteredString(this.font, Component.literal(badgeText).withStyle(ChatFormatting.BOLD), badgeX + (badgeWidth / 2), 14, badgeColor);
@@ -800,14 +830,27 @@ public class OrchestratorScreen extends Screen {
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         updateSidebarButtons();
 
+        double scale = getLayoutScale();
+        guiGraphics.pose().pushPose();
+        int scaledMouseX = mouseX;
+        int scaledMouseY = mouseY;
+        if (scale < 1.0) {
+            guiGraphics.pose().scale((float) scale, (float) scale, 1.0f);
+            scaledMouseX = (int) (mouseX / scale);
+            scaledMouseY = (int) (mouseY / scale);
+        }
+
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
         // 1. Deep Black Background
-        guiGraphics.fill(0, 0, this.width, this.height, CYAN_BG);
+        guiGraphics.fill(0, 0, effWidth, effHeight, CYAN_BG);
 
         // 2. Wireframe Grid Overlay with Diagonal Scroll
-        drawGridOverlay(guiGraphics);
+        drawGridOverlay(guiGraphics, effWidth, effHeight);
 
         // 3. Top Header Bar
-        drawTopHeader(guiGraphics);
+        drawTopHeader(guiGraphics, effWidth);
 
         // 4. Left Panel Container & Header
         Map<String, String> activeMap = getActiveSequenceMap();
@@ -819,12 +862,12 @@ public class OrchestratorScreen extends Screen {
         // 5. Render Sidebar File Buttons (Clipped strictly within sidebar bounds)
         int sidebarTop = mainTop + 32;
         int sidebarBottom = mainTop + mainHeight - 75;
-        guiGraphics.enableScissor(leftPanelLeft + 4, sidebarTop, leftPanelLeft + leftPanelWidth - 4, sidebarBottom);
+        guiGraphics.enableScissor((int) ((leftPanelLeft + 4) * scale), (int) (sidebarTop * scale), (int) ((leftPanelLeft + leftPanelWidth - 4) * scale), (int) (sidebarBottom * scale));
         for (SidebarRow row : sidebarRows) {
             if (row.selectBtn.visible) {
-                row.selectBtn.render(guiGraphics, mouseX, mouseY, partialTick);
+                row.selectBtn.render(guiGraphics, scaledMouseX, scaledMouseY, partialTick);
                 for (CyberpunkButton cb : row.controlBtns) {
-                    cb.render(guiGraphics, mouseX, mouseY, partialTick);
+                    cb.render(guiGraphics, scaledMouseX, scaledMouseY, partialTick);
                 }
             }
         }
@@ -882,6 +925,7 @@ public class OrchestratorScreen extends Screen {
             }
         }
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        super.render(guiGraphics, scaledMouseX, scaledMouseY, partialTick);
+        guiGraphics.pose().popPose();
     }
 }

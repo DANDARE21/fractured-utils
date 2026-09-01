@@ -25,12 +25,25 @@ public class ConfirmDeleteMusicSequenceModalScreen extends Screen {
         return false;
     }
 
+    private double getLayoutScale() {
+        int targetW = 340;
+        int targetH = 170;
+        if (this.width <= 0 || this.height <= 0) return 1.0;
+        double scaleX = (double) this.width / targetW;
+        double scaleY = (double) this.height / targetH;
+        return Math.min(1.0, Math.min(scaleX, scaleY));
+    }
+
     @Override
     protected void init() {
+        double scale = getLayoutScale();
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
         int panelWidth = 320;
         int panelHeight = 150;
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
+        int left = (effWidth - panelWidth) / 2;
+        int top = (effHeight - panelHeight) / 2;
 
         int bottomY = top + panelHeight - 34;
 
@@ -50,17 +63,17 @@ public class ConfirmDeleteMusicSequenceModalScreen extends Screen {
         }, CYAN_MAIN, false));
     }
 
-    private void drawGridOverlay(GuiGraphics graphics) {
+    private void drawGridOverlay(GuiGraphics graphics, int effW, int effH) {
         int gridSize = 32;
         long time = System.currentTimeMillis();
         int offsetX = (int) ((time / 40) % gridSize);
         int offsetY = (int) ((time / 40) % gridSize);
 
-        for (int x = -gridSize + offsetX; x < this.width + gridSize; x += gridSize) {
-            graphics.fill(x, 0, x + 1, this.height, 0x1200E5FF);
+        for (int x = -gridSize + offsetX; x < effW + gridSize; x += gridSize) {
+            graphics.fill(x, 0, x + 1, effH, 0x1200E5FF);
         }
-        for (int y = -gridSize + offsetY; y < this.height + gridSize; y += gridSize) {
-            graphics.fill(0, y, this.width, y + 1, 0x1200E5FF);
+        for (int y = -gridSize + offsetY; y < effH + gridSize; y += gridSize) {
+            graphics.fill(0, y, effW, y + 1, 0x1200E5FF);
         }
     }
 
@@ -73,14 +86,37 @@ public class ConfirmDeleteMusicSequenceModalScreen extends Screen {
     }
 
     @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, CYAN_BG);
-        drawGridOverlay(graphics);
+        double scale = getLayoutScale();
+        graphics.pose().pushPose();
+        int scaledMouseX = mouseX;
+        int scaledMouseY = mouseY;
+        if (scale < 1.0) {
+            graphics.pose().scale((float) scale, (float) scale, 1.0f);
+            scaledMouseX = (int) (mouseX / scale);
+            scaledMouseY = (int) (mouseY / scale);
+        }
+
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
+        graphics.fill(0, 0, effWidth, effHeight, CYAN_BG);
+        drawGridOverlay(graphics, effWidth, effHeight);
 
         int panelWidth = 320;
         int panelHeight = 150;
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
+        int left = (effWidth - panelWidth) / 2;
+        int top = (effHeight - panelHeight) / 2;
 
         drawBorderBox(graphics, left, top, panelWidth, panelHeight, RED_DELETE, 0xEE060C12);
 
@@ -95,6 +131,7 @@ public class ConfirmDeleteMusicSequenceModalScreen extends Screen {
 
         graphics.drawCenteredString(this.font, Component.literal("⚠ THIS ACTION CANNOT BE UNDONE!"), left + (panelWidth / 2), top + 82, RED_DELETE);
 
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, scaledMouseX, scaledMouseY, partialTick);
+        graphics.pose().popPose();
     }
 }

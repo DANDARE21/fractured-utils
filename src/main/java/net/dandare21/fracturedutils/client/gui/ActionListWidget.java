@@ -116,14 +116,42 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        super.render(graphics, mouseX, mouseY, partialTick);
+        int listLeft = this.getRowLeft();
+        int listWidth = this.getRowWidth();
+        int listTop = this.topPos;
+        int listBottom = this.bottomPos;
+        int listHeight = listBottom - listTop;
+
+        double scale = screen.getLayoutScale();
+
+        // Enable scaled scissor region so item contents adapt to screen dimensions on all resolutions
+        graphics.enableScissor(
+            (int) Math.round(listLeft * scale),
+            (int) Math.round(listTop * scale),
+            (int) Math.round((listLeft + listWidth + 12) * scale),
+            (int) Math.round(listBottom * scale)
+        );
+
+        int count = this.children().size();
+        int scroll = (int) this.getScrollAmount();
+
+        for (int i = 0; i < count; i++) {
+            int itemTop = listTop + (i * this.itemHeight) - scroll;
+            int itemBottom = itemTop + this.itemHeight;
+
+            if (itemBottom >= listTop && itemTop <= listBottom) {
+                ActionEntry entry = this.children().get(i);
+                boolean isHovered = (mouseX >= listLeft && mouseX <= listLeft + listWidth && mouseY >= itemTop && mouseY < itemBottom && mouseY >= listTop && mouseY <= listBottom);
+                entry.render(graphics, i, itemTop, listLeft, listWidth, this.itemHeight, mouseX, mouseY, isHovered, partialTick);
+            }
+        }
+
+        graphics.disableScissor();
 
         // 1. Draw Drag-and-Drop Placement Line
         if (draggingIndex != -1 && targetDropIndex >= 0 && targetDropIndex <= this.children().size()) {
             int lineLeft = getRowLeft();
             int lineRight = lineLeft + getRowWidth();
-            int listTop = this.topPos;
-            double scroll = this.getScrollAmount();
             int lineY = (int) (listTop + targetDropIndex * this.itemHeight - scroll);
 
             if (lineY >= topPos - 2 && lineY <= bottomPos + 2) {
@@ -145,7 +173,7 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
             }
         }
 
-        // 2. Draw Floating Dragged Card Preview
+        // 2. Render Floating Preview Card while Dragging
         if (draggingIndex >= 0 && draggingIndex < children().size()) {
             ActionEntry draggedEntry = children().get(draggingIndex);
             OrchestratorAction action = draggedEntry.getAction();
@@ -177,16 +205,16 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
             int scrollbarX = this.getScrollbarPosition();
             int scrollbarY = this.topPos;
             int scrollbarW = 6;
-            int scrollbarH = this.bottomPos - this.topPos;
+            int scrollbarH = listHeight;
 
             // Track Background & Borders
             graphics.fill(scrollbarX, scrollbarY, scrollbarX + scrollbarW, scrollbarY + scrollbarH, 0x77050B10);
             graphics.fill(scrollbarX, scrollbarY, scrollbarX + 1, scrollbarY + scrollbarH, 0xAA00E5FF);
             graphics.fill(scrollbarX + scrollbarW - 1, scrollbarY, scrollbarX + scrollbarW, scrollbarY + scrollbarH, 0xAA00E5FF);
 
-            int totalContentH = this.getItemCount() * this.itemHeight;
+            int totalContentH = count * this.itemHeight;
             int thumbH = Math.max(16, (int) ((float) scrollbarH / totalContentH * scrollbarH));
-            int thumbY = scrollbarY + (int) ((float) this.getScrollAmount() / this.getMaxScroll() * (scrollbarH - thumbH));
+            int thumbY = scrollbarY + (int) ((float) scroll / this.getMaxScroll() * (scrollbarH - thumbH));
 
             // Bright Cyan Thumb
             graphics.fill(scrollbarX, thumbY, scrollbarX + scrollbarW, thumbY + thumbH, 0xFF00E5FF);
@@ -281,11 +309,19 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
             } else if (isInvalidCommand) {
                 typeText += " ⚠ INVALID SYNTAX";
             }
+
+            int maxTextW = width - 74;
+            if (font.width(typeText) > maxTextW) {
+                typeText = font.plainSubstrByWidth(typeText, Math.max(10, maxTextW - 6)) + "..";
+            }
             graphics.drawString(font, Component.literal(typeText), left + 22, top + 4, accentColor, false);
 
             // Detail Subtext
             String details = getDetailsText(action);
             if (!details.isEmpty()) {
+                if (font.width(details) > maxTextW) {
+                    details = font.plainSubstrByWidth(details, Math.max(10, maxTextW - 6)) + "..";
+                }
                 graphics.drawString(font, Component.literal(details), left + 22, top + 17, 0xFFAABBCC, false);
             }
 

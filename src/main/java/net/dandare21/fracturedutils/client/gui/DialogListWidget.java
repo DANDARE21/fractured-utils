@@ -117,17 +117,63 @@ public class DialogListWidget extends ObjectSelectionList<DialogListWidget.Dialo
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        super.render(graphics, mouseX, mouseY, partialTick);
+        int listLeft = this.getRowLeft();
+        int listWidth = this.getRowWidth();
+        int listTop = this.topPos;
+        int listBottom = this.bottomPos;
+        int listHeight = listBottom - listTop;
+
+        double scale = screen.getLayoutScale();
+
+        // Enable scaled scissor region so item contents adapt to screen dimensions on all resolutions
+        graphics.enableScissor(
+            (int) Math.round(listLeft * scale),
+            (int) Math.round(listTop * scale),
+            (int) Math.round((listLeft + listWidth + 12) * scale),
+            (int) Math.round(listBottom * scale)
+        );
+
+        int count = this.children().size();
+        int scroll = (int) this.getScrollAmount();
+
+        for (int i = 0; i < count; i++) {
+            int itemTop = listTop + (i * this.itemHeight) - scroll;
+            int itemBottom = itemTop + this.itemHeight;
+
+            if (itemBottom >= listTop && itemTop <= listBottom) {
+                DialogLineEntry entry = this.children().get(i);
+                boolean isHovered = (mouseX >= listLeft && mouseX <= listLeft + listWidth && mouseY >= itemTop && mouseY < itemBottom && mouseY >= listTop && mouseY <= listBottom);
+                entry.render(graphics, i, itemTop, listLeft, listWidth, this.itemHeight, mouseX, mouseY, isHovered, partialTick);
+            }
+        }
+
+        graphics.disableScissor();
+
+        // Cyberpunk Scrollbar Rendering
+        int maxScroll = getMaxScroll();
+        if (maxScroll > 0) {
+            int sbX = listLeft + listWidth + 4;
+            int sbY = listTop;
+            int sbW = 6;
+            int sbH = listHeight;
+
+            graphics.fill(sbX, sbY, sbX + sbW, sbY + sbH, 0x77050B10);
+            graphics.fill(sbX, sbY, sbX + 1, sbY + sbH, 0xAA00E5FF);
+            graphics.fill(sbX + sbW - 1, sbY, sbX + sbW, sbY + sbH, 0xAA00E5FF);
+
+            int totalH = count * this.itemHeight;
+            int thumbH = Math.max(12, (int) ((float) sbH / totalH * sbH));
+            int thumbY = sbY + (int) ((float) scroll / maxScroll * (sbH - thumbH));
+
+            graphics.fill(sbX, thumbY, sbX + sbW, thumbY + thumbH, 0xFF00E5FF);
+        }
 
         // Drop Indicator Line during Drag
         if (draggingIndex != -1 && targetDropIndex != -1) {
-            int rowLeft = getRowLeft();
-            int rowWidth = getRowWidth();
-            int dropY = this.topPos + (targetDropIndex * this.itemHeight) - (int) this.getScrollAmount();
-
-            if (dropY >= this.topPos && dropY <= this.bottomPos) {
-                graphics.fill(rowLeft - 4, dropY - 2, rowLeft + rowWidth + 4, dropY + 2, 0xFF00E5FF);
-                graphics.fill(rowLeft - 2, dropY - 1, rowLeft + rowWidth + 2, dropY + 1, 0xFFFFFFFF);
+            int dropY = listTop + (targetDropIndex * this.itemHeight) - scroll;
+            if (dropY >= listTop && dropY <= listBottom) {
+                graphics.fill(listLeft - 4, dropY - 2, listLeft + listWidth + 4, dropY + 2, 0xFF00E5FF);
+                graphics.fill(listLeft - 2, dropY - 1, listLeft + listWidth + 2, dropY + 1, 0xFFFFFFFF);
             }
         }
     }
@@ -185,14 +231,25 @@ public class DialogListWidget extends ObjectSelectionList<DialogListWidget.Dialo
             if (line.getLetterSound() != null && !line.getLetterSound().isEmpty()) {
                 headerText += " | 💬 " + line.getLetterSound();
             }
-            graphics.drawString(font, Component.literal(headerText), left + 22, top + 4, 0xAA00E5FF, false);
+
+            int maxHeaderWidth = width - 110;
+            if (font.width(headerText) > maxHeaderWidth) {
+                headerText = font.plainSubstrByWidth(headerText, Math.max(10, maxHeaderWidth - 6)) + "..";
+            }
+            graphics.drawString(font, Component.literal(headerText), left + 22, top + 5, 0xAA00E5FF, false);
 
             // Formatted Dialog Preview Text (Speaker + Message)
             Component formattedText = DialogFormatUtil.formatLine(line.getSpeaker(), line.getText());
-            graphics.drawString(font, formattedText, left + 22, top + 17, 0xFFFFFFFF, false);
+            String rawPreviewStr = formattedText.getString();
+            int maxPreviewWidth = width - 30;
+            if (font.width(rawPreviewStr) > maxPreviewWidth) {
+                rawPreviewStr = font.plainSubstrByWidth(rawPreviewStr, Math.max(10, maxPreviewWidth - 6)) + "..";
+                formattedText = Component.literal(rawPreviewStr);
+            }
+            graphics.drawString(font, formattedText, left + 22, top + 20, 0xFFFFFFFF, false);
 
             // Mini Action Buttons: Edit (✎), Duplicate (⧉), Up (▲), Down (▼), Delete (🗑)
-            int btnY = top + 6;
+            int btnY = top + 10;
             int btnH = 18;
             int btnW = 18;
 
@@ -234,7 +291,7 @@ public class DialogListWidget extends ObjectSelectionList<DialogListWidget.Dialo
                 int rowLeft = screen.getDialogListWidget().getRowLeft();
                 int rowWidth = screen.getDialogListWidget().getRowWidth();
                 int top = screen.getDialogListWidget().getTopPos() + index * screen.getDialogListWidget().getItemHeight() - (int) screen.getDialogListWidget().getScrollAmount();
-                int btnY = top + 6;
+                int btnY = top + 10;
                 int btnH = 18;
                 int btnW = 18;
 

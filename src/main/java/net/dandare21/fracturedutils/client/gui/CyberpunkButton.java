@@ -76,8 +76,14 @@ public class CyberpunkButton extends Button {
             guiGraphics.fill(this.getX() + this.width - 3, this.getY() + this.height - 5, this.getX() + this.width - 2, this.getY() + this.height - 2, borderColor);
         }
 
-        // Render Centered Text
+        // Render Centered Text with text width clamping
         Font font = Minecraft.getInstance().font;
-        guiGraphics.drawCenteredString(font, this.getMessage(), this.getX() + (this.width / 2), this.getY() + (this.height - 8) / 2, textColor);
+        Component msg = this.getMessage();
+        int maxW = this.width - 4;
+        if (maxW > 6 && font.width(msg) > maxW) {
+            String str = font.plainSubstrByWidth(msg.getString(), maxW - font.width("..")) + "..";
+            msg = Component.literal(str);
+        }
+        guiGraphics.drawCenteredString(font, msg, this.getX() + (this.width / 2), this.getY() + (this.height - 8) / 2, textColor);
     }
 }

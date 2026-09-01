@@ -42,10 +42,10 @@ public class ObjectiveHudOverlay {
         }
 
         Font font = mc.font;
-
+        int screenWidth = mc.getWindow().getGuiScaledWidth();
         int boxX = 14;
         int boxY = 14;
-        int boxW = 195;
+        int boxW = Math.min(195, screenWidth - 28);
         int paddingLeft = 10;
         int paddingRight = 8;
         int maxTextWidth = boxW - paddingLeft - paddingRight;

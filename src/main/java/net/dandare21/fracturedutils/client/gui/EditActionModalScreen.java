@@ -103,12 +103,25 @@ public class EditActionModalScreen extends Screen {
         return false;
     }
 
+    private double getLayoutScale() {
+        int targetW = 380;
+        int targetH = 300;
+        if (this.width <= 0 || this.height <= 0) return 1.0;
+        double scaleX = (double) this.width / targetW;
+        double scaleY = (double) this.height / targetH;
+        return Math.min(1.0, Math.min(scaleX, scaleY));
+    }
+
     @Override
     protected void init() {
+        double scale = getLayoutScale();
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
         int panelWidth = 360;
         int panelHeight = 285;
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
+        int left = (effWidth - panelWidth) / 2;
+        int top = (effHeight - panelHeight) / 2;
 
         if (action == null) {
             action = createActionForType(actionType);
@@ -736,6 +749,11 @@ public class EditActionModalScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
         if (musicSequenceDropdown != null && musicSequenceDropdown.isOpen()) {
             if (musicSequenceDropdown.mouseClicked(mouseX, mouseY, button)) return true;
         }
@@ -761,6 +779,13 @@ public class EditActionModalScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+            dragX /= scale;
+            dragY /= scale;
+        }
         if (musicSequenceDropdown != null && musicSequenceDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
         if (subActionTypeDropdown != null && subActionTypeDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
         if (unitDropdown != null && unitDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
@@ -771,6 +796,11 @@ public class EditActionModalScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
         if (musicSequenceDropdown != null && musicSequenceDropdown.mouseReleased(mouseX, mouseY, button)) return true;
         if (subActionTypeDropdown != null && subActionTypeDropdown.mouseReleased(mouseX, mouseY, button)) return true;
         if (unitDropdown != null && unitDropdown.mouseReleased(mouseX, mouseY, button)) return true;
@@ -800,13 +830,26 @@ public class EditActionModalScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, CYAN_BG);
+        double scale = getLayoutScale();
+        graphics.pose().pushPose();
+        int scaledMouseX = mouseX;
+        int scaledMouseY = mouseY;
+        if (scale < 1.0) {
+            graphics.pose().scale((float) scale, (float) scale, 1.0f);
+            scaledMouseX = (int) (mouseX / scale);
+            scaledMouseY = (int) (mouseY / scale);
+        }
+
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
+        graphics.fill(0, 0, effWidth, effHeight, CYAN_BG);
         drawGridOverlay(graphics);
 
         int panelWidth = 360;
         int panelHeight = 285;
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
+        int left = (effWidth - panelWidth) / 2;
+        int top = (effHeight - panelHeight) / 2;
 
         drawBorderBox(graphics, left, top, panelWidth, panelHeight, CYAN_MAIN, 0xEE060C12);
 
@@ -941,21 +984,23 @@ public class EditActionModalScreen extends Screen {
         }
 
         // Render base widgets (Buttons, EditBoxes, Dropdown base bars)
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, scaledMouseX, scaledMouseY, partialTick);
 
         // Render Command Suggestions popup anchored underneath input field
         if (this.commandSuggestions != null) {
             double offsetY = getSuggestionOffsetY();
             graphics.pose().pushPose();
             graphics.pose().translate(0, offsetY, 350);
-            this.commandSuggestions.render(graphics, mouseX, mouseY);
+            this.commandSuggestions.render(graphics, scaledMouseX, scaledMouseY);
             graphics.pose().popPose();
         }
 
         // Render Dropdown overlays on top of everything!
-        if (actionTypeDropdown != null) actionTypeDropdown.renderOverlay(graphics, mouseX, mouseY);
-        if (subActionTypeDropdown != null) subActionTypeDropdown.renderOverlay(graphics, mouseX, mouseY);
-        if (unitDropdown != null) unitDropdown.renderOverlay(graphics, mouseX, mouseY);
-        if (musicSequenceDropdown != null) musicSequenceDropdown.renderOverlay(graphics, mouseX, mouseY);
+        if (actionTypeDropdown != null) actionTypeDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
+        if (subActionTypeDropdown != null) subActionTypeDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
+        if (unitDropdown != null) unitDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
+        if (musicSequenceDropdown != null) musicSequenceDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
+
+        graphics.pose().popPose();
     }
 }

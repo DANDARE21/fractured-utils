@@ -177,22 +177,35 @@ public class DialogScreen extends Screen {
         return false;
     }
 
+    public double getLayoutScale() {
+        int targetW = 640;
+        int targetH = 360;
+        if (this.width <= 0 || this.height <= 0) return 1.0;
+        double scaleX = (double) this.width / targetW;
+        double scaleY = (double) this.height / targetH;
+        return Math.min(1.0, Math.min(scaleX, scaleY));
+    }
+
     @Override
     protected void init() {
         super.init();
 
+        double scale = getLayoutScale();
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
         this.leftPanelLeft = 12;
-        this.leftPanelWidth = Math.max(200, (int) (this.width * 0.32));
+        this.leftPanelWidth = Math.max(200, (int) (effWidth * 0.32));
         this.rightPanelLeft = leftPanelLeft + leftPanelWidth + 12;
-        this.rightPanelWidth = this.width - rightPanelLeft - 12;
+        this.rightPanelWidth = effWidth - rightPanelLeft - 12;
 
         this.mainTop = 42;
-        this.mainHeight = this.height - mainTop - 12;
+        this.mainHeight = effHeight - mainTop - 12;
 
         // Close UI Button "✕"
         int closeW = 20;
         int closeH = 20;
-        int closeX = this.width - closeW - 8;
+        int closeX = effWidth - closeW - 8;
         int closeY = 8;
         WaitingRoomScreen.CyberpunkCloseButton closeBtn = new WaitingRoomScreen.CyberpunkCloseButton(closeX, closeY, closeW, closeH, b -> this.onClose());
         closeBtn.setTooltip(Tooltip.create(Component.literal("Close UI")));
@@ -204,7 +217,7 @@ public class DialogScreen extends Screen {
         int listWidth = rightPanelWidth - 20;
         int listHeight = mainHeight - 75;
 
-        this.dialogListWidget = new DialogListWidget(this, this.minecraft, listWidth, listHeight, listTop, listTop + listHeight, 36);
+        this.dialogListWidget = new DialogListWidget(this, this.minecraft, listWidth, listHeight, listTop, listTop + listHeight, 44);
         this.dialogListWidget.setLeftPos(listLeft);
         this.dialogListWidget.updateEntries(currentLines);
         this.addRenderableWidget(this.dialogListWidget);
@@ -563,7 +576,34 @@ public class DialogScreen extends Screen {
     }
 
     @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+            dragX /= scale;
+            dragY /= scale;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
         if (mouseX >= leftPanelLeft && mouseX <= leftPanelLeft + leftPanelWidth && mouseY >= mainTop + 28 && mouseY <= mainTop + mainHeight - 35) {
             Map<String, String> activeMap = getActiveSequenceMap();
             int sidebarContentHeight = activeMap.size() * 26;
@@ -577,12 +617,25 @@ public class DialogScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        double scale = getLayoutScale();
+        guiGraphics.pose().pushPose();
+        int scaledMouseX = mouseX;
+        int scaledMouseY = mouseY;
+        if (scale < 1.0) {
+            guiGraphics.pose().scale((float) scale, (float) scale, 1.0f);
+            scaledMouseX = (int) (mouseX / scale);
+            scaledMouseY = (int) (mouseY / scale);
+        }
+
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
         // Dark Cyberpunk Fullscreen Overlay
-        guiGraphics.fill(0, 0, this.width, this.height, 0xEE030609);
+        guiGraphics.fill(0, 0, effWidth, effHeight, 0xEE030609);
 
         // Header Title Bar
-        guiGraphics.fill(0, 0, this.width, 34, CYAN_BG);
-        guiGraphics.fill(0, 33, this.width, 34, CYAN_MAIN);
+        guiGraphics.fill(0, 0, effWidth, 34, CYAN_BG);
+        guiGraphics.fill(0, 33, effWidth, 34, CYAN_MAIN);
         guiGraphics.drawString(this.font, Component.literal("DIALOG ORCHESTRATOR").withStyle(ChatFormatting.BOLD), 16, 11, CYAN_MAIN);
 
         // Left Panel (Sequence File List Sidebar)
@@ -619,6 +672,7 @@ public class DialogScreen extends Screen {
             }
         }
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        super.render(guiGraphics, scaledMouseX, scaledMouseY, partialTick);
+        guiGraphics.pose().popPose();
     }
 }

@@ -163,8 +163,22 @@ public class CyberpunkDropdown<T> extends AbstractWidget {
         return this.width;
     }
 
+    public int getEffectiveMaxVisibleItems() {
+        int maxVis = maxVisibleItems;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getWindow() != null) {
+            int screenH = mc.getWindow().getGuiScaledHeight();
+            int availableH = screenH - (this.getY() + this.height + 8);
+            if (availableH > 0) {
+                int maxPossible = Math.max(1, availableH / itemHeight);
+                maxVis = Math.min(maxVis, maxPossible);
+            }
+        }
+        return Math.max(1, maxVis);
+    }
+
     public int getVisibleItemCount() {
-        return Math.min(entries.size(), maxVisibleItems);
+        return Math.min(entries.size(), getEffectiveMaxVisibleItems());
     }
 
     public int getMenuHeight() {
@@ -172,7 +186,7 @@ public class CyberpunkDropdown<T> extends AbstractWidget {
     }
 
     public int getMaxScroll() {
-        return Math.max(0, entries.size() - maxVisibleItems);
+        return Math.max(0, entries.size() - getEffectiveMaxVisibleItems());
     }
 
     public boolean isMouseOverHeader(double mouseX, double mouseY) {
@@ -201,45 +215,46 @@ public class CyberpunkDropdown<T> extends AbstractWidget {
         }
 
         // 2. Check menu item or scrollbar click when open
-        if (isOpen && isMouseOverMenu(mouseX, mouseY)) {
-            int mx = getMenuX();
-            int my = getMenuY() + 2;
-            int mw = getMenuWidth();
-            int visibleCount = getVisibleItemCount();
-            boolean hasScrollbar = getMaxScroll() > 0;
-            int scrollbarW = hasScrollbar ? 6 : 0;
-            int listW = mw - scrollbarW - 4;
+        if (isOpen) {
+            if (isMouseOverMenu(mouseX, mouseY)) {
+                int mx = getMenuX();
+                int my = getMenuY() + 2;
+                int mw = getMenuWidth();
+                int visibleCount = getVisibleItemCount();
+                boolean hasScrollbar = getMaxScroll() > 0;
+                int scrollbarW = hasScrollbar ? 6 : 0;
+                int listW = mw - scrollbarW - 4;
 
-            // Check scrollbar drag start
-            if (hasScrollbar && mouseX >= mx + mw - scrollbarW - 4 && mouseX <= mx + mw) {
-                this.isDraggingScrollbar = true;
-                this.dragOffsetY = mouseY;
+                // Check scrollbar drag start
+                if (hasScrollbar && mouseX >= mx + mw - scrollbarW - 4 && mouseX <= mx + mw) {
+                    this.isDraggingScrollbar = true;
+                    this.dragOffsetY = mouseY;
+                    return true;
+                }
+
+                // Check option item click
+                for (int i = 0; i < visibleCount; i++) {
+                    int itemIndex = scrollOffset + i;
+                    if (itemIndex >= entries.size()) break;
+
+                    int itemY = my + i * itemHeight;
+                    if (mouseY >= itemY && mouseY < itemY + itemHeight && mouseX >= mx + 2 && mouseX <= mx + 2 + listW) {
+                        DropdownEntry<T> clicked = entries.get(itemIndex);
+                        this.selectedEntry = clicked;
+                        this.playDownSound(Minecraft.getInstance().getSoundManager());
+                        this.setOpen(false);
+                        if (onSelect != null) {
+                            onSelect.accept(clicked);
+                        }
+                        return true;
+                    }
+                }
                 return true;
             }
 
-            // Check option item click
-            for (int i = 0; i < visibleCount; i++) {
-                int itemIndex = scrollOffset + i;
-                if (itemIndex >= entries.size()) break;
-
-                int itemY = my + i * itemHeight;
-                if (mouseY >= itemY && mouseY < itemY + itemHeight && mouseX >= mx + 2 && mouseX <= mx + 2 + listW) {
-                    DropdownEntry<T> clicked = entries.get(itemIndex);
-                    this.selectedEntry = clicked;
-                    this.playDownSound(Minecraft.getInstance().getSoundManager());
-                    this.setOpen(false);
-                    if (onSelect != null) {
-                        onSelect.accept(clicked);
-                    }
-                    return true;
-                }
-            }
-            return true;
-        }
-
-        // 3. Click outside closes menu
-        if (isOpen) {
+            // 3. Click outside closes menu and consumes event to block background widgets
             this.setOpen(false);
+            return true;
         }
 
         return false;
@@ -247,9 +262,9 @@ public class CyberpunkDropdown<T> extends AbstractWidget {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
-        if (isOpen && (isMouseOverMenu(mouseX, mouseY) || isMouseOverHeader(mouseX, mouseY))) {
+        if (isOpen) {
             int maxScroll = getMaxScroll();
-            if (maxScroll > 0) {
+            if (maxScroll > 0 && (isMouseOverMenu(mouseX, mouseY) || isMouseOverHeader(mouseX, mouseY))) {
                 if (amount > 0) {
                     this.scrollOffset = Math.max(0, this.scrollOffset - 1);
                 } else if (amount < 0) {

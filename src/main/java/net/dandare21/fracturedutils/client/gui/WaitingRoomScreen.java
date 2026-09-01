@@ -62,17 +62,30 @@ public class WaitingRoomScreen extends Screen {
         }
     }
 
+    private double getLayoutScale() {
+        int targetW = 640;
+        int targetH = 360;
+        if (this.width <= 0 || this.height <= 0) return 1.0;
+        double scaleX = (double) this.width / targetW;
+        double scaleY = (double) this.height / targetH;
+        return Math.min(1.0, Math.min(scaleX, scaleY));
+    }
+
     @Override
     protected void init() {
         super.init();
 
+        double scale = getLayoutScale();
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
         int leftPanelLeft = 12;
-        int leftPanelWidth = (int) (this.width * 0.71) - 12;
+        int leftPanelWidth = (int) (effWidth * 0.71) - 12;
         int rightPanelLeft = leftPanelLeft + leftPanelWidth + 12;
-        int rightPanelWidth = this.width - rightPanelLeft - 12;
+        int rightPanelWidth = effWidth - rightPanelLeft - 12;
 
         int mainTop = 42;
-        int mainHeight = this.height - mainTop - 12;
+        int mainHeight = effHeight - mainTop - 12;
         int bottomY = mainTop + mainHeight - 60;
 
         int buttonWidth = 130;
@@ -90,7 +103,7 @@ public class WaitingRoomScreen extends Screen {
         if (isOp()) {
             int closeW = 20;
             int closeH = 20;
-            int closeX = this.width - closeW - 8;
+            int closeX = effWidth - closeW - 8;
             int closeY = 8;
 
             this.addRenderableWidget(new CyberpunkCloseButton(
@@ -153,32 +166,46 @@ public class WaitingRoomScreen extends Screen {
             return;
         }
 
+        double scale = getLayoutScale();
+        guiGraphics.pose().pushPose();
+        int scaledMouseX = mouseX;
+        int scaledMouseY = mouseY;
+        if (scale < 1.0) {
+            guiGraphics.pose().scale((float) scale, (float) scale, 1.0f);
+            scaledMouseX = (int) (mouseX / scale);
+            scaledMouseY = (int) (mouseY / scale);
+        }
+
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
         // Deep Black Background
-        guiGraphics.fill(0, 0, this.width, this.height, CYAN_BG);
+        guiGraphics.fill(0, 0, effWidth, effHeight, CYAN_BG);
 
         // Cyberpunk Wireframe Grid Overlay with Diagonal Scroll
-        drawGridOverlay(guiGraphics);
+        drawGridOverlay(guiGraphics, effWidth, effHeight);
 
         // Top Header Bar
-        drawTopHeader(guiGraphics);
+        drawTopHeader(guiGraphics, effWidth);
 
         // Panel Layout Dimensions
         int leftPanelLeft = 12;
-        int leftPanelWidth = (int) (this.width * 0.71) - 12;
+        int leftPanelWidth = (int) (effWidth * 0.71) - 12;
         int rightPanelLeft = leftPanelLeft + leftPanelWidth + 12;
-        int rightPanelWidth = this.width - rightPanelLeft - 12;
+        int rightPanelWidth = effWidth - rightPanelLeft - 12;
 
         int mainTop = 42;
-        int mainHeight = this.height - mainTop - 12;
+        int mainHeight = effHeight - mainTop - 12;
 
         // Render Panels
-        drawLeftPanel(guiGraphics, leftPanelLeft, mainTop, leftPanelWidth, mainHeight);
-        drawRightPanel(guiGraphics, rightPanelLeft, mainTop, rightPanelWidth, mainHeight);
+        drawLeftPanel(guiGraphics, leftPanelLeft, mainTop, leftPanelWidth, mainHeight, scale);
+        drawRightPanel(guiGraphics, rightPanelLeft, mainTop, rightPanelWidth, mainHeight, scale);
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        super.render(guiGraphics, scaledMouseX, scaledMouseY, partialTick);
+        guiGraphics.pose().popPose();
     }
 
-    private void drawGridOverlay(GuiGraphics guiGraphics) {
+    private void drawGridOverlay(GuiGraphics guiGraphics, int effW, int effH) {
         int gridSize = 32;
         int gridColor = 0x1200E5FF;
 
@@ -186,18 +213,18 @@ public class WaitingRoomScreen extends Screen {
         int offsetX = (int) ((time / 40) % gridSize);
         int offsetY = (int) ((time / 40) % gridSize);
 
-        for (int x = -gridSize + offsetX; x < this.width + gridSize; x += gridSize) {
-            guiGraphics.fill(x, 0, x + 1, this.height, gridColor);
+        for (int x = -gridSize + offsetX; x < effW + gridSize; x += gridSize) {
+            guiGraphics.fill(x, 0, x + 1, effH, gridColor);
         }
-        for (int y = -gridSize + offsetY; y < this.height + gridSize; y += gridSize) {
-            guiGraphics.fill(0, y, this.width, y + 1, gridColor);
+        for (int y = -gridSize + offsetY; y < effH + gridSize; y += gridSize) {
+            guiGraphics.fill(0, y, effW, y + 1, gridColor);
         }
     }
 
-    private void drawTopHeader(GuiGraphics guiGraphics) {
+    private void drawTopHeader(GuiGraphics guiGraphics, int effW) {
         // Top Header Container
-        guiGraphics.fill(0, 0, this.width, 36, 0xEE060C12);
-        guiGraphics.fill(0, 35, this.width, 36, CYAN_MAIN);
+        guiGraphics.fill(0, 0, effW, 36, 0xEE060C12);
+        guiGraphics.fill(0, 35, effW, 36, CYAN_MAIN);
 
         // Event Title (Top Left)
         String eventTitle = ClientWaitingRoomData.getRoomTitle().toUpperCase();
@@ -227,12 +254,12 @@ public class WaitingRoomScreen extends Screen {
         }
 
         int timerBoxWidth = 90;
-        int timerBoxX = (this.width - timerBoxWidth) / 2;
+        int timerBoxX = (effW - timerBoxWidth) / 2;
         drawBorderBox(guiGraphics, timerBoxX, 6, timerBoxWidth, 24, timerColor, 0xFF050B10);
         guiGraphics.drawCenteredString(this.font, Component.literal(timeStr).withStyle(ChatFormatting.BOLD), timerBoxX + (timerBoxWidth / 2), 14, timerColor);
     }
 
-    private void drawLeftPanel(GuiGraphics guiGraphics, int x, int y, int width, int height) {
+    private void drawLeftPanel(GuiGraphics guiGraphics, int x, int y, int width, int height, double scale) {
         // More transparent panel background so diagonal grid is clearly visible
         drawBorderBox(guiGraphics, x, y, width, height, CYAN_MAIN, 0x7708121B);
 
@@ -298,7 +325,7 @@ public class WaitingRoomScreen extends Screen {
                     x + (width / 2), gridTop + 20, 0xFF888888);
         } else {
             // Enable Scissor for clipping scrolled elements
-            guiGraphics.enableScissor(x + 12, gridTop, x + 12 + gridWidth, gridBottom);
+            guiGraphics.enableScissor((int) ((x + 12) * scale), (int) (gridTop * scale), (int) ((x + 12 + gridWidth) * scale), (int) (gridBottom * scale));
 
             for (int i = 0; i < connectedPlayers.size(); i++) {
                 PlayerInfo playerInfo = connectedPlayers.get(i);
@@ -424,13 +451,21 @@ public class WaitingRoomScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
         int leftPanelLeft = 12;
-        int leftPanelWidth = (int) (this.width * 0.71) - 12;
+        int leftPanelWidth = (int) (effWidth * 0.71) - 12;
         int rightPanelLeft = leftPanelLeft + leftPanelWidth + 12;
-        int rightPanelWidth = this.width - rightPanelLeft - 12;
+        int rightPanelWidth = effWidth - rightPanelLeft - 12;
 
         int mainTop = 42;
-        int mainHeight = this.height - mainTop - 12;
+        int mainHeight = effHeight - mainTop - 12;
         int gridTop = mainTop + 38;
         int gridBottom = mainTop + mainHeight - 70;
 
@@ -456,11 +491,19 @@ public class WaitingRoomScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
         if (button == 0) {
+            int effWidth = (int) (this.width / scale);
+            int effHeight = (int) (this.height / scale);
+
             int leftPanelLeft = 12;
-            int leftPanelWidth = (int) (this.width * 0.71) - 12;
+            int leftPanelWidth = (int) (effWidth * 0.71) - 12;
             int mainTop = 42;
-            int mainHeight = this.height - mainTop - 12;
+            int mainHeight = effHeight - mainTop - 12;
             int gridTop = mainTop + 38;
             int gridBottom = mainTop + mainHeight - 70;
             int gridHeight = gridBottom - gridTop;
@@ -497,11 +540,21 @@ public class WaitingRoomScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+            dragX /= scale;
+            dragY /= scale;
+        }
         if (this.isDraggingScrollbar && button == 0) {
+            int effWidth = (int) (this.width / scale);
+            int effHeight = (int) (this.height / scale);
+
             int leftPanelLeft = 12;
-            int leftPanelWidth = (int) (this.width * 0.71) - 12;
+            int leftPanelWidth = (int) (effWidth * 0.71) - 12;
             int mainTop = 42;
-            int mainHeight = this.height - mainTop - 12;
+            int mainHeight = effHeight - mainTop - 12;
             int gridTop = mainTop + 38;
             int gridBottom = mainTop + mainHeight - 70;
             int gridHeight = gridBottom - gridTop;
@@ -615,7 +668,7 @@ public class WaitingRoomScreen extends Screen {
         guiGraphics.drawString(this.font, displayStatus, textX, statusY, statusColor, false);
     }
 
-    private void drawRightPanel(GuiGraphics guiGraphics, int x, int y, int width, int height) {
+    private void drawRightPanel(GuiGraphics guiGraphics, int x, int y, int width, int height, double scale) {
         // Semi-transparent panel background so diagonal grid shows through
         drawBorderBox(guiGraphics, x, y, width, height, CYAN_MAIN, 0x7708121B);
 
@@ -663,7 +716,7 @@ public class WaitingRoomScreen extends Screen {
                     Component.literal("No chat messages yet...").withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC),
                     x + 10 + (chatBoxWidth / 2), chatBoxTop + 15, 0xFF778899);
         } else {
-            guiGraphics.enableScissor(x + 12, chatBoxTop + 4, x + 10 + chatBoxWidth - 14, chatBoxBottom - 4);
+            guiGraphics.enableScissor((int) ((x + 12) * scale), (int) ((chatBoxTop + 4) * scale), (int) ((x + 10 + chatBoxWidth - 14) * scale), (int) ((chatBoxBottom - 4) * scale));
 
             int startY = chatBoxTop + 6;
             for (int i = 0; i < allWrappedLines.size(); i++) {

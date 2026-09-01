@@ -172,6 +172,13 @@ public class CameraSetupScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+            dragX /= scale;
+            dragY /= scale;
+        }
         if (super.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
             return true;
         }
@@ -333,18 +340,50 @@ public class CameraSetupScreen extends Screen {
         line.setCameraFov(this.cameraFov);
     }
 
+    private double getLayoutScale() {
+        int targetW = 360;
+        int targetH = 240;
+        if (this.width <= 0 || this.height <= 0) return 1.0;
+        double scaleX = (double) this.width / targetW;
+        double scaleY = (double) this.height / targetH;
+        return Math.min(1.0, Math.min(scaleX, scaleY));
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        double scale = getLayoutScale();
+        guiGraphics.pose().pushPose();
+        int scaledMouseX = mouseX;
+        int scaledMouseY = mouseY;
+        if (scale < 1.0) {
+            guiGraphics.pose().scale((float) scale, (float) scale, 1.0f);
+            scaledMouseX = (int) (mouseX / scale);
+            scaledMouseY = (int) (mouseY / scale);
+        }
+
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
         int panelWidth = 340;
         int panelHeight = 210;
-        int panelLeft = (this.width - panelWidth) / 2;
-        int panelTop = this.height - panelHeight - 15;
+        int panelLeft = (effWidth - panelWidth) / 2;
+        int panelTop = effHeight - panelHeight - 15;
 
         // Dark transparent panel overlay at bottom
         guiGraphics.fill(panelLeft, panelTop, panelLeft + panelWidth, panelTop + panelHeight, CYAN_BG);
         guiGraphics.fill(panelLeft, panelTop, panelLeft + panelWidth, panelTop + 2, CYAN_MAIN);
         guiGraphics.fill(panelLeft, panelTop + panelHeight - 2, panelLeft + panelWidth, panelTop + panelHeight, CYAN_MAIN);
-        guiGraphics.fill(panelLeft, panelTop, panelLeft + 2, panelTop + panelHeight, CYAN_MAIN);
+        guiGraphics.fill(panelLeft, panelTop + 2, panelLeft + 2, panelTop + panelHeight, CYAN_MAIN);
         guiGraphics.fill(panelLeft + panelWidth - 2, panelTop, panelLeft + panelWidth, panelTop + panelHeight, CYAN_MAIN);
 
         guiGraphics.drawString(this.font, Component.literal("CAMERA SETUP & LIVE PREVIEW").withStyle(net.minecraft.ChatFormatting.BOLD), panelLeft + 15, panelTop + 8, CYAN_MAIN);
@@ -359,13 +398,14 @@ public class CameraSetupScreen extends Screen {
         // Top Banner & Control Instructions Indicators
         String bannerText = this.useCamera ? "LIVE CAMERA PREVIEW ACTIVE" : "CAMERA OVERRIDE DISABLED";
         int bannerColor = this.useCamera ? 0xFF00E5FF : 0xFFFF3355;
-        guiGraphics.drawCenteredString(this.font, Component.literal(bannerText).withStyle(net.minecraft.ChatFormatting.BOLD), this.width / 2, 12, bannerColor);
+        guiGraphics.drawCenteredString(this.font, Component.literal(bannerText).withStyle(net.minecraft.ChatFormatting.BOLD), effWidth / 2, 12, bannerColor);
 
         if (this.useCamera) {
-            guiGraphics.drawCenteredString(this.font, Component.literal("💡 Right-Click Drag: Rotate | WASD / Space / Ctrl: Camera-Space Movement | Sprint Key: Fast"), this.width / 2, 26, 0xFFFFEE55);
+            guiGraphics.drawCenteredString(this.font, Component.literal("💡 Right-Click Drag: Rotate | WASD / Space / Ctrl: Camera-Space Movement | Sprint Key: Fast"), effWidth / 2, 26, 0xFFFFEE55);
         }
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        super.render(guiGraphics, scaledMouseX, scaledMouseY, partialTick);
+        guiGraphics.pose().popPose();
     }
 
     @Override

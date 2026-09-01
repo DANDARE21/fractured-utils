@@ -163,10 +163,10 @@ public class DialogHudOverlay {
         int screenHeight = mc.getWindow().getGuiScaledHeight();
 
         // Sleek RPG Dialog Box Dimensions (Anchored to screen center)
-        int boxW = 330;
+        int boxW = Math.min(330, screenWidth - 20);
         int boxH = 58;
         int boxX = (screenWidth - boxW) / 2;
-        int boxY = (screenHeight / 2) + 40;
+        int boxY = Math.min(screenHeight - boxH - 10, (screenHeight / 2) + 40);
 
         int alphaBits = 0xF5000000;
 
@@ -218,19 +218,13 @@ public class DialogHudOverlay {
             guiGraphics.fill(badgeX, badgeY, badgeX + 1, badgeY + badgeH, borderColor);
             guiGraphics.fill(badgeX + badgeW - 1, badgeY, badgeX + badgeW, badgeY + badgeH, borderColor);
 
-            guiGraphics.drawString(mc.font, speakerComp, badgeX + 6, badgeY + 3, 0xFFFFFFFF);
+            DialogFormatUtil.renderAnimatedText(guiGraphics, mc.font, activeSpeaker, badgeX + 6, badgeY + 3, badgeW, 0xFFFFFFFF);
             currentY += 4;
         }
 
-        // 4. Render Typewriter Revealed Dialog Text
+        // 4. Render Typewriter Revealed Dialog Text with Custom Animated Effects
         String currentRevealedText = DialogFormatUtil.getRevealedText(activeText, revealedCharCount);
-        Component textComp = DialogFormatUtil.formatText(currentRevealedText);
-
-        List<FormattedCharSequence> wrappedLines = mc.font.split(textComp, maxTextWidth);
-        for (int i = 0; i < Math.min(3, wrappedLines.size()); i++) {
-            guiGraphics.drawString(mc.font, wrappedLines.get(i), contentX, currentY, 0xFFFFFFFF);
-            currentY += 13;
-        }
+        DialogFormatUtil.renderAnimatedText(guiGraphics, mc.font, currentRevealedText, contentX, currentY, maxTextWidth, 0xFFFFFFFF);
 
         // 5. Render Blinking RPG Next Prompt Indicator (▼) and Ready Player Heads
         if (revealedCharCount >= totalCharCount) {

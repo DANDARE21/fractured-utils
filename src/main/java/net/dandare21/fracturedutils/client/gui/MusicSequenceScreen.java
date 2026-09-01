@@ -199,9 +199,22 @@ public class MusicSequenceScreen extends Screen {
         return false;
     }
 
+    private double getLayoutScale() {
+        int targetW = 740;
+        int targetH = 380;
+        if (this.width <= 0 || this.height <= 0) return 1.0;
+        double scaleX = (double) this.width / targetW;
+        double scaleY = (double) this.height / targetH;
+        return Math.min(1.0, Math.min(scaleX, scaleY));
+    }
+
     @Override
     protected void init() {
         this.clearWidgets();
+
+        double scale = getLayoutScale();
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
 
         int topY = 36;
         int leftX = 14;
@@ -288,7 +301,7 @@ public class MusicSequenceScreen extends Screen {
         // Storage Mode Toggle (if in multiplayer)
         boolean isMultiplayer = Minecraft.getInstance().getCurrentServer() != null || !Minecraft.getInstance().isSingleplayer();
         if (isMultiplayer) {
-            CyberpunkButton modeBtn = new CyberpunkButton(this.width - 160, topY, 145, 20,
+            CyberpunkButton modeBtn = new CyberpunkButton(effWidth - 160, topY, 145, 20,
                     Component.literal(isClientMode ? "LOCAL STORAGE" : "SERVER STORAGE"),
                     b -> {
                         saveCurrentSequenceToWorkingMap();
@@ -341,11 +354,11 @@ public class MusicSequenceScreen extends Screen {
         this.addRenderableWidget(autoFollowBtn);
 
         // 4. Footer Action Buttons
-        int footerY = this.height - 30;
+        int footerY = effHeight - 30;
 
-        CyberpunkButton saveBtn = new CyberpunkButton(this.width - 115, footerY, 100, 22, Component.literal("SAVE FILE"), b -> saveCurrentFile(), CYAN_MAIN, false);
-        CyberpunkButton runBtn = new CyberpunkButton(this.width - 225, footerY, 100, 22, Component.literal("▶ RUN SERVER"), b -> startSequencePlayback(currentFileName), 0xFF00FF88, false);
-        CyberpunkButton stopBtn = new CyberpunkButton(this.width - 325, footerY, 90, 22, Component.literal("⏹ STOP MUSIC"), b -> MusicSequenceManager.getInstance().stopAllSequences(Minecraft.getInstance().getSingleplayerServer()), 0xFFFF3366, false);
+        CyberpunkButton saveBtn = new CyberpunkButton(effWidth - 115, footerY, 100, 22, Component.literal("SAVE FILE"), b -> saveCurrentFile(), CYAN_MAIN, false);
+        CyberpunkButton runBtn = new CyberpunkButton(effWidth - 225, footerY, 100, 22, Component.literal("▶ RUN SERVER"), b -> startSequencePlayback(currentFileName), 0xFF00FF88, false);
+        CyberpunkButton stopBtn = new CyberpunkButton(effWidth - 325, footerY, 90, 22, Component.literal("⏹ STOP MUSIC"), b -> MusicSequenceManager.getInstance().stopAllSequences(Minecraft.getInstance().getSingleplayerServer()), 0xFFFF3366, false);
         CyberpunkButton closeBtn = new CyberpunkButton(leftX, footerY, 100, 22, Component.literal("CLOSE"), b -> this.onClose(), 0xFF8899AA, false);
 
         this.addRenderableWidget(saveBtn);
@@ -564,6 +577,12 @@ public class MusicSequenceScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
+
         if (fileDropdown != null && fileDropdown.isOpen() && fileDropdown.isMouseOverMenu(mouseX, mouseY)) {
             return fileDropdown.mouseClicked(mouseX, mouseY, button);
         }
@@ -572,7 +591,8 @@ public class MusicSequenceScreen extends Screen {
         }
 
         int timelineLeft = 14;
-        int timelineWidth = this.width - 28;
+        int effWidth = (int) (this.width / scale);
+        int timelineWidth = effWidth - 28;
         int timelineTop = 90;
         int rulerHeight = 24;
         int waveformHeight = 45;
@@ -678,6 +698,14 @@ public class MusicSequenceScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+            dragX /= scale;
+            dragY /= scale;
+        }
+
         int timelineLeft = 14;
 
         if (isPanningTimeline) {
@@ -800,6 +828,19 @@ public class MusicSequenceScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        double scale = getLayoutScale();
+        guiGraphics.pose().pushPose();
+        int scaledMouseX = mouseX;
+        int scaledMouseY = mouseY;
+        if (scale < 1.0) {
+            guiGraphics.pose().scale((float) scale, (float) scale, 1.0f);
+            scaledMouseX = (int) (mouseX / scale);
+            scaledMouseY = (int) (mouseY / scale);
+        }
+
+        int effWidth = (int) (this.width / scale);
+        int effHeight = (int) (this.height / scale);
+
         this.renderBackground(guiGraphics);
 
         // Update preview playhead position if playing & Auto-Follow timeline
@@ -811,7 +852,7 @@ public class MusicSequenceScreen extends Screen {
 
             if (autoFollowPlayhead) {
                 int timelineLeft = 14;
-                int timelineWidth = this.width - 28;
+                int timelineWidth = effWidth - 28;
                 double playheadScreenX = timelineLeft + ((playheadMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
                 if (playheadScreenX > timelineLeft + (timelineWidth * 0.75)) {
                     timeScrollMs = Math.max(0.0, playheadMs - ((timelineWidth * 0.35) / pixelsPerSecond) * 1000.0);
@@ -822,34 +863,43 @@ public class MusicSequenceScreen extends Screen {
         }
 
         int timelineLeft = 14;
-        int timelineWidth = this.width - 28;
+        int timelineWidth = effWidth - 28;
         int timelineTop = 90;
         int rulerHeight = 24;
         int waveformHeight = 45;
         int channelHeight = 28;
 
         // Header Title Bar
-        guiGraphics.fill(0, 0, this.width, 30, CYAN_BG);
-        guiGraphics.fill(0, 29, this.width, 30, CYAN_MAIN);
+        guiGraphics.fill(0, 0, effWidth, 30, CYAN_BG);
+        guiGraphics.fill(0, 29, effWidth, 30, CYAN_MAIN);
         guiGraphics.drawString(this.font, "TIMELINE MUSIC SEQUENCE ORCHESTRATOR", 16, 9, CYAN_MAIN, false);
 
         // Playhead Time Counter & Inspector Status
         long curSec = (long) (playheadMs / 1000.0);
         long curMs = (long) (playheadMs % 1000.0);
         String playheadTimeStr = String.format("%02d:%02d.%03d", curSec / 60, curSec % 60, curMs);
-        guiGraphics.drawString(this.font, "PLAYHEAD: " + playheadTimeStr, 340, 9, 0xFFFFD700, false);
+        int headerPlayheadX = Math.max(260, effWidth / 2 - 50);
+        guiGraphics.drawString(this.font, "PLAYHEAD: " + playheadTimeStr, headerPlayheadX, 9, 0xFFFFD700, false);
 
+        int statusX = effWidth - 240;
         if (selectedEntryIndex >= 0 && selectedEntryIndex < currentSequence.getEntries().size()) {
             MusicSequenceEntry sel = currentSequence.getEntries().get(selectedEntryIndex);
             long sec = sel.getTimestampMs() / 1000;
             long ms = sel.getTimestampMs() % 1000;
             String selStr = String.format("SEL: CH%d (%s) @ %02d:%02d.%03d [DEL to delete]",
                     getChannelIndex(sel.getActionType()) + 1, sel.getActionType(), sec / 60, sec % 60, ms);
-            guiGraphics.drawString(this.font, selStr, 480, 9, CYAN_MAIN, false);
+            if (this.font.width(selStr) > 230) {
+                selStr = this.font.plainSubstrByWidth(selStr, 224) + "..";
+            }
+            guiGraphics.drawString(this.font, selStr, statusX, 9, CYAN_MAIN, false);
         } else if (hasUnsavedChanges()) {
-            guiGraphics.drawString(this.font, "* UNSAVED CHANGES", 500, 9, 0xFFFF3366, false);
+            guiGraphics.drawString(this.font, "* UNSAVED CHANGES", statusX + 60, 9, 0xFFFF3366, false);
         } else if (saveFeedbackMessage != null && System.currentTimeMillis() - saveFeedbackTime < 3000L) {
-            guiGraphics.drawString(this.font, saveFeedbackMessage, 500, 9, 0xFF00FF88, false);
+            String fb = saveFeedbackMessage;
+            if (this.font.width(fb) > 230) {
+                fb = this.font.plainSubstrByWidth(fb, 224) + "..";
+            }
+            guiGraphics.drawString(this.font, fb, statusX, 9, 0xFF00FF88, false);
         }
 
         // Timeline Outer Canvas Box
@@ -1001,73 +1051,31 @@ public class MusicSequenceScreen extends Screen {
 
         // B. Dimmed Region AFTER END
         if (endX < timelineLeft + timelineWidth) {
-            int outOfBoundsStartX = (int) Math.max((double) timelineLeft, endX);
-            int outOfBoundsWidth = (timelineLeft + timelineWidth) - outOfBoundsStartX;
-            if (outOfBoundsWidth > 0) {
-                guiGraphics.fill(outOfBoundsStartX, timelineTop, outOfBoundsStartX + outOfBoundsWidth, timelineTop + totalHeight, 0xCC050A10);
-                guiGraphics.drawString(this.font, "AFTER END", outOfBoundsStartX + 8, timelineTop + 6, 0xFFFF3355, false);
+            int dimX = (int) Math.max((double) timelineLeft, endX);
+            int dimW = (timelineLeft + timelineWidth) - dimX;
+            if (dimW > 0) {
+                guiGraphics.fill(dimX, timelineTop, dimX + dimW, timelineTop + totalHeight, 0xCC050A10);
+                guiGraphics.drawString(this.font, "AFTER END", dimX + 6, timelineTop + 6, 0xAA888888, false);
             }
         }
 
-        // C. START Marker (Vivid Green 0xFF00FF88)
-        if (startX >= timelineLeft - 40 && startX <= timelineLeft + timelineWidth + 40) {
+        // C. START Line & Flag Badge
+        if (startX >= timelineLeft && startX <= timelineLeft + timelineWidth) {
             int sx = (int) startX;
-            guiGraphics.fill(sx - 1, timelineTop, sx + 1, timelineTop + totalHeight, 0xFF00FF88);
-
-            int badgeW = 60;
-            int badgeH = 16;
-            int bx = sx - (badgeW / 2);
-            int by = timelineTop + 2;
-
-            boolean hovered = (mouseX >= bx && mouseX <= bx + badgeW && mouseY >= by && mouseY <= by + badgeH);
-            int bg = hovered ? 0xEE08351A : 0xEE041C0E;
-            int border = hovered ? 0xFFFFFFFF : 0xFF00FF88;
-
-            guiGraphics.fill(bx, by, bx + badgeW, by + badgeH, bg);
-            guiGraphics.fill(bx, by, bx + badgeW, by + 1, border);
-            guiGraphics.fill(bx, by + badgeH - 1, bx + badgeW, by + badgeH, border);
-            guiGraphics.fill(bx, by, bx + 1, by + badgeH, border);
-            guiGraphics.fill(bx + badgeW - 1, by, bx + badgeW, by + badgeH, border);
-
-            long sSec = startMs / 1000;
-            String lbl = String.format("▶ %02d:%02d", sSec / 60, sSec % 60);
-            guiGraphics.drawString(this.font, lbl, bx + 4, by + 4, 0xFF00FF88, false);
-
-            if (hovered) {
-                guiGraphics.renderTooltip(this.font, Component.literal("START Marker: Drag to alter sequence start position"), mouseX, mouseY);
-            }
+            guiGraphics.fill(sx - 1, timelineTop, sx + 2, timelineTop + totalHeight, 0xFF00FF88);
+            guiGraphics.fill(sx - 14, timelineTop, sx + 14, timelineTop + 14, 0xEE00FF88);
+            guiGraphics.drawCenteredString(this.font, "IN", sx, timelineTop + 3, 0xFF000000);
         }
 
-        // D. END Marker (Vivid Neon Red 0xFFFF2255)
-        if (endX >= timelineLeft - 40 && endX <= timelineLeft + timelineWidth + 40) {
+        // D. END Line & Flag Badge
+        if (endX >= timelineLeft && endX <= timelineLeft + timelineWidth) {
             int ex = (int) endX;
-            guiGraphics.fill(ex - 1, timelineTop, ex + 1, timelineTop + totalHeight, 0xFFFF2255);
-
-            int badgeW = 60;
-            int badgeH = 16;
-            int bx = ex - (badgeW / 2);
-            int by = timelineTop + 2;
-
-            boolean hovered = (mouseX >= bx && mouseX <= bx + badgeW && mouseY >= by && mouseY <= by + badgeH);
-            int bg = hovered ? 0xEE400B16 : 0xEE2A060E;
-            int border = hovered ? 0xFFFFFFFF : 0xFFFF2255;
-
-            guiGraphics.fill(bx, by, bx + badgeW, by + badgeH, bg);
-            guiGraphics.fill(bx, by, bx + badgeW, by + 1, border);
-            guiGraphics.fill(bx, by + badgeH - 1, bx + badgeW, by + badgeH, border);
-            guiGraphics.fill(bx, by, bx + 1, by + badgeH, border);
-            guiGraphics.fill(bx + badgeW - 1, by, bx + badgeW, by + badgeH, border);
-
-            long eSec = endMs / 1000;
-            String lbl = String.format("🏁 %02d:%02d", eSec / 60, eSec % 60);
-            guiGraphics.drawString(this.font, lbl, bx + 4, by + 4, 0xFFFF2255, false);
-
-            if (hovered) {
-                guiGraphics.renderTooltip(this.font, Component.literal("END Marker: Drag to alter sequence end position"), mouseX, mouseY);
-            }
+            guiGraphics.fill(ex - 1, timelineTop, ex + 2, timelineTop + totalHeight, 0xFFFF3366);
+            guiGraphics.fill(ex - 16, timelineTop, ex + 16, timelineTop + 14, 0xEEFF3366);
+            guiGraphics.drawCenteredString(this.font, "OUT", ex, timelineTop + 3, 0xFFFFFFFF);
         }
 
-        // 4. Render Keyframes on Action Channels
+        // 4. Action Keyframe Nodes
         List<MusicSequenceEntry> entries = currentSequence.getEntries();
         for (int i = 0; i < entries.size(); i++) {
             MusicSequenceEntry entry = entries.get(i);
@@ -1077,13 +1085,13 @@ public class MusicSequenceScreen extends Screen {
             int entryTrackY = waveTopY + waveformHeight + (channelIndex * channelHeight);
             double entryX = timelineLeft + ((entry.getTimestampMs() - timeScrollMs) / 1000.0) * pixelsPerSecond;
 
-            if (entryX >= timelineLeft - 10 && entryX <= timelineLeft + timelineWidth + 10) {
+            if (entryX >= timelineLeft && entryX <= timelineLeft + timelineWidth) {
                 int kx = (int) entryX;
                 int ky = entryTrackY + (channelHeight / 2);
 
-                // Render Keyframe Diamond / Pill Node & Selection Aura Ring
-                boolean isHovered = (mouseX >= kx - 8 && mouseX <= kx + 8 && mouseY >= entryTrackY && mouseY <= entryTrackY + channelHeight);
+                boolean isHovered = (scaledMouseX >= kx - 8 && scaledMouseX <= kx + 8 && scaledMouseY >= entryTrackY && scaledMouseY <= entryTrackY + channelHeight);
                 boolean isSelected = (i == selectedEntryIndex);
+
                 int nodeColor = (isHovered || isSelected) ? 0xFFFFFFFF : chColor;
 
                 if (isSelected) {
@@ -1115,13 +1123,15 @@ public class MusicSequenceScreen extends Screen {
             guiGraphics.fill(px - 4, timelineTop + 1, px + 5, timelineTop + 9, 0xFFFFFFFF);
         }
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        super.render(guiGraphics, scaledMouseX, scaledMouseY, partialTick);
 
         if (this.fileDropdown != null) {
-            this.fileDropdown.renderOverlay(guiGraphics, mouseX, mouseY);
+            this.fileDropdown.renderOverlay(guiGraphics, scaledMouseX, scaledMouseY);
         }
         if (this.trackDropdown != null) {
-            this.trackDropdown.renderOverlay(guiGraphics, mouseX, mouseY);
+            this.trackDropdown.renderOverlay(guiGraphics, scaledMouseX, scaledMouseY);
         }
+
+        guiGraphics.pose().popPose();
     }
 }

@@ -418,6 +418,7 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
                 case "run_sequence" -> 0xFF00E5FF;
                 case "stall_parent" -> 0xFFFF3355;
                 case "resume_parent" -> 0xFF55FF55;
+                case "puppet_action", "execute_puppet_action", "puppet_move_to", "puppet_move", "puppet_look_at", "puppet_look", "puppet_suppress_ai", "puppet_suppress", "puppet_stop_action", "puppet_stop" -> 0xFFFF8800;
                 default -> 0xFF00E5FF;
             };
         }
@@ -476,6 +477,23 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
             } else if (action instanceof PlayMusicSequenceAction pmsa) {
                 String modeTag = pmsa.isAwaitCompletion() ? " [Wait Finish]" : " [Async]";
                 return "🎵 Play Music Sequence: \"" + pmsa.getSequenceFile() + "\"" + modeTag;
+            } else if (action instanceof ExecutePuppetAction epa) {
+                String targetInfo = !epa.getEntityUuid().isBlank() ? ("UUID: " + epa.getEntityUuid()) : (!epa.getTargetSelector().isBlank() ? epa.getTargetSelector() : "All Puppets");
+                String timing = epa.getWindupTicks() > 0 ? (epa.getWindupTicks() + "t windup + " + epa.getDurationTicks() + "t dur") : (epa.getDurationTicks() + "t dur");
+                return "🎭 Puppet Action: \"" + epa.getActionId() + "\" (" + timing + ") [" + targetInfo + "]";
+            } else if (action instanceof PuppetMoveToAction pmt) {
+                String targetInfo = !pmt.getEntityUuid().isBlank() ? ("UUID: " + pmt.getEntityUuid()) : (!pmt.getTargetSelector().isBlank() ? pmt.getTargetSelector() : "All Puppets");
+                return String.format(java.util.Locale.ROOT, "🎭 Puppet Move To (%.1f, %.1f, %.1f) spd=%.1f [%s]", pmt.getX(), pmt.getY(), pmt.getZ(), pmt.getSpeed(), targetInfo);
+            } else if (action instanceof PuppetLookAtAction pla) {
+                String lookTarget = !pla.getLookTargetSelector().isBlank() ? pla.getLookTargetSelector() : String.format(java.util.Locale.ROOT, "(%.1f, %.1f, %.1f)", pla.getX(), pla.getY(), pla.getZ());
+                String targetInfo = !pla.getEntityUuid().isBlank() ? ("UUID: " + pla.getEntityUuid()) : (!pla.getTargetSelector().isBlank() ? pla.getTargetSelector() : "All Puppets");
+                return "🎭 Puppet Look At " + lookTarget + " [" + targetInfo + "]";
+            } else if (action instanceof PuppetSuppressAction psa) {
+                String targetInfo = !psa.getEntityUuid().isBlank() ? ("UUID: " + psa.getEntityUuid()) : (!psa.getTargetSelector().isBlank() ? psa.getTargetSelector() : "All Puppets");
+                return String.format(java.util.Locale.ROOT, "🎭 Puppet AI Suppress (ai=%b, nav=%b, tgt=%b, look=%b) [%s]", psa.isSuppressAi(), psa.isSuppressNavigation(), psa.isSuppressTargeting(), psa.isSuppressLook(), targetInfo);
+            } else if (action instanceof PuppetStopAction pst) {
+                String targetInfo = !pst.getEntityUuid().isBlank() ? ("UUID: " + pst.getEntityUuid()) : (!pst.getTargetSelector().isBlank() ? pst.getTargetSelector() : "All Puppets");
+                return "🎭 Puppet Stop Action [" + targetInfo + "]";
             }
             return "";
         }

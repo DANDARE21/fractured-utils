@@ -15,18 +15,31 @@ public class PuppetOverrideGoal extends Goal {
     public PuppetOverrideGoal(Mob mob, PuppetController controller) {
         this.mob = mob;
         this.controller = controller;
-        // Suppress all standard AI sub-systems when active
-        this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK, Flag.TARGET, Flag.JUMP));
+        // Suppress standard AI movement, look, and jump subsystems when active
+        this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK, Flag.JUMP));
     }
 
     @Override
     public boolean canUse() {
-        return this.controller.isPuppetingActive();
+        return this.controller.isPuppetingActive() ||
+                this.controller.isNavigationSuppressed() ||
+                this.controller.isLookSuppressed() ||
+                this.controller.isAiSuppressed();
     }
 
     @Override
     public boolean canContinueToUse() {
-        return this.controller.isPuppetingActive();
+        return this.canUse();
+    }
+
+    @Override
+    public void start() {
+        if (this.controller.isNavigationSuppressed()) {
+            this.mob.getNavigation().stop();
+        }
+        if (this.controller.isTargetingSuppressed()) {
+            this.mob.setTarget(null);
+        }
     }
 
     @Override

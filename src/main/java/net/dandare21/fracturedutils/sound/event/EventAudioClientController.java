@@ -61,6 +61,17 @@ public class EventAudioClientController {
         currentSoundEventId = "";
     }
 
+    public synchronized void seekAudio(long offsetMs) {
+        this.localPlaybackStartTimeMs = System.currentTimeMillis() - Math.max(0L, offsetMs);
+        if (ModAudioPlayer.getInstance().isPlaying()) {
+            ModAudioPlayer.getInstance().seekTrack(offsetMs);
+        }
+    }
+
+    public boolean isPlaying() {
+        return ModAudioPlayer.getInstance().isPlaying();
+    }
+
     public synchronized void handleServerSyncHeartbeat(String soundEventId, long serverStartTimeMs, int syncThresholdMs, boolean looping) {
         if (currentMode != PlaybackMode.SERVER_CONTROLLED) return;
         if (!ModAudioPlayer.getInstance().isPlaying()) return;

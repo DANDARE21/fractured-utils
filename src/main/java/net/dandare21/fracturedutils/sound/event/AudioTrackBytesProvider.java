@@ -51,16 +51,15 @@ public class AudioTrackBytesProvider {
                 pathName = pathName.substring(6);
             }
             pathName = pathName.replace('.', '/');
-            if (!pathName.endsWith(".ogg")) {
-                pathName += ".ogg";
-            }
+            String targetOgg = pathName.endsWith(".ogg") || pathName.endsWith(".wav") ? pathName : pathName + ".ogg";
+            String targetWav = pathName.endsWith(".ogg") || pathName.endsWith(".wav") ? pathName : pathName + ".wav";
 
             try (java.util.zip.ZipFile zipFile = new java.util.zip.ZipFile(zipPath.toFile())) {
                 var entries = zipFile.entries();
                 while (entries.hasMoreElements()) {
                     var entry = entries.nextElement();
                     String entryName = entry.getName().replace('\\', '/');
-                    if (entryName.endsWith(pathName)) {
+                    if (entryName.endsWith(targetOgg) || entryName.endsWith(targetWav)) {
                         try (var is = zipFile.getInputStream(entry)) {
                             return is.readAllBytes();
                         }
@@ -90,13 +89,20 @@ public class AudioTrackBytesProvider {
             }
 
             pathName = pathName.replace('.', '/');
-            if (!pathName.endsWith(".ogg")) {
-                pathName += ".ogg";
-            }
-
-            Path trackPath = tracksDir.resolve(pathName);
-            if (Files.exists(trackPath) && Files.isRegularFile(trackPath)) {
-                return Files.readAllBytes(trackPath);
+            if (pathName.endsWith(".ogg") || pathName.endsWith(".wav")) {
+                Path trackPath = tracksDir.resolve(pathName);
+                if (Files.exists(trackPath) && Files.isRegularFile(trackPath)) {
+                    return Files.readAllBytes(trackPath);
+                }
+            } else {
+                Path oggPath = tracksDir.resolve(pathName + ".ogg");
+                if (Files.exists(oggPath) && Files.isRegularFile(oggPath)) {
+                    return Files.readAllBytes(oggPath);
+                }
+                Path wavPath = tracksDir.resolve(pathName + ".wav");
+                if (Files.exists(wavPath) && Files.isRegularFile(wavPath)) {
+                    return Files.readAllBytes(wavPath);
+                }
             }
         } catch (Exception ignored) {
         }

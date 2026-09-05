@@ -84,9 +84,17 @@ public class ClientAudioPackManager {
             if (Files.exists(p1)) {
                 try { return Files.readAllBytes(p1); } catch (Exception ignored) {}
             }
+            Path p1w = tracksDir.resolve(cleanId + ".wav");
+            if (Files.exists(p1w)) {
+                try { return Files.readAllBytes(p1w); } catch (Exception ignored) {}
+            }
             Path p2 = tracksDir.resolve(pathFromId + ".ogg");
             if (Files.exists(p2)) {
                 try { return Files.readAllBytes(p2); } catch (Exception ignored) {}
+            }
+            Path p2w = tracksDir.resolve(pathFromId + ".wav");
+            if (Files.exists(p2w)) {
+                try { return Files.readAllBytes(p2w); } catch (Exception ignored) {}
             }
 
             // Recursive search in event_music/tracks
@@ -94,16 +102,22 @@ public class ClientAudioPackManager {
             final String searchPathId = pathFromId;
             try (var stream = Files.walk(tracksDir)) {
                 var found = stream.filter(Files::isRegularFile)
-                        .filter(p -> p.toString().toLowerCase().endsWith(".ogg"))
+                        .filter(p -> {
+                            String name = p.toString().toLowerCase();
+                            return name.endsWith(".ogg") || name.endsWith(".wav");
+                        })
                         .filter(p -> {
                             String rel = tracksDir.relativize(p).toString().replace('\\', '/');
-                            String nameNoExt = rel.endsWith(".ogg") ? rel.substring(0, rel.length() - 4) : rel;
+                            String nameNoExt = rel;
+                            if (rel.endsWith(".ogg")) nameNoExt = rel.substring(0, rel.length() - 4);
+                            else if (rel.endsWith(".wav")) nameNoExt = rel.substring(0, rel.length() - 4);
                             String dotName = nameNoExt.replace('/', '.');
                             return nameNoExt.equalsIgnoreCase(searchCleanId)
                                     || nameNoExt.equalsIgnoreCase(searchPathId)
                                     || dotName.equalsIgnoreCase(searchCleanId)
                                     || ("event." + dotName).equalsIgnoreCase(trackStr)
-                                    || p.getFileName().toString().equalsIgnoreCase(searchCleanId + ".ogg");
+                                    || p.getFileName().toString().equalsIgnoreCase(searchCleanId + ".ogg")
+                                    || p.getFileName().toString().equalsIgnoreCase(searchCleanId + ".wav");
                         })
                         .findFirst();
                 if (found.isPresent()) {
@@ -120,12 +134,19 @@ public class ClientAudioPackManager {
             try (ZipFile zf = new ZipFile(packFile)) {
                 String[] candidates = new String[]{
                         "assets/fracturedutils/sounds/music/" + cleanId + ".ogg",
+                        "assets/fracturedutils/sounds/music/" + cleanId + ".wav",
                         "assets/fracturedutils/sounds/music/" + pathFromId + ".ogg",
+                        "assets/fracturedutils/sounds/music/" + pathFromId + ".wav",
                         "assets/fracturedutils/sounds/" + cleanId + ".ogg",
+                        "assets/fracturedutils/sounds/" + cleanId + ".wav",
                         "assets/fracturedutils/sounds/" + pathFromId + ".ogg",
+                        "assets/fracturedutils/sounds/" + pathFromId + ".wav",
                         "assets/fractured_utils/sounds/music/" + cleanId + ".ogg",
+                        "assets/fractured_utils/sounds/music/" + cleanId + ".wav",
                         "assets/minecraft/sounds/music/" + cleanId + ".ogg",
-                        cleanId + ".ogg"
+                        "assets/minecraft/sounds/music/" + cleanId + ".wav",
+                        cleanId + ".ogg",
+                        cleanId + ".wav"
                 };
                 for (String cand : candidates) {
                     ZipEntry entry = zf.getEntry(cand);

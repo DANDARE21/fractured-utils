@@ -54,6 +54,7 @@ public class MusicSequenceScreen extends Screen {
     private double playheadMs = 0.0; // active preview playhead position in milliseconds
     private boolean isPreviewPlaying = false;
     private long lastPreviewTickTime = 0;
+    private long lastDragAudioSeekTime = 0;
 
     // Timeline Drag, Pan & Selection
     private int draggedEntryIndex = -1;
@@ -537,6 +538,51 @@ public class MusicSequenceScreen extends Screen {
         return Math.max(30000L, maxEntry + 1000L);
     }
 
+    private int getTimelineWidth() {
+        double scale = getLayoutScale();
+        int effWidth = (int) (this.width / scale);
+        return effWidth - 28;
+    }
+
+    private void clampTimeScroll() {
+        long maxDuration = getEffectiveEndMs();
+        double timelineWidth = getTimelineWidth();
+        double visibleMs = (timelineWidth / pixelsPerSecond) * 1000.0;
+
+        if (visibleMs >= maxDuration) {
+            this.timeScrollMs = 0.0;
+        } else {
+            double marginMs = (60.0 / pixelsPerSecond) * 1000.0;
+            double maxScroll = Math.max(0.0, maxDuration - visibleMs + marginMs);
+            this.timeScrollMs = Math.max(0.0, Math.min(maxScroll, this.timeScrollMs));
+        }
+    }
+
+    private void relocatePlaybackAudio(long offsetMs) {
+        if (!isPreviewPlaying) return;
+        this.lastPreviewTickTime = System.currentTimeMillis();
+
+        String songTrack = currentSequence.getSongTrack();
+        if (songTrack == null || songTrack.trim().isEmpty()) return;
+
+        if (EventAudioClientController.getInstance().isPlaying()) {
+            EventAudioClientController.getInstance().seekAudio(offsetMs);
+        } else {
+            EventAudioClientController.getInstance().playAudio(
+                    songTrack,
+                    net.dandare21.fracturedutils.sound.ModSoundSources.EVENT_MUSIC,
+                    currentSequence.getVolume(),
+                    currentSequence.getPitch(),
+                    0,
+                    offsetMs,
+                    true,
+                    net.dandare21.fracturedutils.network.packet.S2CPlayEventAudioPacket.PlaybackMode.FIRE_AND_FORGET,
+                    currentSequence.isLooping(),
+                    2000
+            );
+        }
+    }
+
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         if (fileDropdown != null && fileDropdown.mouseScrolled(mouseX, mouseY, delta)) {
@@ -550,24 +596,28 @@ public class MusicSequenceScreen extends Screen {
             return true;
         }
 
+        double scale = getLayoutScale();
         int timelineLeft = 14;
-        int timelineWidth = this.width - 28;
+        int timelineWidth = getTimelineWidth();
+        double scaledMouseX = scale < 1.0 ? mouseX / scale : mouseX;
 
-        if (mouseX >= timelineLeft && mouseX <= timelineLeft + timelineWidth) {
+        if (scaledMouseX >= timelineLeft && scaledMouseX <= timelineLeft + timelineWidth) {
             if (hasControlDown()) {
                 // Modern DAW: Ctrl + Mouse Wheel = Mouse-Centered Zoom
                 double oldPixelsPerSecond = this.pixelsPerSecond;
                 double zoomFactor = delta > 0 ? 1.25 : 0.8;
                 double newPixelsPerSecond = Math.max(10.0, Math.min(400.0, oldPixelsPerSecond * zoomFactor));
 
-                double mouseTimeMs = timeScrollMs + ((mouseX - timelineLeft) / oldPixelsPerSecond) * 1000.0;
+                double mouseTimeMs = timeScrollMs + ((scaledMouseX - timelineLeft) / oldPixelsPerSecond) * 1000.0;
                 this.pixelsPerSecond = newPixelsPerSecond;
-                this.timeScrollMs = Math.max(0.0, mouseTimeMs - ((mouseX - timelineLeft) / newPixelsPerSecond) * 1000.0);
+                this.timeScrollMs = Math.max(0.0, mouseTimeMs - ((scaledMouseX - timelineLeft) / newPixelsPerSecond) * 1000.0);
+                clampTimeScroll();
                 return true;
             } else {
                 // Horizontal Timeline Panning Scroll
                 double scrollSpeed = 500.0 / (pixelsPerSecond / 50.0);
                 timeScrollMs = Math.max(0.0, timeScrollMs - (delta * scrollSpeed));
+                clampTimeScroll();
                 return true;
             }
         }
@@ -627,7 +677,14 @@ public class MusicSequenceScreen extends Screen {
                 }
             }
 
-            // Check click on Ruler -> START Marker, END Marker, or Seek Playhead
+            // 1. Direct Click on Playhead handle or vertical scrubber line
+            double playheadX = timelineLeft + ((playheadMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
+            if (Math.abs(mouseX - playheadX) <= 8 && mouseY >= timelineTop && mouseY <= timelineTop + totalHeight) {
+                this.isDraggingPlayhead = true;
+                return true;
+            }
+
+            // 2. Check click on Ruler -> START Marker, END Marker, or Seek Playhead
             if (mouseY >= timelineTop && mouseY <= timelineTop + rulerHeight) {
                 double startX = timelineLeft + ((currentSequence.getStartMs() - timeScrollMs) / 1000.0) * pixelsPerSecond;
                 double endX = timelineLeft + ((getEffectiveEndMs() - timeScrollMs) / 1000.0) * pixelsPerSecond;
@@ -642,8 +699,20 @@ public class MusicSequenceScreen extends Screen {
                 }
 
                 double relX = mouseX - timelineLeft;
-                this.playheadMs = Math.max(0.0, timeScrollMs + (relX / pixelsPerSecond) * 1000.0);
+                double clickedTimeMs = timeScrollMs + (relX / pixelsPerSecond) * 1000.0;
+                this.playheadMs = Math.max(0.0, Math.min(getEffectiveEndMs(), clickedTimeMs));
                 this.isDraggingPlayhead = true;
+                relocatePlaybackAudio((long) this.playheadMs);
+                return true;
+            }
+
+            // 3. Click on Audio Waveform Channel -> Seek and Drag Playhead
+            if (mouseY >= canvasY && mouseY < canvasY + waveformHeight) {
+                double relX = mouseX - timelineLeft;
+                double clickedTimeMs = timeScrollMs + (relX / pixelsPerSecond) * 1000.0;
+                this.playheadMs = Math.max(0.0, Math.min(getEffectiveEndMs(), clickedTimeMs));
+                this.isDraggingPlayhead = true;
+                relocatePlaybackAudio((long) this.playheadMs);
                 return true;
             }
 
@@ -708,9 +777,24 @@ public class MusicSequenceScreen extends Screen {
 
         int timelineLeft = 14;
 
+        if (isDraggingPlayhead) {
+            double relX = mouseX - timelineLeft;
+            double rawMs = timeScrollMs + (relX / pixelsPerSecond) * 1000.0;
+            long endMs = getEffectiveEndMs();
+            this.playheadMs = Math.max(0.0, Math.min(endMs, rawMs));
+
+            long now = System.currentTimeMillis();
+            if (isPreviewPlaying && now - lastDragAudioSeekTime >= 50L) {
+                lastDragAudioSeekTime = now;
+                relocatePlaybackAudio((long) this.playheadMs);
+            }
+            return true;
+        }
+
         if (isPanningTimeline) {
             double deltaX = mouseX - lastPanMouseX;
             timeScrollMs = Math.max(0.0, timeScrollMs - (deltaX / pixelsPerSecond) * 1000.0);
+            clampTimeScroll();
             lastPanMouseX = mouseX;
             return true;
         }
@@ -759,7 +843,12 @@ public class MusicSequenceScreen extends Screen {
             saveCurrentSequenceToWorkingMap();
             draggedEntryIndex = -1;
         }
-        isDraggingPlayhead = false;
+        if (isDraggingPlayhead) {
+            isDraggingPlayhead = false;
+            if (isPreviewPlaying) {
+                relocatePlaybackAudio((long) this.playheadMs);
+            }
+        }
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
@@ -784,29 +873,31 @@ public class MusicSequenceScreen extends Screen {
         if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_HOME) {
             this.playheadMs = 0.0;
             this.timeScrollMs = 0.0;
+            relocatePlaybackAudio(0L);
             return true;
         }
 
         if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_END) {
-            if (!currentSequence.getEntries().isEmpty()) {
-                currentSequence.sortEntriesByTimestamp();
-                long maxTs = currentSequence.getEntries().get(currentSequence.getEntries().size() - 1).getTimestampMs();
-                this.playheadMs = maxTs;
-                int timelineWidth = this.width - 28;
-                this.timeScrollMs = Math.max(0.0, maxTs - (timelineWidth * 0.5 / pixelsPerSecond) * 1000.0);
-            }
+            long maxTs = getEffectiveEndMs();
+            this.playheadMs = maxTs;
+            int timelineWidth = getTimelineWidth();
+            this.timeScrollMs = Math.max(0.0, maxTs - (timelineWidth * 0.5 / pixelsPerSecond) * 1000.0);
+            clampTimeScroll();
+            relocatePlaybackAudio(maxTs);
             return true;
         }
 
         if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT) {
             double stepMs = hasShiftDown() ? (60000.0 / currentSequence.getBpm()) : 50.0;
             this.playheadMs = Math.max(0.0, playheadMs - stepMs);
+            relocatePlaybackAudio((long) this.playheadMs);
             return true;
         }
 
         if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT) {
             double stepMs = hasShiftDown() ? (60000.0 / currentSequence.getBpm()) : 50.0;
-            this.playheadMs = Math.max(0.0, playheadMs + stepMs);
+            this.playheadMs = Math.min(getEffectiveEndMs(), playheadMs + stepMs);
+            relocatePlaybackAudio((long) this.playheadMs);
             return true;
         }
 
@@ -848,16 +939,20 @@ public class MusicSequenceScreen extends Screen {
             long now = System.currentTimeMillis();
             long dt = now - lastPreviewTickTime;
             lastPreviewTickTime = now;
-            playheadMs += dt;
+            if (!isDraggingPlayhead) {
+                playheadMs += dt;
+            }
 
-            if (autoFollowPlayhead) {
+            if (autoFollowPlayhead && !isDraggingPlayhead) {
                 int timelineLeft = 14;
                 int timelineWidth = effWidth - 28;
                 double playheadScreenX = timelineLeft + ((playheadMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
                 if (playheadScreenX > timelineLeft + (timelineWidth * 0.75)) {
                     timeScrollMs = Math.max(0.0, playheadMs - ((timelineWidth * 0.35) / pixelsPerSecond) * 1000.0);
+                    clampTimeScroll();
                 } else if (playheadScreenX < timelineLeft) {
                     timeScrollMs = Math.max(0.0, playheadMs - ((timelineWidth * 0.1) / pixelsPerSecond) * 1000.0);
+                    clampTimeScroll();
                 }
             }
         }
@@ -1011,7 +1106,7 @@ public class MusicSequenceScreen extends Screen {
         long endMs = getEffectiveEndMs();
 
         // DAW Preview Playback Loop/Pause between startMs and endMs
-        if (isPreviewPlaying) {
+        if (isPreviewPlaying && !isDraggingPlayhead) {
             if (playheadMs < startMs) {
                 playheadMs = startMs;
             } else if (playheadMs >= endMs) {

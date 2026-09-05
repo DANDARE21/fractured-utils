@@ -1,15 +1,23 @@
 package net.dandare21.fracturedutils.client.gui;
 
 import net.dandare21.fracturedutils.orchestrator.action.*;
+import net.dandare21.fracturedutils.puppet.*;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.CommandSuggestions;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -34,6 +42,8 @@ public class EditActionModalScreen extends Screen {
     private CyberpunkDropdown<String> subActionTypeDropdown;
     private CyberpunkDropdown<DelayUnit> unitDropdown;
     private CyberpunkDropdown<String> musicSequenceDropdown;
+    private CyberpunkDropdown<String> nearbyEntityDropdown;
+    private CyberpunkDropdown<String> puppetActionDropdown;
 
     private EditBox inputField;
     private EditBox xField;
@@ -51,7 +61,19 @@ public class EditActionModalScreen extends Screen {
     private EditBox nameField;
     private EditBox descriptionField;
     private CyberpunkCheckbox showActiveWaitCheckbox;
+    private EditBox entityUuidField;
+    private EditBox speedField;
+    private EditBox windupTicksField;
+    private EditBox durationTicksField;
+    private EditBox lookTargetField;
+    private CyberpunkCheckbox suppressAiCheckbox;
+    private CyberpunkCheckbox suppressNavCheckbox;
+    private CyberpunkCheckbox suppressTargetingCheckbox;
+    private CyberpunkCheckbox suppressLookCheckbox;
+    private CyberpunkCheckbox puppetingActiveCheckbox;
     private CyberpunkButton setMyPositionButton;
+    private CyberpunkButton pickLookedEntityButton;
+    private CyberpunkButton pickLookTargetButton;
     private CommandSuggestions commandSuggestions;
 
     public EditActionModalScreen(Screen parentScreen, OrchestratorAction action, Consumer<OrchestratorAction> onSave) {
@@ -126,6 +148,7 @@ public class EditActionModalScreen extends Screen {
         if (action == null) {
             action = createActionForType(actionType);
         }
+        this.puppetActionDropdown = null;
 
         // --- 1. Action Type Selection Dropdown ---
         List<CyberpunkDropdown.DropdownEntry<String>> actionEntries = new ArrayList<>();
@@ -140,6 +163,11 @@ public class EditActionModalScreen extends Screen {
         actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("run_sequence", Component.literal("Run Sequence"), Component.literal("Synchronously execute sub-sequence")));
         actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("stall_parent", Component.literal("Stall Parent"), Component.literal("Stall execution of parent sequence")));
         actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("resume_parent", Component.literal("Resume Parent"), Component.literal("Resume execution of parent sequence")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_action", Component.literal("Execute Puppet Action"), Component.literal("Execute registered puppet attack/routine")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_move_to", Component.literal("Puppet Move To"), Component.literal("Direct puppet pathfinding to coordinates")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_look_at", Component.literal("Puppet Look At"), Component.literal("Direct puppet look angle to target or coordinates")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_suppress_ai", Component.literal("Puppet Suppress AI"), Component.literal("Configure AI aspect suppression flags")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_stop_action", Component.literal("Puppet Stop Action"), Component.literal("Stop active action & reset suppression")));
 
         this.actionTypeDropdown = new CyberpunkDropdown<>(left + 20, top + 34, panelWidth - 40, 20, Component.literal("Action Type"));
         this.actionTypeDropdown.setOptions(actionEntries);
@@ -149,6 +177,9 @@ public class EditActionModalScreen extends Screen {
         this.actionTypeDropdown.setOnOpenListener(() -> {
             if (subActionTypeDropdown != null) subActionTypeDropdown.setOpen(false);
             if (unitDropdown != null) unitDropdown.setOpen(false);
+            if (musicSequenceDropdown != null) musicSequenceDropdown.setOpen(false);
+            if (nearbyEntityDropdown != null) nearbyEntityDropdown.setOpen(false);
+            if (puppetActionDropdown != null) puppetActionDropdown.setOpen(false);
         });
         this.actionTypeDropdown.setOnSelect(entry -> {
             String newType = entry.getValue();
@@ -163,6 +194,75 @@ public class EditActionModalScreen extends Screen {
             }
         });
         this.addRenderableWidget(this.actionTypeDropdown);
+
+        // --- Nearby Entities Quick Picker Dropdown (Only for Puppet Actions) ---
+        boolean isPuppetActionType = actionType.equalsIgnoreCase("puppet_action") ||
+                actionType.equalsIgnoreCase("puppet_move_to") ||
+                actionType.equalsIgnoreCase("puppet_look_at") ||
+                actionType.equalsIgnoreCase("puppet_suppress_ai") ||
+                actionType.equalsIgnoreCase("puppet_stop_action");
+
+        if (isPuppetActionType) {
+            List<CyberpunkDropdown.DropdownEntry<String>> nearbyEntries = new ArrayList<>();
+            nearbyEntries.add(new CyberpunkDropdown.DropdownEntry<>("", Component.literal("-- Select Nearby Entity --"), Component.literal("Scans loaded entities within 64 blocks")));
+
+            if (this.minecraft != null && this.minecraft.level != null && this.minecraft.player != null) {
+                Vec3 pPos = this.minecraft.player.position();
+                AABB area = new AABB(pPos.x - 64, pPos.y - 64, pPos.z - 64, pPos.x + 64, pPos.y + 64, pPos.z + 64);
+                List<Entity> nearby = new ArrayList<>(this.minecraft.level.getEntities((Entity) null, area, e -> e != this.minecraft.player));
+                nearby.sort(Comparator.comparingDouble(e -> e.distanceToSqr(this.minecraft.player)));
+
+                for (Entity e : nearby) {
+                    boolean isPuppet = e instanceof IPuppetEntity;
+                    String name = e.getDisplayName().getString();
+                    String typeStr = EntityType.getKey(e.getType()).toString();
+                    String uuidStr = e.getUUID().toString();
+                    double dist = Math.sqrt(e.distanceToSqr(this.minecraft.player));
+
+                    String label = String.format(Locale.ROOT, "%s%s (%.1fm) - %s", isPuppet ? "🎭 " : "", name, dist, typeStr);
+                    String details = "UUID: " + uuidStr;
+                    nearbyEntries.add(new CyberpunkDropdown.DropdownEntry<>(uuidStr, Component.literal(label), Component.literal(details)));
+                }
+            }
+
+            this.nearbyEntityDropdown = new CyberpunkDropdown<>(left + 20, top + 60, panelWidth - 40, 20, Component.literal("Select Nearby Entity"));
+            this.nearbyEntityDropdown.setOptions(nearbyEntries);
+            this.nearbyEntityDropdown.setMaxVisibleItems(4);
+            this.nearbyEntityDropdown.setItemHeight(22);
+            this.nearbyEntityDropdown.setOnOpenListener(() -> {
+                if (actionTypeDropdown != null) actionTypeDropdown.setOpen(false);
+                if (subActionTypeDropdown != null) subActionTypeDropdown.setOpen(false);
+                if (unitDropdown != null) unitDropdown.setOpen(false);
+                if (musicSequenceDropdown != null) musicSequenceDropdown.setOpen(false);
+                if (puppetActionDropdown != null) puppetActionDropdown.setOpen(false);
+            });
+            this.nearbyEntityDropdown.setOnSelect(entry -> {
+                String uuidStr = entry.getValue();
+                if (uuidStr != null && !uuidStr.isEmpty()) {
+                    if (entityUuidField != null) {
+                        entityUuidField.setValue(uuidStr);
+                    }
+                    if (this.minecraft != null && this.minecraft.level != null) {
+                        try {
+                            java.util.UUID uuid = java.util.UUID.fromString(uuidStr);
+                            for (Entity e : this.minecraft.level.entitiesForRendering()) {
+                                if (e.getUUID().equals(uuid)) {
+                                    String typeStr = EntityType.getKey(e.getType()).toString();
+                                    if (targetSelectorField != null && targetSelectorField.getValue().isBlank()) {
+                                        targetSelectorField.setValue("@e[type=" + typeStr + "]");
+                                    }
+                                    break;
+                                }
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    refreshPuppetActionSuggestions();
+                }
+            });
+            this.addRenderableWidget(this.nearbyEntityDropdown);
+        } else {
+            this.nearbyEntityDropdown = null;
+        }
 
         // --- 2. Subaction Selection Dropdown (Only for Wait Until) ---
         if (actionType.equalsIgnoreCase("wait_until")) {
@@ -539,6 +639,337 @@ public class EditActionModalScreen extends Screen {
             this.addRenderableWidget(this.showActiveWaitCheckbox);
         } else if (actionType.equalsIgnoreCase("end_objective")) {
             this.commandSuggestions = null;
+        } else if (actionType.equalsIgnoreCase("puppet_action")) {
+            this.commandSuggestions = null;
+            String defaultActionId = "";
+            String defaultUuid = "";
+            String defaultSelector = "";
+            int defaultWindup = 0;
+            int defaultDuration = 20;
+            if (action instanceof ExecutePuppetAction epa) {
+                defaultActionId = epa.getActionId();
+                defaultUuid = epa.getEntityUuid();
+                defaultSelector = epa.getTargetSelector();
+                defaultWindup = epa.getWindupTicks();
+                defaultDuration = epa.getDurationTicks();
+            }
+
+            int boxH = 18;
+            this.puppetActionDropdown = new CyberpunkDropdown<>(left + 20, top + 90, panelWidth - 40, 20, Component.literal("Select Puppet Action"));
+            this.puppetActionDropdown.setMaxVisibleItems(4);
+            this.puppetActionDropdown.setItemHeight(22);
+            this.puppetActionDropdown.setOnOpenListener(() -> {
+                if (actionTypeDropdown != null) actionTypeDropdown.setOpen(false);
+                if (subActionTypeDropdown != null) subActionTypeDropdown.setOpen(false);
+                if (unitDropdown != null) unitDropdown.setOpen(false);
+                if (musicSequenceDropdown != null) musicSequenceDropdown.setOpen(false);
+                if (nearbyEntityDropdown != null) nearbyEntityDropdown.setOpen(false);
+            });
+            this.puppetActionDropdown.setOnSelect(entry -> {
+                String actionIdStr = entry.getValue();
+                if (actionIdStr != null && !actionIdStr.isEmpty()) {
+                    if (inputField != null) {
+                        inputField.setValue(actionIdStr);
+                    }
+                }
+            });
+            this.addRenderableWidget(this.puppetActionDropdown);
+
+            this.inputField.setX(left + 22);
+            this.inputField.setY(top + 125);
+            this.inputField.setWidth(panelWidth - 44);
+            this.inputField.setHeight(boxH);
+            this.inputField.setValue(defaultActionId);
+            this.inputField.setResponder(text -> {
+                if (this.puppetActionDropdown != null) {
+                    this.puppetActionDropdown.selectByValue(text.trim());
+                }
+            });
+            this.addRenderableWidget(this.inputField);
+
+            this.windupTicksField = new EditBox(this.font, left + 22, top + 158, 61, boxH, Component.literal("Windup Ticks"));
+            this.windupTicksField.setBordered(false);
+            this.windupTicksField.setValue(String.valueOf(defaultWindup));
+            this.addRenderableWidget(this.windupTicksField);
+
+            this.durationTicksField = new EditBox(this.font, left + 97, top + 158, 61, boxH, Component.literal("Duration Ticks"));
+            this.durationTicksField.setBordered(false);
+            this.durationTicksField.setValue(String.valueOf(defaultDuration));
+            this.addRenderableWidget(this.durationTicksField);
+
+            this.pickLookedEntityButton = new CyberpunkButton(
+                    left + 170, top + 157, 170, 20,
+                    Component.literal("🎯 TARGET MOB"),
+                    b -> {
+                        Entity target = getLookedAtEntity();
+                        if (target != null) {
+                            if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
+                            if (targetSelectorField != null && targetSelectorField.getValue().isBlank()) {
+                                String typeStr = EntityType.getKey(target.getType()).toString();
+                                targetSelectorField.setValue("@e[type=" + typeStr + "]");
+                            }
+                            refreshPuppetActionSuggestions();
+                        }
+                    }, CYAN_MAIN, false, Component.literal("Set UUID & selector to entity under crosshair")
+            );
+            this.addRenderableWidget(this.pickLookedEntityButton);
+
+            this.entityUuidField = new EditBox(this.font, left + 22, top + 190, panelWidth - 44, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField.setBordered(false);
+            this.entityUuidField.setValue(defaultUuid);
+            this.entityUuidField.setResponder(text -> refreshPuppetActionSuggestions());
+            this.addRenderableWidget(this.entityUuidField);
+
+            this.targetSelectorField = new EditBox(this.font, left + 22, top + 222, panelWidth - 44, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField.setBordered(false);
+            this.targetSelectorField.setValue(defaultSelector);
+            this.targetSelectorField.setResponder(text -> refreshPuppetActionSuggestions());
+            this.addRenderableWidget(this.targetSelectorField);
+
+            refreshPuppetActionSuggestions();
+        } else if (actionType.equalsIgnoreCase("puppet_move_to")) {
+            this.commandSuggestions = null;
+            double defaultX = 0.0, defaultY = 64.0, defaultZ = 0.0, defaultSpeed = 1.0;
+            String defaultUuid = "", defaultSelector = "";
+            if (action instanceof PuppetMoveToAction pmt) {
+                defaultX = pmt.getX();
+                defaultY = pmt.getY();
+                defaultZ = pmt.getZ();
+                defaultSpeed = pmt.getSpeed();
+                defaultUuid = pmt.getEntityUuid();
+                defaultSelector = pmt.getTargetSelector();
+            }
+
+            int boxH = 18;
+            int r1Y = top + 105;
+            int boxW3 = 95;
+
+            this.xField = new EditBox(this.font, left + 22, r1Y, boxW3 - 4, boxH, Component.literal("X"));
+            this.xField.setBordered(false);
+            this.xField.setValue(String.format(Locale.US, "%.1f", defaultX));
+            this.addRenderableWidget(this.xField);
+
+            this.yField = new EditBox(this.font, left + 132, r1Y, boxW3 - 4, boxH, Component.literal("Y"));
+            this.yField.setBordered(false);
+            this.yField.setValue(String.format(Locale.US, "%.1f", defaultY));
+            this.addRenderableWidget(this.yField);
+
+            this.zField = new EditBox(this.font, left + 242, r1Y, boxW3 - 4, boxH, Component.literal("Z"));
+            this.zField.setBordered(false);
+            this.zField.setValue(String.format(Locale.US, "%.1f", defaultZ));
+            this.addRenderableWidget(this.zField);
+
+            this.speedField = new EditBox(this.font, left + 22, top + 147, 75, boxH, Component.literal("Speed"));
+            this.speedField.setBordered(false);
+            this.speedField.setValue(String.format(Locale.US, "%.1f", defaultSpeed));
+            this.addRenderableWidget(this.speedField);
+
+            this.setMyPositionButton = new CyberpunkButton(
+                    left + 105, top + 146, 110, 20,
+                    Component.literal("📍 SET POS"),
+                    b -> {
+                        if (this.minecraft != null && this.minecraft.player != null) {
+                            double px = this.minecraft.player.getX();
+                            double py = this.minecraft.player.getY();
+                            double pz = this.minecraft.player.getZ();
+                            if (xField != null) xField.setValue(String.format(Locale.US, "%.1f", px));
+                            if (yField != null) yField.setValue(String.format(Locale.US, "%.1f", py));
+                            if (zField != null) zField.setValue(String.format(Locale.US, "%.1f", pz));
+                        }
+                    }, CYAN_MAIN, false, Component.literal("Copy player position into target coordinates")
+            );
+            this.addRenderableWidget(this.setMyPositionButton);
+
+            this.pickLookedEntityButton = new CyberpunkButton(
+                    left + 222, top + 146, 115, 20,
+                    Component.literal("🎯 TARGET MOB"),
+                    b -> {
+                        Entity target = getLookedAtEntity();
+                        if (target != null) {
+                            if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
+                            if (targetSelectorField != null && targetSelectorField.getValue().isBlank()) {
+                                String typeStr = EntityType.getKey(target.getType()).toString();
+                                targetSelectorField.setValue("@e[type=" + typeStr + "]");
+                            }
+                        }
+                    }, CYAN_MAIN, false, Component.literal("Set UUID & selector to entity under crosshair")
+            );
+            this.addRenderableWidget(this.pickLookedEntityButton);
+
+            this.entityUuidField = new EditBox(this.font, left + 22, top + 189, panelWidth - 44, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField.setBordered(false);
+            this.entityUuidField.setValue(defaultUuid);
+            this.addRenderableWidget(this.entityUuidField);
+
+            this.targetSelectorField = new EditBox(this.font, left + 22, top + 229, panelWidth - 44, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField.setBordered(false);
+            this.targetSelectorField.setValue(defaultSelector);
+            this.addRenderableWidget(this.targetSelectorField);
+        } else if (actionType.equalsIgnoreCase("puppet_look_at")) {
+            this.commandSuggestions = null;
+            double defaultX = 0.0, defaultY = 64.0, defaultZ = 0.0;
+            String defaultLookSelector = "", defaultUuid = "", defaultSelector = "";
+            if (action instanceof PuppetLookAtAction pla) {
+                defaultX = pla.getX();
+                defaultY = pla.getY();
+                defaultZ = pla.getZ();
+                defaultLookSelector = pla.getLookTargetSelector();
+                defaultUuid = pla.getEntityUuid();
+                defaultSelector = pla.getTargetSelector();
+            }
+
+            int boxH = 18;
+            int r1Y = top + 105;
+            int boxW3 = 95;
+
+            this.xField = new EditBox(this.font, left + 22, r1Y, boxW3 - 4, boxH, Component.literal("X"));
+            this.xField.setBordered(false);
+            this.xField.setValue(String.format(Locale.US, "%.1f", defaultX));
+            this.addRenderableWidget(this.xField);
+
+            this.yField = new EditBox(this.font, left + 132, r1Y, boxW3 - 4, boxH, Component.literal("Y"));
+            this.yField.setBordered(false);
+            this.yField.setValue(String.format(Locale.US, "%.1f", defaultY));
+            this.addRenderableWidget(this.yField);
+
+            this.zField = new EditBox(this.font, left + 242, r1Y, boxW3 - 4, boxH, Component.literal("Z"));
+            this.zField.setBordered(false);
+            this.zField.setValue(String.format(Locale.US, "%.1f", defaultZ));
+            this.addRenderableWidget(this.zField);
+
+            this.lookTargetField = new EditBox(this.font, left + 22, top + 147, panelWidth - 165, boxH, Component.literal("Look Target Selector"));
+            this.lookTargetField.setBordered(false);
+            this.lookTargetField.setValue(defaultLookSelector);
+            this.addRenderableWidget(this.lookTargetField);
+
+            this.pickLookTargetButton = new CyberpunkButton(
+                    left + panelWidth - 138, top + 146, 115, 20,
+                    Component.literal("🎯 LOOK TARGET"),
+                    b -> {
+                        Entity target = getLookedAtEntity();
+                        if (target != null && lookTargetField != null) {
+                            lookTargetField.setValue(target.getUUID().toString());
+                        } else if (lookTargetField != null) {
+                            lookTargetField.setValue("@p");
+                        }
+                    }, CYAN_MAIN, false, Component.literal("Set look target to entity under crosshair (or @p)")
+            );
+            this.addRenderableWidget(this.pickLookTargetButton);
+
+            this.entityUuidField = new EditBox(this.font, left + 22, top + 189, panelWidth - 165, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField.setBordered(false);
+            this.entityUuidField.setValue(defaultUuid);
+            this.addRenderableWidget(this.entityUuidField);
+
+            this.pickLookedEntityButton = new CyberpunkButton(
+                    left + panelWidth - 138, top + 188, 115, 20,
+                    Component.literal("🎯 TARGET MOB"),
+                    b -> {
+                        Entity target = getLookedAtEntity();
+                        if (target != null) {
+                            if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
+                            if (targetSelectorField != null && targetSelectorField.getValue().isBlank()) {
+                                String typeStr = EntityType.getKey(target.getType()).toString();
+                                targetSelectorField.setValue("@e[type=" + typeStr + "]");
+                            }
+                        }
+                    }, CYAN_MAIN, false, Component.literal("Set UUID & selector to entity under crosshair")
+            );
+            this.addRenderableWidget(this.pickLookedEntityButton);
+
+            this.targetSelectorField = new EditBox(this.font, left + 22, top + 229, panelWidth - 44, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField.setBordered(false);
+            this.targetSelectorField.setValue(defaultSelector);
+            this.addRenderableWidget(this.targetSelectorField);
+        } else if (actionType.equalsIgnoreCase("puppet_suppress_ai")) {
+            this.commandSuggestions = null;
+            boolean defaultAi = false, defaultNav = false, defaultTargeting = false, defaultLook = false, defaultActive = true;
+            String defaultUuid = "", defaultSelector = "";
+            if (action instanceof PuppetSuppressAction psa) {
+                defaultAi = psa.isSuppressAi();
+                defaultNav = psa.isSuppressNavigation();
+                defaultTargeting = psa.isSuppressTargeting();
+                defaultLook = psa.isSuppressLook();
+                defaultActive = psa.isPuppetingActive();
+                defaultUuid = psa.getEntityUuid();
+                defaultSelector = psa.getTargetSelector();
+            }
+
+            int boxH = 18;
+            this.suppressAiCheckbox = new CyberpunkCheckbox(left + 20, top + 98, panelWidth - 40, 18, Component.literal("Disable Entire Mob AI (Orchestrator Manual Only)"), defaultAi, null);
+            this.addRenderableWidget(this.suppressAiCheckbox);
+
+            this.suppressNavCheckbox = new CyberpunkCheckbox(left + 20, top + 120, (panelWidth - 50) / 2, 18, Component.literal("Suppress Navigation"), defaultNav, null);
+            this.addRenderableWidget(this.suppressNavCheckbox);
+
+            this.suppressTargetingCheckbox = new CyberpunkCheckbox(left + 185, top + 120, (panelWidth - 50) / 2, 18, Component.literal("Suppress Targeting"), defaultTargeting, null);
+            this.addRenderableWidget(this.suppressTargetingCheckbox);
+
+            this.suppressLookCheckbox = new CyberpunkCheckbox(left + 20, top + 142, (panelWidth - 50) / 2, 18, Component.literal("Suppress Look Control"), defaultLook, null);
+            this.addRenderableWidget(this.suppressLookCheckbox);
+
+            this.puppetingActiveCheckbox = new CyberpunkCheckbox(left + 185, top + 142, (panelWidth - 50) / 2, 18, Component.literal("Puppeting Active Flag"), defaultActive, null);
+            this.addRenderableWidget(this.puppetingActiveCheckbox);
+
+            this.entityUuidField = new EditBox(this.font, left + 22, top + 175, panelWidth - 165, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField.setBordered(false);
+            this.entityUuidField.setValue(defaultUuid);
+            this.addRenderableWidget(this.entityUuidField);
+
+            this.pickLookedEntityButton = new CyberpunkButton(
+                    left + panelWidth - 138, top + 174, 115, 20,
+                    Component.literal("🎯 TARGET MOB"),
+                    b -> {
+                        Entity target = getLookedAtEntity();
+                        if (target != null) {
+                            if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
+                            if (targetSelectorField != null && targetSelectorField.getValue().isBlank()) {
+                                String typeStr = EntityType.getKey(target.getType()).toString();
+                                targetSelectorField.setValue("@e[type=" + typeStr + "]");
+                            }
+                        }
+                    }, CYAN_MAIN, false, Component.literal("Set UUID & selector to entity under crosshair")
+            );
+            this.addRenderableWidget(this.pickLookedEntityButton);
+
+            this.targetSelectorField = new EditBox(this.font, left + 22, top + 218, panelWidth - 44, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField.setBordered(false);
+            this.targetSelectorField.setValue(defaultSelector);
+            this.addRenderableWidget(this.targetSelectorField);
+        } else if (actionType.equalsIgnoreCase("puppet_stop_action")) {
+            this.commandSuggestions = null;
+            String defaultUuid = "", defaultSelector = "";
+            if (action instanceof PuppetStopAction pst) {
+                defaultUuid = pst.getEntityUuid();
+                defaultSelector = pst.getTargetSelector();
+            }
+
+            int boxH = 18;
+            this.entityUuidField = new EditBox(this.font, left + 22, top + 125, panelWidth - 165, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField.setBordered(false);
+            this.entityUuidField.setValue(defaultUuid);
+            this.addRenderableWidget(this.entityUuidField);
+
+            this.pickLookedEntityButton = new CyberpunkButton(
+                    left + panelWidth - 138, top + 124, 115, 20,
+                    Component.literal("🎯 TARGET MOB"),
+                    b -> {
+                        Entity target = getLookedAtEntity();
+                        if (target != null) {
+                            if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
+                            if (targetSelectorField != null && targetSelectorField.getValue().isBlank()) {
+                                String typeStr = EntityType.getKey(target.getType()).toString();
+                                targetSelectorField.setValue("@e[type=" + typeStr + "]");
+                            }
+                        }
+                    }, CYAN_MAIN, false, Component.literal("Set UUID & selector to entity under crosshair")
+            );
+            this.addRenderableWidget(this.pickLookedEntityButton);
+
+            this.targetSelectorField = new EditBox(this.font, left + 22, top + 175, panelWidth - 44, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField.setBordered(false);
+            this.targetSelectorField.setValue(defaultSelector);
+            this.addRenderableWidget(this.targetSelectorField);
         } else {
             this.commandSuggestions = null;
         }
@@ -617,6 +1048,11 @@ public class EditActionModalScreen extends Screen {
             case "run_sequence" -> new RunSequenceAction("sub_sequence.json");
             case "stall_parent" -> new StallParentAction();
             case "resume_parent" -> new ResumeParentAction();
+            case "puppet_action", "execute_puppet_action" -> new ExecutePuppetAction("", "", "", 20);
+            case "puppet_move_to", "puppet_move" -> new PuppetMoveToAction(0.0, 64.0, 0.0, 1.0, "", "");
+            case "puppet_look_at", "puppet_look" -> new PuppetLookAtAction(0.0, 64.0, 0.0, "", "", "");
+            case "puppet_suppress_ai", "puppet_suppress" -> new PuppetSuppressAction(false, false, false, true, "", "");
+            case "puppet_stop_action", "puppet_stop" -> new PuppetStopAction("", "");
             default -> new CommandAction("say Hello %player%");
         };
     }
@@ -691,6 +1127,37 @@ public class EditActionModalScreen extends Screen {
             parseSubsequenceInput(val, fsa::setFile, fsa::setStartIndex);
         } else if (action instanceof RunSequenceAction rsa) {
             parseSubsequenceInput(val, rsa::setFile, rsa::setStartIndex);
+        } else if (action instanceof ExecutePuppetAction epa) {
+            epa.setActionId(val);
+            if (windupTicksField != null) try { epa.setWindupTicks(Integer.parseInt(windupTicksField.getValue().trim())); } catch (Exception ignored) {}
+            if (durationTicksField != null) try { epa.setDurationTicks(Integer.parseInt(durationTicksField.getValue().trim())); } catch (Exception ignored) {}
+            if (entityUuidField != null) epa.setEntityUuid(entityUuidField.getValue().trim());
+            if (targetSelectorField != null) epa.setTargetSelector(targetSelectorField.getValue().trim());
+        } else if (action instanceof PuppetMoveToAction pmt) {
+            if (xField != null) try { pmt.setX(Double.parseDouble(xField.getValue().trim())); } catch (Exception ignored) {}
+            if (yField != null) try { pmt.setY(Double.parseDouble(yField.getValue().trim())); } catch (Exception ignored) {}
+            if (zField != null) try { pmt.setZ(Double.parseDouble(zField.getValue().trim())); } catch (Exception ignored) {}
+            if (speedField != null) try { pmt.setSpeed(Double.parseDouble(speedField.getValue().trim())); } catch (Exception ignored) {}
+            if (entityUuidField != null) pmt.setEntityUuid(entityUuidField.getValue().trim());
+            if (targetSelectorField != null) pmt.setTargetSelector(targetSelectorField.getValue().trim());
+        } else if (action instanceof PuppetLookAtAction pla) {
+            if (xField != null) try { pla.setX(Double.parseDouble(xField.getValue().trim())); } catch (Exception ignored) {}
+            if (yField != null) try { pla.setY(Double.parseDouble(yField.getValue().trim())); } catch (Exception ignored) {}
+            if (zField != null) try { pla.setZ(Double.parseDouble(zField.getValue().trim())); } catch (Exception ignored) {}
+            if (lookTargetField != null) pla.setLookTargetSelector(lookTargetField.getValue().trim());
+            if (entityUuidField != null) pla.setEntityUuid(entityUuidField.getValue().trim());
+            if (targetSelectorField != null) pla.setTargetSelector(targetSelectorField.getValue().trim());
+        } else if (action instanceof PuppetSuppressAction psa) {
+            if (suppressAiCheckbox != null) psa.setSuppressAi(suppressAiCheckbox.isChecked());
+            if (suppressNavCheckbox != null) psa.setSuppressNavigation(suppressNavCheckbox.isChecked());
+            if (suppressTargetingCheckbox != null) psa.setSuppressTargeting(suppressTargetingCheckbox.isChecked());
+            if (suppressLookCheckbox != null) psa.setSuppressLook(suppressLookCheckbox.isChecked());
+            if (puppetingActiveCheckbox != null) psa.setPuppetingActive(puppetingActiveCheckbox.isChecked());
+            if (entityUuidField != null) psa.setEntityUuid(entityUuidField.getValue().trim());
+            if (targetSelectorField != null) psa.setTargetSelector(targetSelectorField.getValue().trim());
+        } else if (action instanceof PuppetStopAction pst) {
+            if (entityUuidField != null) pst.setEntityUuid(entityUuidField.getValue().trim());
+            if (targetSelectorField != null) pst.setTargetSelector(targetSelectorField.getValue().trim());
         }
     }
 
@@ -712,6 +1179,17 @@ public class EditActionModalScreen extends Screen {
         setStartIndex.accept(startIndex);
     }
 
+    private Entity getLookedAtEntity() {
+        if (this.minecraft == null) return null;
+        if (this.minecraft.crosshairPickEntity != null) {
+            return this.minecraft.crosshairPickEntity;
+        }
+        if (this.minecraft.hitResult instanceof EntityHitResult ehr) {
+            return ehr.getEntity();
+        }
+        return null;
+    }
+
     private double getSuggestionOffsetY() {
         int panelHeight = 285;
         int top = (this.height - panelHeight) / 2;
@@ -723,7 +1201,121 @@ public class EditActionModalScreen extends Screen {
         return (actionTypeDropdown != null && actionTypeDropdown.isOpen()) ||
                 (subActionTypeDropdown != null && subActionTypeDropdown.isOpen()) ||
                 (unitDropdown != null && unitDropdown.isOpen()) ||
-                (musicSequenceDropdown != null && musicSequenceDropdown.isOpen());
+                (musicSequenceDropdown != null && musicSequenceDropdown.isOpen()) ||
+                (nearbyEntityDropdown != null && nearbyEntityDropdown.isOpen()) ||
+                (puppetActionDropdown != null && puppetActionDropdown.isOpen());
+    }
+
+    private void refreshPuppetActionSuggestions() {
+        if (this.puppetActionDropdown == null || this.minecraft == null || this.minecraft.level == null) return;
+
+        List<CyberpunkDropdown.DropdownEntry<String>> actionEntries = new ArrayList<>();
+        String currentEntityUuid = entityUuidField != null ? entityUuidField.getValue().trim() : "";
+        String currentSelector = targetSelectorField != null ? targetSelectorField.getValue().trim() : "";
+
+        List<IPuppetEntity> specificPuppets = new ArrayList<>();
+        List<IPuppetEntity> candidatePuppets = new ArrayList<>();
+
+        if (!currentEntityUuid.isEmpty()) {
+            try {
+                java.util.UUID uuid = java.util.UUID.fromString(currentEntityUuid);
+                for (Entity e : this.minecraft.level.entitiesForRendering()) {
+                    if (e.getUUID().equals(uuid) && e instanceof IPuppetEntity puppet) {
+                        specificPuppets.add(puppet);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        String typeFilter = null;
+        if (!currentSelector.isEmpty() && currentSelector.contains("type=")) {
+            int idx = currentSelector.indexOf("type=");
+            int endIdx = currentSelector.indexOf("]", idx);
+            if (endIdx < 0) endIdx = currentSelector.indexOf(",", idx);
+            if (endIdx < 0) endIdx = currentSelector.length();
+            typeFilter = currentSelector.substring(idx + 5, endIdx).trim();
+        }
+
+        if (specificPuppets.isEmpty() && !currentSelector.isEmpty()) {
+            for (Entity e : this.minecraft.level.entitiesForRendering()) {
+                if (e instanceof IPuppetEntity puppet) {
+                    if (typeFilter != null && !typeFilter.isEmpty()) {
+                        String entityTypeStr = EntityType.getKey(e.getType()).toString();
+                        if (entityTypeStr.equalsIgnoreCase(typeFilter) || entityTypeStr.endsWith(":" + typeFilter)) {
+                            specificPuppets.add(puppet);
+                        }
+                    } else {
+                        candidatePuppets.add(puppet);
+                    }
+                }
+            }
+        }
+
+        if (specificPuppets.isEmpty() && candidatePuppets.isEmpty() && typeFilter != null && !typeFilter.isEmpty()) {
+            try {
+                net.minecraft.resources.ResourceLocation typeRes = net.minecraft.resources.ResourceLocation.tryParse(typeFilter);
+                if (typeRes != null && net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.containsKey(typeRes)) {
+                    EntityType<?> type = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.get(typeRes);
+                    if (type != null) {
+                        Entity dummy = type.create(this.minecraft.level);
+                        if (dummy instanceof IPuppetEntity puppet) {
+                            specificPuppets.add(puppet);
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        if (candidatePuppets.isEmpty() && specificPuppets.isEmpty()) {
+            for (Entity e : this.minecraft.level.entitiesForRendering()) {
+                if (e instanceof IPuppetEntity puppet) {
+                    candidatePuppets.add(puppet);
+                }
+            }
+        }
+
+        List<IPuppetEntity> targetPuppets = !specificPuppets.isEmpty() ? specificPuppets : candidatePuppets;
+
+        Set<String> addedActionIds = new java.util.LinkedHashSet<>();
+        int totalFound = 0;
+
+        for (IPuppetEntity puppet : targetPuppets) {
+            if (puppet.getPuppetController() != null) {
+                Map<net.minecraft.resources.ResourceLocation, PuppetAction> actionsMap = puppet.getPuppetController().getActions();
+                Entity entity = (Entity) puppet;
+                String entityName = entity.getDisplayName().getString();
+                String entityType = EntityType.getKey(entity.getType()).toString();
+
+                for (net.minecraft.resources.ResourceLocation actionRes : actionsMap.keySet()) {
+                    String actionIdStr = actionRes.toString();
+                    if (addedActionIds.add(actionIdStr)) {
+                        totalFound++;
+                        String label = "⚡ " + actionIdStr;
+                        String details = "Entity: " + entityName + " (" + entityType + ")";
+                        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>(actionIdStr, Component.literal(label), Component.literal(details)));
+                    }
+                }
+            }
+        }
+
+        if (actionEntries.isEmpty()) {
+            actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("", Component.literal("-- No Registered Actions Found --"), Component.literal("Select a mob or enter a valid entity selector")));
+        } else {
+            actionEntries.add(0, new CyberpunkDropdown.DropdownEntry<>("", Component.literal("-- Select Puppet Action (" + totalFound + " available) --"), Component.literal("Click to choose action ID")));
+        }
+
+        String currentVal = inputField != null ? inputField.getValue().trim() : "";
+        this.puppetActionDropdown.setOptions(actionEntries);
+
+        if ((currentVal.isEmpty() || currentVal.equalsIgnoreCase("mymod:action_id")) && !addedActionIds.isEmpty()) {
+            String firstAction = addedActionIds.iterator().next();
+            if (inputField != null) {
+                inputField.setValue(firstAction);
+            }
+            this.puppetActionDropdown.selectByValue(firstAction);
+        } else if (!currentVal.isEmpty() && addedActionIds.contains(currentVal)) {
+            this.puppetActionDropdown.selectByValue(currentVal);
+        }
     }
 
     @Override
@@ -736,6 +1328,8 @@ public class EditActionModalScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        if (puppetActionDropdown != null && puppetActionDropdown.mouseScrolled(mouseX, mouseY, amount)) return true;
+        if (nearbyEntityDropdown != null && nearbyEntityDropdown.mouseScrolled(mouseX, mouseY, amount)) return true;
         if (musicSequenceDropdown != null && musicSequenceDropdown.mouseScrolled(mouseX, mouseY, amount)) return true;
         if (subActionTypeDropdown != null && subActionTypeDropdown.mouseScrolled(mouseX, mouseY, amount)) return true;
         if (unitDropdown != null && unitDropdown.mouseScrolled(mouseX, mouseY, amount)) return true;
@@ -753,6 +1347,12 @@ public class EditActionModalScreen extends Screen {
         if (scale < 1.0) {
             mouseX /= scale;
             mouseY /= scale;
+        }
+        if (puppetActionDropdown != null && puppetActionDropdown.isOpen()) {
+            if (puppetActionDropdown.mouseClicked(mouseX, mouseY, button)) return true;
+        }
+        if (nearbyEntityDropdown != null && nearbyEntityDropdown.isOpen()) {
+            if (nearbyEntityDropdown.mouseClicked(mouseX, mouseY, button)) return true;
         }
         if (musicSequenceDropdown != null && musicSequenceDropdown.isOpen()) {
             if (musicSequenceDropdown.mouseClicked(mouseX, mouseY, button)) return true;
@@ -786,6 +1386,8 @@ public class EditActionModalScreen extends Screen {
             dragX /= scale;
             dragY /= scale;
         }
+        if (puppetActionDropdown != null && puppetActionDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
+        if (nearbyEntityDropdown != null && nearbyEntityDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
         if (musicSequenceDropdown != null && musicSequenceDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
         if (subActionTypeDropdown != null && subActionTypeDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
         if (unitDropdown != null && unitDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
@@ -801,6 +1403,8 @@ public class EditActionModalScreen extends Screen {
             mouseX /= scale;
             mouseY /= scale;
         }
+        if (puppetActionDropdown != null && puppetActionDropdown.mouseReleased(mouseX, mouseY, button)) return true;
+        if (nearbyEntityDropdown != null && nearbyEntityDropdown.mouseReleased(mouseX, mouseY, button)) return true;
         if (musicSequenceDropdown != null && musicSequenceDropdown.mouseReleased(mouseX, mouseY, button)) return true;
         if (subActionTypeDropdown != null && subActionTypeDropdown.mouseReleased(mouseX, mouseY, button)) return true;
         if (unitDropdown != null && unitDropdown.mouseReleased(mouseX, mouseY, button)) return true;
@@ -911,6 +1515,10 @@ public class EditActionModalScreen extends Screen {
             promptLabel = actionType.equalsIgnoreCase("new_objective") ? "Configure Mission Objective Parameters:" : "End Active Objective Action:";
             promptColor = 0xFF00E5FF;
             showInputFieldBox = false;
+        } else if (actionType.equalsIgnoreCase("puppet_action") || actionType.equalsIgnoreCase("puppet_move_to") || actionType.equalsIgnoreCase("puppet_look_at") || actionType.equalsIgnoreCase("puppet_suppress_ai") || actionType.equalsIgnoreCase("puppet_stop_action")) {
+            promptLabel = "Configure Puppet Action Parameters:";
+            promptColor = 0xFFFF8800;
+            showInputFieldBox = false;
         } else {
             promptLabel = switch (actionType.toLowerCase()) {
                 case "fork_sequence", "run_sequence" -> "Subsequence JSON File Name [Start Action #]:";
@@ -963,6 +1571,67 @@ public class EditActionModalScreen extends Screen {
             drawBorderBox(graphics, left + 20, top + 146, panelWidth - 40, 20, 0xAA00E5FF, 0xEE08121B);
         } else if (actionType.equalsIgnoreCase("end_objective")) {
             graphics.drawString(this.font, "Clears current active objective from the HUD overlay.", left + 20, top + 114, 0xFFAABBCC, false);
+        } else if (actionType.equalsIgnoreCase("puppet_action")) {
+            graphics.drawString(this.font, "Suggested Entity Actions (Autocompleted):", left + 20, top + 80, 0xFFFF8800, false);
+
+            graphics.drawString(this.font, "Action ID (e.g. mymod:radial_blast):", left + 20, top + 114, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 124, panelWidth - 40, 20, 0xAA00E5FF, 0xEE08121B);
+
+            graphics.drawString(this.font, "Windup", left + 20, top + 148, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 157, 65, 20, 0xAA00E5FF, 0xEE08121B);
+
+            graphics.drawString(this.font, "Duration", left + 95, top + 148, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 95, top + 157, 65, 20, 0xAA00E5FF, 0xEE08121B);
+
+            graphics.drawString(this.font, "Entity UUID (Optional)", left + 20, top + 181, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 189, panelWidth - 40, 20, 0xAA00E5FF, 0xEE08121B);
+
+            graphics.drawString(this.font, "Target Selector (Optional, e.g. @e[type=...])", left + 20, top + 213, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 221, panelWidth - 40, 20, 0xAA00E5FF, 0xEE08121B);
+        } else if (actionType.equalsIgnoreCase("puppet_move_to")) {
+            graphics.drawString(this.font, "X Position", left + 20, top + 93, 0xFFAABBCC, false);
+            graphics.drawString(this.font, "Y Position", left + 130, top + 93, 0xFFAABBCC, false);
+            graphics.drawString(this.font, "Z Position", left + 240, top + 93, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 104, 95, 20, 0xAA00E5FF, 0xEE08121B);
+            drawBorderBox(graphics, left + 130, top + 104, 95, 20, 0xAA00E5FF, 0xEE08121B);
+            drawBorderBox(graphics, left + 240, top + 104, 95, 20, 0xAA00E5FF, 0xEE08121B);
+
+            graphics.drawString(this.font, "Speed", left + 20, top + 135, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 145, 100, 20, 0xAA00E5FF, 0xEE08121B);
+
+            graphics.drawString(this.font, "Entity UUID (Optional)", left + 20, top + 177, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 187, panelWidth - 40, 20, 0xAA00E5FF, 0xEE08121B);
+
+            graphics.drawString(this.font, "Target Selector (Optional, e.g. @e[tag=puppet])", left + 20, top + 217, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 227, panelWidth - 40, 20, 0xAA00E5FF, 0xEE08121B);
+        } else if (actionType.equalsIgnoreCase("puppet_look_at")) {
+            graphics.drawString(this.font, "X Position", left + 20, top + 93, 0xFFAABBCC, false);
+            graphics.drawString(this.font, "Y Position", left + 130, top + 93, 0xFFAABBCC, false);
+            graphics.drawString(this.font, "Z Position", left + 240, top + 93, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 104, 95, 20, 0xAA00E5FF, 0xEE08121B);
+            drawBorderBox(graphics, left + 130, top + 104, 95, 20, 0xAA00E5FF, 0xEE08121B);
+            drawBorderBox(graphics, left + 240, top + 104, 95, 20, 0xAA00E5FF, 0xEE08121B);
+
+            graphics.drawString(this.font, "Look Target Selector (Optional, e.g. @p)", left + 20, top + 135, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 145, panelWidth - 40, 20, 0xAA00E5FF, 0xEE08121B);
+
+            graphics.drawString(this.font, "Entity UUID (Optional)", left + 20, top + 177, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 187, panelWidth - 40, 20, 0xAA00E5FF, 0xEE08121B);
+
+            graphics.drawString(this.font, "Target Selector (Optional, e.g. @e[tag=puppet])", left + 20, top + 217, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 227, panelWidth - 40, 20, 0xAA00E5FF, 0xEE08121B);
+        } else if (actionType.equalsIgnoreCase("puppet_suppress_ai")) {
+            graphics.drawString(this.font, "Entity UUID (Optional)", left + 20, top + 153, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 163, panelWidth - 40, 20, 0xAA00E5FF, 0xEE08121B);
+
+            graphics.drawString(this.font, "Target Selector (Optional, e.g. @e[tag=puppet])", left + 20, top + 198, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 208, panelWidth - 40, 20, 0xAA00E5FF, 0xEE08121B);
+        } else if (actionType.equalsIgnoreCase("puppet_stop_action")) {
+            graphics.drawString(this.font, "Entity UUID (Optional)", left + 20, top + 113, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 123, panelWidth - 40, 20, 0xAA00E5FF, 0xEE08121B);
+
+            graphics.drawString(this.font, "Target Selector (Optional, e.g. @e[tag=puppet])", left + 20, top + 163, 0xFFAABBCC, false);
+            drawBorderBox(graphics, left + 20, top + 173, panelWidth - 40, 20, 0xAA00E5FF, 0xEE08121B);
         } else {
             int labelY = (actionType.equalsIgnoreCase("wait_until") && waitUntilType.equalsIgnoreCase("delay")) ? top + 114 : top + 104;
             graphics.drawString(this.font, promptLabel, left + 20, labelY, promptColor, false);
@@ -1000,6 +1669,8 @@ public class EditActionModalScreen extends Screen {
         if (subActionTypeDropdown != null) subActionTypeDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
         if (unitDropdown != null) unitDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
         if (musicSequenceDropdown != null) musicSequenceDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
+        if (nearbyEntityDropdown != null) nearbyEntityDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
+        if (puppetActionDropdown != null) puppetActionDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
 
         graphics.pose().popPose();
     }

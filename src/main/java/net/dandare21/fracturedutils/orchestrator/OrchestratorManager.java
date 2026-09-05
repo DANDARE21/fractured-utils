@@ -212,10 +212,19 @@ public class OrchestratorManager {
             return "parent";
         } else if (action instanceof ResumeParentAction) {
             return "parent";
-        } else if (action instanceof NewObjectiveAction noa) {
-            return noa.getName() + " (" + noa.getDescription() + ")";
-        } else if (action instanceof EndObjectiveAction) {
-            return "end_objective";
+        } else if (action instanceof ExecutePuppetAction epa) {
+            return String.format(Locale.ROOT, "puppet action %s (%dt)", epa.getActionId(), epa.getDurationTicks());
+        } else if (action instanceof PuppetMoveToAction pmt) {
+            return String.format(Locale.ROOT, "puppet move to %.1f,%.1f,%.1f (spd=%.1f)", pmt.getX(), pmt.getY(), pmt.getZ(), pmt.getSpeed());
+        } else if (action instanceof PuppetLookAtAction pla) {
+            if (!pla.getLookTargetSelector().isBlank()) {
+                return "puppet look at " + pla.getLookTargetSelector();
+            }
+            return String.format(Locale.ROOT, "puppet look at %.1f,%.1f,%.1f", pla.getX(), pla.getY(), pla.getZ());
+        } else if (action instanceof PuppetSuppressAction psa) {
+            return String.format(Locale.ROOT, "puppet suppress (nav=%b, tgt=%b, look=%b)", psa.isSuppressNavigation(), psa.isSuppressTargeting(), psa.isSuppressLook());
+        } else if (action instanceof PuppetStopAction) {
+            return "puppet stop action";
         }
         return "";
     }

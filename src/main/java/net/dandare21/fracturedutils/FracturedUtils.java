@@ -25,9 +25,13 @@ public class FracturedUtils
 
         net.dandare21.fracturedutils.particle.ModParticles.register(modEventBus);
         net.dandare21.fracturedutils.sound.ModSounds.register(modEventBus);
+        net.dandare21.fracturedutils.puppet.registry.ModEntities.register(modEventBus);
+        net.dandare21.fracturedutils.puppet.registry.ModItems.register(modEventBus);
 
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::addCreative);
+        modEventBus.addListener(this::entityAttributeSetup);
+        modEventBus.addListener(net.dandare21.fracturedutils.puppet.capability.PuppetCapabilityEvents::onRegisterCapabilities);
 
         MinecraftForge.EVENT_BUS.register(this);
     }
@@ -40,8 +44,17 @@ public class FracturedUtils
         });
     }
 
+    private void entityAttributeSetup(net.minecraftforge.event.entity.EntityAttributeCreationEvent event)
+    {
+        event.put(net.dandare21.fracturedutils.puppet.registry.ModEntities.VOID_HERALD.get(),
+                net.dandare21.fracturedutils.puppet.boss.VoidHeraldBoss.createAttributes().build());
+    }
+
     private void addCreative(BuildCreativeModeTabContentsEvent event)
     {
+        if (event.getTabKey() == net.minecraft.world.item.CreativeModeTabs.SPAWN_EGGS) {
+            event.accept(net.dandare21.fracturedutils.puppet.registry.ModItems.VOID_HERALD_SPAWN_EGG);
+        }
     }
 
     @SubscribeEvent
@@ -67,6 +80,15 @@ public class FracturedUtils
                 net.dandare21.fracturedutils.sound.DialogResourcePackGenerator.generateIfMissing();
                 net.dandare21.fracturedutils.sound.event.ClientAudioPackManager.getInstance().init();
             });
+        }
+
+        @SubscribeEvent
+        public static void registerEntityRenderers(net.minecraftforge.client.event.EntityRenderersEvent.RegisterRenderers event)
+        {
+            event.registerEntityRenderer(
+                    net.dandare21.fracturedutils.puppet.registry.ModEntities.VOID_HERALD.get(),
+                    net.dandare21.fracturedutils.puppet.client.VoidHeraldRenderer::new
+            );
         }
 
         @SubscribeEvent

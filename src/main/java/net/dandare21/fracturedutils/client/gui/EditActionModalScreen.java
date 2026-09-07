@@ -70,6 +70,7 @@ public class EditActionModalScreen extends Screen {
     private CyberpunkCheckbox suppressNavCheckbox;
     private CyberpunkCheckbox suppressTargetingCheckbox;
     private CyberpunkCheckbox suppressLookCheckbox;
+    private CyberpunkCheckbox suppressActionsCheckbox;
     private CyberpunkCheckbox puppetingActiveCheckbox;
     private CyberpunkButton setMyPositionButton;
     private CyberpunkButton pickLookedEntityButton;
@@ -248,8 +249,8 @@ public class EditActionModalScreen extends Screen {
                             for (Entity e : this.minecraft.level.entitiesForRendering()) {
                                 if (e.getUUID().equals(uuid)) {
                                     String typeStr = EntityType.getKey(e.getType()).toString();
-                                    if (targetSelectorField != null && targetSelectorField.getValue().isBlank()) {
-                                        targetSelectorField.setValue("@e[type=" + typeStr + "]");
+                                    if (targetSelectorField != null) {
+                                        targetSelectorField.setValue("@e[type=" + typeStr + ",limit=1,sort=nearest]");
                                     }
                                     break;
                                 }
@@ -430,6 +431,7 @@ public class EditActionModalScreen extends Screen {
                     this.addRenderableWidget(this.setMyPositionButton);
 
                     this.targetSelectorField = new EditBox(this.font, left + 162, top + 130, panelWidth - 182, boxH, Component.literal("Target Selector"));
+                    this.targetSelectorField.setMaxLength(256);
                     this.targetSelectorField.setBordered(false);
                     this.targetSelectorField.setValue(defaultTargetSelector != null ? defaultTargetSelector : "@a");
                     this.addRenderableWidget(this.targetSelectorField);
@@ -538,6 +540,7 @@ public class EditActionModalScreen extends Screen {
             // Row 3: Checkpoint Label
             int r3Y = top + 189;
             this.labelField = new EditBox(this.font, left + 22, r3Y, panelWidth - 44, boxH, Component.literal("Label"));
+            this.labelField.setMaxLength(256);
             this.labelField.setBordered(false);
             this.labelField.setValue(defaultLabel != null ? defaultLabel : "");
             this.addRenderableWidget(this.labelField);
@@ -564,6 +567,7 @@ public class EditActionModalScreen extends Screen {
             this.addRenderableWidget(this.setMyPositionButton);
 
             this.targetSelectorField = new EditBox(this.font, left + 212, top + 225, 124, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField.setMaxLength(256);
             this.targetSelectorField.setBordered(false);
             this.targetSelectorField.setValue(defaultTargetSelector != null ? defaultTargetSelector : "@a");
             this.addRenderableWidget(this.targetSelectorField);
@@ -580,11 +584,13 @@ public class EditActionModalScreen extends Screen {
 
             int boxH = 18;
             this.nameField = new EditBox(this.font, left + 25, top + 105, panelWidth - 50, boxH, Component.literal("Name"));
+            this.nameField.setMaxLength(256);
             this.nameField.setBordered(false);
             this.nameField.setValue(defaultName);
             this.addRenderableWidget(this.nameField);
 
             this.descriptionField = new EditBox(this.font, left + 25, top + 147, panelWidth - 50, boxH, Component.literal("Description"));
+            this.descriptionField.setMaxLength(256);
             this.descriptionField.setBordered(false);
             this.descriptionField.setValue(defaultDesc);
             this.addRenderableWidget(this.descriptionField);
@@ -704,9 +710,9 @@ public class EditActionModalScreen extends Screen {
                         Entity target = getLookedAtEntity();
                         if (target != null) {
                             if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
-                            if (targetSelectorField != null && targetSelectorField.getValue().isBlank()) {
+                            if (targetSelectorField != null) {
                                 String typeStr = EntityType.getKey(target.getType()).toString();
-                                targetSelectorField.setValue("@e[type=" + typeStr + "]");
+                                targetSelectorField.setValue("@e[type=" + typeStr + ",limit=1,sort=nearest]");
                             }
                             refreshPuppetActionSuggestions();
                         }
@@ -715,12 +721,14 @@ public class EditActionModalScreen extends Screen {
             this.addRenderableWidget(this.pickLookedEntityButton);
 
             this.entityUuidField = new EditBox(this.font, left + 22, top + 190, panelWidth - 44, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField.setMaxLength(128);
             this.entityUuidField.setBordered(false);
             this.entityUuidField.setValue(defaultUuid);
             this.entityUuidField.setResponder(text -> refreshPuppetActionSuggestions());
             this.addRenderableWidget(this.entityUuidField);
 
             this.targetSelectorField = new EditBox(this.font, left + 22, top + 222, panelWidth - 44, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField.setMaxLength(256);
             this.targetSelectorField.setBordered(false);
             this.targetSelectorField.setValue(defaultSelector);
             this.targetSelectorField.setResponder(text -> refreshPuppetActionSuggestions());
@@ -787,9 +795,9 @@ public class EditActionModalScreen extends Screen {
                         Entity target = getLookedAtEntity();
                         if (target != null) {
                             if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
-                            if (targetSelectorField != null && targetSelectorField.getValue().isBlank()) {
+                            if (targetSelectorField != null) {
                                 String typeStr = EntityType.getKey(target.getType()).toString();
-                                targetSelectorField.setValue("@e[type=" + typeStr + "]");
+                                targetSelectorField.setValue("@e[type=" + typeStr + ",limit=1,sort=nearest]");
                             }
                         }
                     }, CYAN_MAIN, false, Component.literal("Set UUID & selector to entity under crosshair")
@@ -797,11 +805,13 @@ public class EditActionModalScreen extends Screen {
             this.addRenderableWidget(this.pickLookedEntityButton);
 
             this.entityUuidField = new EditBox(this.font, left + 22, top + 189, panelWidth - 44, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField.setMaxLength(128);
             this.entityUuidField.setBordered(false);
             this.entityUuidField.setValue(defaultUuid);
             this.addRenderableWidget(this.entityUuidField);
 
             this.targetSelectorField = new EditBox(this.font, left + 22, top + 229, panelWidth - 44, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField.setMaxLength(256);
             this.targetSelectorField.setBordered(false);
             this.targetSelectorField.setValue(defaultSelector);
             this.addRenderableWidget(this.targetSelectorField);
@@ -838,6 +848,7 @@ public class EditActionModalScreen extends Screen {
             this.addRenderableWidget(this.zField);
 
             this.lookTargetField = new EditBox(this.font, left + 22, top + 147, panelWidth - 165, boxH, Component.literal("Look Target Selector"));
+            this.lookTargetField.setMaxLength(256);
             this.lookTargetField.setBordered(false);
             this.lookTargetField.setValue(defaultLookSelector);
             this.addRenderableWidget(this.lookTargetField);
@@ -857,6 +868,7 @@ public class EditActionModalScreen extends Screen {
             this.addRenderableWidget(this.pickLookTargetButton);
 
             this.entityUuidField = new EditBox(this.font, left + 22, top + 189, panelWidth - 165, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField.setMaxLength(128);
             this.entityUuidField.setBordered(false);
             this.entityUuidField.setValue(defaultUuid);
             this.addRenderableWidget(this.entityUuidField);
@@ -868,9 +880,9 @@ public class EditActionModalScreen extends Screen {
                         Entity target = getLookedAtEntity();
                         if (target != null) {
                             if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
-                            if (targetSelectorField != null && targetSelectorField.getValue().isBlank()) {
+                            if (targetSelectorField != null) {
                                 String typeStr = EntityType.getKey(target.getType()).toString();
-                                targetSelectorField.setValue("@e[type=" + typeStr + "]");
+                                targetSelectorField.setValue("@e[type=" + typeStr + ",limit=1,sort=nearest]");
                             }
                         }
                     }, CYAN_MAIN, false, Component.literal("Set UUID & selector to entity under crosshair")
@@ -878,40 +890,48 @@ public class EditActionModalScreen extends Screen {
             this.addRenderableWidget(this.pickLookedEntityButton);
 
             this.targetSelectorField = new EditBox(this.font, left + 22, top + 229, panelWidth - 44, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField.setMaxLength(256);
             this.targetSelectorField.setBordered(false);
             this.targetSelectorField.setValue(defaultSelector);
             this.addRenderableWidget(this.targetSelectorField);
         } else if (actionType.equalsIgnoreCase("puppet_suppress_ai")) {
             this.commandSuggestions = null;
-            boolean defaultAi = false, defaultNav = false, defaultTargeting = false, defaultLook = false, defaultActive = true;
+            boolean defaultAi = false, defaultNav = false, defaultTargeting = false, defaultLook = false, defaultActions = false, defaultActive = true;
             String defaultUuid = "", defaultSelector = "";
             if (action instanceof PuppetSuppressAction psa) {
                 defaultAi = psa.isSuppressAi();
                 defaultNav = psa.isSuppressNavigation();
                 defaultTargeting = psa.isSuppressTargeting();
                 defaultLook = psa.isSuppressLook();
+                defaultActions = psa.isSuppressActions();
                 defaultActive = psa.isPuppetingActive();
                 defaultUuid = psa.getEntityUuid();
                 defaultSelector = psa.getTargetSelector();
             }
 
             int boxH = 18;
-            this.suppressAiCheckbox = new CyberpunkCheckbox(left + 20, top + 98, panelWidth - 40, 18, Component.literal("Disable Entire Mob AI (Orchestrator Manual Only)"), defaultAi, null);
+            int colW = (panelWidth - 50) / 2;
+
+            this.suppressAiCheckbox = new CyberpunkCheckbox(left + 20, top + 96, colW, 18, Component.literal("Disable Mob AI"), defaultAi, null);
             this.addRenderableWidget(this.suppressAiCheckbox);
 
-            this.suppressNavCheckbox = new CyberpunkCheckbox(left + 20, top + 120, (panelWidth - 50) / 2, 18, Component.literal("Suppress Navigation"), defaultNav, null);
-            this.addRenderableWidget(this.suppressNavCheckbox);
-
-            this.suppressTargetingCheckbox = new CyberpunkCheckbox(left + 185, top + 120, (panelWidth - 50) / 2, 18, Component.literal("Suppress Targeting"), defaultTargeting, null);
-            this.addRenderableWidget(this.suppressTargetingCheckbox);
-
-            this.suppressLookCheckbox = new CyberpunkCheckbox(left + 20, top + 142, (panelWidth - 50) / 2, 18, Component.literal("Suppress Look Control"), defaultLook, null);
-            this.addRenderableWidget(this.suppressLookCheckbox);
-
-            this.puppetingActiveCheckbox = new CyberpunkCheckbox(left + 185, top + 142, (panelWidth - 50) / 2, 18, Component.literal("Puppeting Active Flag"), defaultActive, null);
+            this.puppetingActiveCheckbox = new CyberpunkCheckbox(left + 185, top + 96, colW, 18, Component.literal("Puppeting Active Flag"), defaultActive, null);
             this.addRenderableWidget(this.puppetingActiveCheckbox);
 
+            this.suppressNavCheckbox = new CyberpunkCheckbox(left + 20, top + 116, colW, 18, Component.literal("Suppress Navigation"), defaultNav, null);
+            this.addRenderableWidget(this.suppressNavCheckbox);
+
+            this.suppressTargetingCheckbox = new CyberpunkCheckbox(left + 185, top + 116, colW, 18, Component.literal("Suppress Targeting"), defaultTargeting, null);
+            this.addRenderableWidget(this.suppressTargetingCheckbox);
+
+            this.suppressLookCheckbox = new CyberpunkCheckbox(left + 20, top + 136, colW, 18, Component.literal("Suppress Look Control"), defaultLook, null);
+            this.addRenderableWidget(this.suppressLookCheckbox);
+
+            this.suppressActionsCheckbox = new CyberpunkCheckbox(left + 185, top + 136, colW, 18, Component.literal("Disable Puppet Actions"), defaultActions, null);
+            this.addRenderableWidget(this.suppressActionsCheckbox);
+
             this.entityUuidField = new EditBox(this.font, left + 22, top + 175, panelWidth - 165, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField.setMaxLength(128);
             this.entityUuidField.setBordered(false);
             this.entityUuidField.setValue(defaultUuid);
             this.addRenderableWidget(this.entityUuidField);
@@ -923,9 +943,9 @@ public class EditActionModalScreen extends Screen {
                         Entity target = getLookedAtEntity();
                         if (target != null) {
                             if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
-                            if (targetSelectorField != null && targetSelectorField.getValue().isBlank()) {
+                            if (targetSelectorField != null) {
                                 String typeStr = EntityType.getKey(target.getType()).toString();
-                                targetSelectorField.setValue("@e[type=" + typeStr + "]");
+                                targetSelectorField.setValue("@e[type=" + typeStr + ",limit=1,sort=nearest]");
                             }
                         }
                     }, CYAN_MAIN, false, Component.literal("Set UUID & selector to entity under crosshair")
@@ -933,6 +953,7 @@ public class EditActionModalScreen extends Screen {
             this.addRenderableWidget(this.pickLookedEntityButton);
 
             this.targetSelectorField = new EditBox(this.font, left + 22, top + 218, panelWidth - 44, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField.setMaxLength(256);
             this.targetSelectorField.setBordered(false);
             this.targetSelectorField.setValue(defaultSelector);
             this.addRenderableWidget(this.targetSelectorField);
@@ -946,6 +967,7 @@ public class EditActionModalScreen extends Screen {
 
             int boxH = 18;
             this.entityUuidField = new EditBox(this.font, left + 22, top + 125, panelWidth - 165, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField.setMaxLength(128);
             this.entityUuidField.setBordered(false);
             this.entityUuidField.setValue(defaultUuid);
             this.addRenderableWidget(this.entityUuidField);
@@ -957,9 +979,9 @@ public class EditActionModalScreen extends Screen {
                         Entity target = getLookedAtEntity();
                         if (target != null) {
                             if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
-                            if (targetSelectorField != null && targetSelectorField.getValue().isBlank()) {
+                            if (targetSelectorField != null) {
                                 String typeStr = EntityType.getKey(target.getType()).toString();
-                                targetSelectorField.setValue("@e[type=" + typeStr + "]");
+                                targetSelectorField.setValue("@e[type=" + typeStr + ",limit=1,sort=nearest]");
                             }
                         }
                     }, CYAN_MAIN, false, Component.literal("Set UUID & selector to entity under crosshair")
@@ -967,6 +989,7 @@ public class EditActionModalScreen extends Screen {
             this.addRenderableWidget(this.pickLookedEntityButton);
 
             this.targetSelectorField = new EditBox(this.font, left + 22, top + 175, panelWidth - 44, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField.setMaxLength(256);
             this.targetSelectorField.setBordered(false);
             this.targetSelectorField.setValue(defaultSelector);
             this.addRenderableWidget(this.targetSelectorField);
@@ -1051,7 +1074,7 @@ public class EditActionModalScreen extends Screen {
             case "puppet_action", "execute_puppet_action" -> new ExecutePuppetAction("", "", "", 20);
             case "puppet_move_to", "puppet_move" -> new PuppetMoveToAction(0.0, 64.0, 0.0, 1.0, "", "");
             case "puppet_look_at", "puppet_look" -> new PuppetLookAtAction(0.0, 64.0, 0.0, "", "", "");
-            case "puppet_suppress_ai", "puppet_suppress" -> new PuppetSuppressAction(false, false, false, true, "", "");
+            case "puppet_suppress_ai", "puppet_suppress" -> new PuppetSuppressAction(false, false, false, false, false, true, "", "");
             case "puppet_stop_action", "puppet_stop" -> new PuppetStopAction("", "");
             default -> new CommandAction("say Hello %player%");
         };
@@ -1152,6 +1175,7 @@ public class EditActionModalScreen extends Screen {
             if (suppressNavCheckbox != null) psa.setSuppressNavigation(suppressNavCheckbox.isChecked());
             if (suppressTargetingCheckbox != null) psa.setSuppressTargeting(suppressTargetingCheckbox.isChecked());
             if (suppressLookCheckbox != null) psa.setSuppressLook(suppressLookCheckbox.isChecked());
+            if (suppressActionsCheckbox != null) psa.setSuppressActions(suppressActionsCheckbox.isChecked());
             if (puppetingActiveCheckbox != null) psa.setPuppetingActive(puppetingActiveCheckbox.isChecked());
             if (entityUuidField != null) psa.setEntityUuid(entityUuidField.getValue().trim());
             if (targetSelectorField != null) psa.setTargetSelector(targetSelectorField.getValue().trim());
@@ -1295,6 +1319,18 @@ public class EditActionModalScreen extends Screen {
                         actionEntries.add(new CyberpunkDropdown.DropdownEntry<>(actionIdStr, Component.literal(label), Component.literal(details)));
                     }
                 }
+            }
+        }
+
+        // Global Boss Puppet Framework v2.0 Actions
+        for (net.dandare21.fracturedutils.puppet.fsm.PuppetActionType<?> globalAction :
+                net.dandare21.fracturedutils.puppet.registry.ModPuppetActions.getAll()) {
+            String actionIdStr = globalAction.getId().toString();
+            if (addedActionIds.add(actionIdStr)) {
+                totalFound++;
+                String label = "⚡ " + actionIdStr;
+                String details = "Global Puppet Action";
+                actionEntries.add(new CyberpunkDropdown.DropdownEntry<>(actionIdStr, Component.literal(label), Component.literal(details)));
             }
         }
 

@@ -69,16 +69,67 @@ public class ExecutePuppetAction implements OrchestratorAction {
         }
 
         ResourceLocation resLoc = ResourceLocation.tryParse(actionId);
+        if (resLoc == null && !actionId.contains(":")) {
+            resLoc = new ResourceLocation(net.dandare21.fracturedutils.FracturedUtils.MOD_ID, actionId);
+        }
         if (resLoc == null) {
             return ActionResult.SUCCESS;
         }
 
+        // 1. Check v2.0 Capability Handlers & Global Registry
+        List<net.dandare21.fracturedutils.puppet.capability.IPuppetHandler> handlers =
+                SelectorUtils.getPuppetHandlers(server, entityUuid, targetSelector);
+        net.dandare21.fracturedutils.puppet.fsm.PuppetActionType<?> actionType =
+                net.dandare21.fracturedutils.puppet.registry.ModPuppetActions.get(resLoc);
+        if (actionType == null && !actionId.contains(":")) {
+            actionType = net.dandare21.fracturedutils.puppet.registry.ModPuppetActions.get(
+                    new ResourceLocation(net.dandare21.fracturedutils.FracturedUtils.MOD_ID, actionId));
+        }
+
+        if (!handlers.isEmpty() && actionType != null) {
+            CompoundTag resolvedParams = this.params != null ? this.params.copy() : new CompoundTag();
+
+            // Auto-inject target if not provided
+            if (!resolvedParams.contains("target")) {
+                if (targetSelector != null && !targetSelector.isBlank() && !targetSelector.equals("@e")) {
+                    resolvedParams.putString("target", targetSelector);
+                } else if (instance != null && instance.getTargetPlayerName() != null && !instance.getTargetPlayerName().isBlank()) {
+                    resolvedParams.putString("target", instance.getTargetPlayerName());
+                } else {
+                    resolvedParams.putString("target", "@p");
+                }
+            }
+
+            if (windupTicks > 0 && !resolvedParams.contains("windupTicks")) {
+                resolvedParams.putInt("windupTicks", windupTicks);
+            }
+
+            dispatchToHandlers(handlers, actionType, resolvedParams);
+            return ActionResult.SUCCESS;
+        }
+
+        // 2. Fallback to legacy IPuppetEntity controller
         List<IPuppetEntity> targets = SelectorUtils.getPuppetEntities(server, entityUuid, targetSelector);
         for (IPuppetEntity puppetEntity : targets) {
             puppetEntity.getPuppetController().executeAction(resLoc, params != null ? params : new CompoundTag(), windupTicks, durationTicks, null);
         }
 
         return ActionResult.SUCCESS;
+    }
+
+    private static <T> void dispatchToHandlers(List<net.dandare21.fracturedutils.puppet.capability.IPuppetHandler> handlers,
+                                               net.dandare21.fracturedutils.puppet.fsm.PuppetActionType<T> actionType,
+                                               CompoundTag paramsTag) {
+        com.mojang.serialization.DataResult<T> parseResult = actionType.getCodec().parse(net.minecraft.nbt.NbtOps.INSTANCE, paramsTag);
+        if (parseResult.result().isPresent()) {
+            T typedParams = parseResult.result().get();
+            for (net.dandare21.fracturedutils.puppet.capability.IPuppetHandler handler : handlers) {
+                handler.dispatch(actionType, typedParams);
+            }
+        } else {
+            net.dandare21.fracturedutils.FracturedUtils.LOGGER.warn("[ExecutePuppetAction] Failed to parse params for action '{}': {}",
+                    actionType.getId(), parseResult.error().map(com.mojang.serialization.DataResult.PartialResult::message).orElse("Unknown error"));
+        }
     }
 
     @Override

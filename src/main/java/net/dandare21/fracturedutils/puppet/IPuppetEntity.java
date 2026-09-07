@@ -1,8 +1,13 @@
 package net.dandare21.fracturedutils.puppet;
 
 /**
- * Implemented by any entity (Mob, PathfinderMob, GeoEntity) that can be controlled by the sequencer.
+ * Legacy puppet interface.
+ *
+ * @deprecated Deprecated in Boss Puppet Framework v2.0. Use {@link net.dandare21.fracturedutils.puppet.capability.IPuppetHandler}
+ * via {@link net.dandare21.fracturedutils.puppet.capability.PuppetCapabilityProvider#PUPPET_HANDLER} attached to any {@link net.minecraft.world.entity.Mob}
+ * instead of interface inheritance.
  */
+@Deprecated(forRemoval = true)
 public interface IPuppetEntity {
     /**
      * @return The entity's persistent PuppetController instance.

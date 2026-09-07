@@ -68,6 +68,13 @@ public class ActionAdapter implements JsonSerializer<OrchestratorAction>, JsonDe
                 } else if (obj.has("noAi") && obj.get("noAi").isJsonPrimitive()) {
                     psa.setSuppressAi(obj.get("noAi").getAsBoolean());
                 }
+                if (obj.has("suppressActions") && obj.get("suppressActions").isJsonPrimitive()) {
+                    psa.setSuppressActions(obj.get("suppressActions").getAsBoolean());
+                } else if (obj.has("disableActions") && obj.get("disableActions").isJsonPrimitive()) {
+                    psa.setSuppressActions(obj.get("disableActions").getAsBoolean());
+                } else if (obj.has("noActions") && obj.get("noActions").isJsonPrimitive()) {
+                    psa.setSuppressActions(obj.get("noActions").getAsBoolean());
+                }
                 return psa;
             case "puppet_stop_action":
             case "puppet_stop":
@@ -100,6 +107,14 @@ public class ActionAdapter implements JsonSerializer<OrchestratorAction>, JsonDe
                 WaitUntilAction proxAction = RAW_GSON.fromJson(obj, WaitUntilAction.class);
                 proxAction.setWaitType("proximity");
                 return proxAction;
+            case "puppet_wait":
+            case "wait_puppet":
+            case "puppet_idle":
+            case "puppet_finish":
+            case "puppet_action_end":
+                WaitUntilAction puppetWaitAction = RAW_GSON.fromJson(obj, WaitUntilAction.class);
+                puppetWaitAction.setWaitType("puppet_action");
+                return puppetWaitAction;
             case "delay":
                 int ticks = obj.has("ticks") ? obj.get("ticks").getAsInt() : 20;
                 return new WaitUntilAction("delay", ticks, "", "");

@@ -42,6 +42,8 @@ import net.dandare21.fracturedutils.network.packet.S2CSendMusicSequenceDataPacke
 import net.dandare21.fracturedutils.network.packet.C2SSaveMusicSequencePacket;
 import net.dandare21.fracturedutils.network.packet.C2SDeleteMusicSequencePacket;
 import net.dandare21.fracturedutils.network.packet.C2SStartMusicSequencePacket;
+import net.dandare21.fracturedutils.network.packet.ClientboundPuppetAnimPacket;
+import net.dandare21.fracturedutils.network.packet.ClientboundAttackIndicatorPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -312,6 +314,18 @@ public class ModMessages {
                 .encoder(C2SStartMusicSequencePacket::encode)
                 .consumerMainThread(C2SStartMusicSequencePacket::handle)
                 .add();
+
+        net.messageBuilder(ClientboundPuppetAnimPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(ClientboundPuppetAnimPacket::new)
+                .encoder(ClientboundPuppetAnimPacket::encode)
+                .consumerMainThread(ClientboundPuppetAnimPacket::handle)
+                .add();
+
+        net.messageBuilder(ClientboundAttackIndicatorPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(ClientboundAttackIndicatorPacket::new)
+                .encoder(ClientboundAttackIndicatorPacket::encode)
+                .consumerMainThread(ClientboundAttackIndicatorPacket::handle)
+                .add();
     }
 
     public static <MSG> void sendToServer(MSG message) {
@@ -338,5 +352,23 @@ public class ModMessages {
 
     public static <MSG> void sendToAllPlayers(MSG message, MinecraftServer server) {
         INSTANCE.send(PacketDistributor.ALL.noArg(), message);
+    }
+
+    public static <MSG> void sendToTrackingEntityAndSelf(MSG message, net.minecraft.world.entity.Entity entity) {
+        if (entity != null) {
+            INSTANCE.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> entity), message);
+        }
+    }
+
+    public static <MSG> void sendToNear(MSG message, net.minecraft.server.level.ServerLevel level, double x, double y, double z, double radius) {
+        if (level != null) {
+            INSTANCE.send(PacketDistributor.NEAR.with(() -> new PacketDistributor.TargetPoint(x, y, z, radius, level.dimension())), message);
+        }
+    }
+
+    public static <MSG> void sendToDimension(MSG message, net.minecraft.server.level.ServerLevel level) {
+        if (level != null) {
+            INSTANCE.send(PacketDistributor.DIMENSION.with(level::dimension), message);
+        }
     }
 }

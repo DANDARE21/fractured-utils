@@ -1,299 +1,283 @@
-# Developer Guide: Boss Puppet Framework Integration
+# Developer Guide: Boss Puppet Framework v2.0 (Forge 1.20.1)
 
-This guide explains how to add **Fractured Utils** as a mod dependency and implement the **Boss Puppet Framework** (`IPuppetEntity` + `PuppetController`) in your custom Minecraft entities.
-
----
-
-## 1. Overview
-
-The **Boss Puppet Framework** provides a modular AI hijacking and action dispatch system. It uses a **Composition Pattern** to allow custom mobs and third-party entities to yield control to music sequencers and orchestrator scripts without forcing modifications to your mob class inheritance hierarchy.
+The **Boss Puppet Framework v2.0** is an enterprise-grade AI orchestration and attack dispatch system for Forge 1.20.1. It replaces legacy intrusive interface inheritance (`IPuppetEntity`), loosely typed `CompoundTag` parameters, and leaky AI goals with **Forge Capabilities**, **DFU Codecs**, **Global Registries**, **Goal Flag Suppression**, and **S2C GeckoLib Animation Synchronization**.
 
 ---
 
-## 2. Adding Fractured Utils as a Dependency
+## 1. Architecture Overview
 
-### A. Gradle Setup (`build.gradle`)
-
-Add Fractured Utils to your `repositories` and `dependencies` blocks in `build.gradle`:
-
-```groovy
-repositories {
-    // Maven repository hosting Fractured Utils (or local maven repository)
-    maven {
-        name = "Local Maven"
-        url = "file://${project.projectDir}/mcmodsrepo"
-    }
-    // Alternatively, use CurseMaven if hosted on CurseForge:
-    // maven { url = "https://www.cursemaven.com" }
-}
-
-dependencies {
-    // Compile against Fractured Utils API
-    implementation fg.deobf("net.dandare21.fracturedutils:fractured_utils:${fractured_utils_version}")
-    
-    // Or via CurseMaven:
-    // implementation fg.deobf("curse.maven:fractured-utils-PROJECTID:FILEID")
-}
 ```
-
-### B. Mod Manifest (`META-INF/mods.toml`)
-
-Declare Fractured Utils as a dependency in your `mods.toml`:
-
-```toml
-[[dependencies.your_mod_id]]
-    modId = "fractured_utils"
-    mandatory = true
-    versionRange = "[1.0.0,)"
-    ordering = "AFTER"
-    side = "BOTH"
+                      ┌─────────────────────────────────────────┐
+                      │    External Sequences / Orchestrator    │
+                      │               (JSON File)               │
+                      └────────────────────┬────────────────────┘
+                                           │ DFU Codec<T>
+                                           ▼
+                      ┌─────────────────────────────────────────┐
+                      │      PuppetActionType<T> Registry       │
+                      │          (ModPuppetActions)             │
+                      └────────────────────┬────────────────────┘
+                                           │ dispatch(type, params)
+                                           ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                               IPuppetHandler Capability                                │
+│                                                                                        │
+│  ┌─────────────────────────────────┐        ┌───────────────────────────────────────┐  │
+│  │     Robust AI Suppression       │        │       Finite State Machine (FSM)      │  │
+│  │  GoalSelector.setControlFlag    │        │         PuppetActionInstance<T>       │  │
+│  │  • Flag.MOVE, LOOK, JUMP (false)│        │                                       │  │
+│  │  • Flag.TARGET (false)          │        │       WINDUP ───────► ACTIVE          │  │
+│  │  • getNavigation().stop()       │        │         ▲                │            │  │
+│  │  • setTarget(null)              │        │         │                ▼            │  │
+│  │  • Clean restoreAi() on exit    │        │       IDLE  ◄──────  RECOVERY         │  │
+│  └─────────────────────────────────┘        └───────────────────┬───────────────────┘  │
+└─────────────────────────────────────────────────────────────────┼──────────────────────┘
+                                                                  │ onPhaseTransition()
+                                                                  ▼
+                                              ┌───────────────────────────────────────┐
+                                              │      ClientboundPuppetAnimPacket      │
+                                              │     (S2C GeckoLib Trigger Packet)     │
+                                              └───────────────────┬───────────────────┘
+                                                                  │
+                                                                  ▼
+                                              ┌───────────────────────────────────────┐
+                                              │          GeoEntity (GeckoLib)         │
+                                              │  geoEntity.triggerAnim(ctrl, anim)    │
+                                              └───────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Architecture & Core Components
+## 2. Core Components
 
-| Component | Class / Interface | Purpose |
+| Component | Class / Interface | Responsibility |
 | :--- | :--- | :--- |
-| **Interface** | [`IPuppetEntity`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/IPuppetEntity.java) | Implemented by any `Mob` to allow puppeteering. |
-| **Controller** | [`PuppetController`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/PuppetController.java) | Persistent entity component managing multi-phase actions, lifetimes, and AI aspect suppression. |
-| **Action Callback** | [`PuppetAction`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/PuppetAction.java) | Multi-phase interface (`onWindupTick`, `execute`, `onActiveTick`, `onComplete`) defining attack routines. |
-| **Registry** | [`PuppetActionRegistry`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/PuppetActionRegistry.java) | Builder helper used to map `ResourceLocation` action IDs to `PuppetAction` callbacks. |
-| **Hijack Goal (GoalSelector)** | [`PuppetOverrideGoal`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/PuppetOverrideGoal.java) | Priority 0 AI goal (`MOVE`, `LOOK`, `JUMP`) that silences standard AI goals while active. |
-| **Hijack Goal (TargetSelector)** | [`PuppetTargetOverrideGoal`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/PuppetTargetOverrideGoal.java) | Priority 0 target selector goal (`TARGET`) that suppresses target acquisition while active. |
+| **Capability** | [`IPuppetHandler`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/capability/IPuppetHandler.java) | Attached to any `Mob` via `AttachCapabilitiesEvent<Entity>`. Controls FSM lifecycle and goal flag suppression. |
+| **Provider** | [`PuppetCapabilityProvider`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/capability/PuppetCapabilityProvider.java) | Exposes thread-safe `LazyOptional<IPuppetHandler>`. |
+| **Targeting** | [`ActionTarget`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/target/ActionTarget.java) | Polymorphic target union (`Vec3`, `UUID`, or command selector string) parsed via DFU Codecs. |
+| **Action Definition** | [`PuppetActionType<T>`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/fsm/PuppetActionType.java) | Global immutable action blueprint backed by Mojang `Codec<T>`. |
+| **Action FSM** | [`PuppetActionInstance<T>`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/fsm/PuppetActionInstance.java) | Running action finite state machine (`WINDUP`, `ACTIVE`, `RECOVERY`, `IDLE`). |
+| **Registry** | [`ModPuppetActions`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/registry/ModPuppetActions.java) | Global central registry mapping `ResourceLocation` to `PuppetActionType<?>`. |
+| **Anim Sync Packet** | [`ClientboundPuppetAnimPacket`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/network/packet/ClientboundPuppetAnimPacket.java) | S2C packet triggering GeckoLib animations on tracking clients. |
 
 ---
 
-## 4. Multi-Phase Action Lifecycle & Input Parameters
+## 3. Polymorphic Targeting (`ActionTarget`)
 
-Every `PuppetAction` supports three lifecycle phases:
+The `ActionTarget` type supports three target sources with a unified DFU Codec:
 
-```
-[Trigger Action] ──► [WINDUP PHASE (windupTicks)] ──► [EXECUTE / ACTIVE PHASE (durationTicks)] ──► [ON COMPLETE]
-                      └─ onWindupTick()                 └─ execute() + onActiveTick()                 └─ onComplete()
-```
+1. **Static Coordinates (`PositionTarget`)**: Fixed world position `[x, y, z]` or `{"type": "position", "x": 0, "y": 64, "z": 0}`.
+2. **Explicit Entity (`EntityTarget`)**: UUID string representing a specific entity.
+3. **Command Selector (`SelectorTarget`)**: Minecraft target selector (e.g. `@p`, `@e[tag=boss_target,limit=1]`), evaluated at execution time against `ServerLevel`.
 
-1. **AI & Aspect Toggles**:
-   - `puppetingActive`: Toggles the priority 0 hijack goals.
-   - `suppressNavigation`: Stops pathfinding and freezes movement.
-   - `suppressTargeting`: Clears combat target entity (`setTarget(null)`).
-   - `suppressLook`: Suppresses look control.
-2. **Action Parameters (`CompoundTag params`)**:
-   - Actions receive key-value NBT parameters passed from sequence scripts or Java calls (e.g. `x, y, z` target coordinates, target player selectors, `radius`, `damage`).
-3. **Timing Properties**:
-   - **Windup Ticks** (`windupTicks`): Charge / telegraph phase (e.g., 60 ticks). Fires `onWindupTick(mob, params, currentTick, totalWindupTicks)` every tick so the entity can display attack indicators, play charge sounds, or track target positions.
-   - **Duration Ticks** (`durationTicks`): Execution phase (e.g. 1 tick for instantaneous strike, or 40 ticks for sustained whirlwind/beam). Fires `execute(mob, params)` at phase start and `onActiveTick(...)` every tick during duration.
-   - **On Complete**: Fired when duration finishes or when `stopAction()` is called.
-
----
-
-## 5. Entity Integration Step-by-Step
-
-To make your custom entity puppet-controllable:
-
-1. Implement `IPuppetEntity`.
-2. Instantiate a `PuppetController` inside your entity.
-3. Pass `PuppetActionRegistry` to `registerPuppetActions(registry)` during constructor initialization.
-4. Forward entity tick calls to `puppetController.tick()`.
-
-### Boss Entity Code Example (Thunder Attack with 60t Windup + 1t Strike)
+### Java Usage
 
 ```java
-package com.example.mymod.entity;
+// From static position
+ActionTarget posTarget = ActionTarget.fromPos(new Vec3(100, 64, 200));
 
-import net.dandare21.fracturedutils.puppet.IPuppetEntity;
-import net.dandare21.fracturedutils.puppet.PuppetAction;
-import net.dandare21.fracturedutils.puppet.PuppetActionRegistry;
-import net.dandare21.fracturedutils.puppet.PuppetController;
-import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
+// From Entity UUID
+ActionTarget entityTarget = ActionTarget.fromEntity(player.getUUID());
 
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.LightningBolt;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.monster.Monster;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.Vec3;
+// From Selector
+ActionTarget selectorTarget = ActionTarget.fromSelector("@p");
 
-public class BossDemonEntity extends Monster implements IPuppetEntity {
-    private final PuppetController puppetController = new PuppetController(this);
-
-    public BossDemonEntity(EntityType<? extends Monster> type, Level level) {
-        super(type, level);
-        this.registerPuppetActions(new PuppetActionRegistry(this.puppetController));
-    }
-
-    @Override
-    public PuppetController getPuppetController() {
-        return this.puppetController;
-    }
-
-    @Override
-    public void registerPuppetActions(PuppetActionRegistry registry) {
-        // --- Action: Boss Thunder Strike (60 Tick Windup Indicator + 1 Tick Strike Duration) ---
-        registry.register(ResourceLocation.fromNamespaceAndPath("mymod", "thunder_strike"), new PuppetAction() {
-            @Override
-            public void onWindupTick(Mob mob, CompoundTag params, int currentTick, int totalWindupTicks) {
-                // Determine target position: from explicit NBT params (x, y, z) or target player
-                Vec3 targetPos = getTargetPosition(mob, params);
-
-                // Render ground charge indicator circle during windup (60 ticks = 3 seconds)
-                if (mob.level() instanceof ServerLevel serverLevel) {
-                    double radius = params.contains("radius") ? params.getDouble("radius") : 3.0;
-                    for (int i = 0; i < 16; i++) {
-                        double angle = i * (Math.PI * 2 / 16);
-                        double px = targetPos.x + Math.cos(angle) * radius;
-                        double pz = targetPos.z + Math.sin(angle) * radius;
-                        serverLevel.sendParticles(ParticleTypes.ELECTRIC_SPARK, px, targetPos.y + 0.1, pz, 1, 0, 0.05, 0, 0.01);
-                    }
-                }
-            }
-
-            @Override
-            public void execute(Mob mob, CompoundTag params) {
-                // Windup complete -> Strike lightning bolt!
-                Vec3 targetPos = getTargetPosition(mob, params);
-                if (mob.level() instanceof ServerLevel serverLevel) {
-                    LightningBolt bolt = EntityType.LIGHTNING_BOLT.create(serverLevel);
-                    if (bolt != null) {
-                        bolt.moveTo(targetPos.x, targetPos.y, targetPos.z);
-                        serverLevel.addFreshEntity(bolt);
-                    }
-                }
-            }
-
-            private Vec3 getTargetPosition(Mob mob, CompoundTag params) {
-                if (params.contains("x") && params.contains("y") && params.contains("z")) {
-                    return new Vec3(params.getDouble("x"), params.getDouble("y"), params.getDouble("z"));
-                }
-                LivingEntity target = mob.getTarget();
-                return target != null ? target.position() : mob.position();
-            }
-        });
-    }
-
-    @Override
-    public void tick() {
-        super.tick();
-        // Forward tick update to PuppetController
-        this.puppetController.tick();
-    }
-}
+// Evaluation
+Vec3 position = target.getPosition(serverLevel);
+Optional<LivingEntity> entity = target.getEntity(serverLevel);
 ```
 
 ---
 
-## 6. Programmatic Control API
+## 4. Robust AI Goal Suppression
 
-### A. AI Suppression Controls
-
-```java
-PuppetController controller = puppetEntity.getPuppetController();
-
-// Freeze pathfinding navigation
-controller.setSuppressNavigation(true);
-
-// Clear & suppress combat targeting
-controller.setSuppressTargeting(true);
-
-// Suppress look control
-controller.setSuppressLook(true);
-
-// Reset all suppression flags
-controller.resetSuppressionFlags();
-```
-
-### B. Executing Multi-Phase Actions
+Instead of relying on priority 0 goal hijacking, v2.0 directly manipulates `GoalSelector#setControlFlag`:
 
 ```java
-CompoundTag params = new CompoundTag();
-params.putDouble("x", 100.5);
-params.putDouble("y", 64.0);
-params.putDouble("z", -250.5);
-params.putDouble("radius", 4.0);
+// Locking AI control
+mob.goalSelector.setControlFlag(Goal.Flag.MOVE, false);
+mob.goalSelector.setControlFlag(Goal.Flag.LOOK, false);
+mob.goalSelector.setControlFlag(Goal.Flag.JUMP, false);
+mob.targetSelector.setControlFlag(Goal.Flag.TARGET, false);
 
-// Execute action with 60 ticks windup (charge phase) + 1 tick strike duration + completion callback
-controller.executeAction(
-    ResourceLocation.fromNamespaceAndPath("mymod", "thunder_strike"),
-    params,
-    60, // Windup Ticks
-    1,  // Duration Ticks
-    () -> System.out.println("Thunder Strike complete!")
-);
+mob.getNavigation().stop();
+mob.setTarget(null);
+
+// Restoring AI control on completion
+mob.goalSelector.setControlFlag(Goal.Flag.MOVE, true);
+mob.goalSelector.setControlFlag(Goal.Flag.LOOK, true);
+mob.goalSelector.setControlFlag(Goal.Flag.JUMP, true);
+mob.targetSelector.setControlFlag(Goal.Flag.TARGET, true);
 ```
 
 ---
 
-## 7. Orchestrator Sequence Integration
+## 5. Reference Attacks: Void Leap Slam & Abyssal Barrage
 
-In Fractured Utils orchestrator sequences, you can control puppet entities directly via JSON sequence scripts:
+### Action A: Void Leap Slam (`fractured_utils:leap_slam`)
 
-### Puppet Action Types
+* **Record**: `LeapSlamParams(ActionTarget target, double slamRadius, float damage, int windupTicks, int recoveryTicks)`
+* **Lifecycle**:
+  * **`WINDUP`**: Faces mob toward target, displays circular ground telegraph particles (`ParticleTypes.CRIT` ring), and sends `"charge"` GeckoLib animation packet.
+  * **`ACTIVE`**: Launches mob along a calculated parabolic arc toward the target vector, sends `"leap"` animation packet, detects ground impact, spawns `EXPLOSION_EMITTER` particles, deals AoE damage in `slamRadius`, and applies radial knockback.
+  * **`RECOVERY`**: Roots mob in place, sends `"stunned"` animation packet for `recoveryTicks`, then transitions to `IDLE` and restores AI control.
 
-#### 1. Execute Scripted Puppet Action (`puppet_action` / `execute_puppet_action`)
-Triggers a custom registered `PuppetAction` callback with optional `windupTicks`, `durationTicks`, and input `params`:
+### Action B: Abyssal Barrage (`fractured_utils:abyssal_barrage`)
+
+* **Record**: `AbyssalBarrageParams(int channelTicks, int waveInterval, double projectileSpeed)`
+* **Lifecycle**:
+  * **`ACTIVE`**: Roots mob in place, sends `"barrage"` animation packet, and every `waveInterval` ticks fires a ring of 8 `WitherSkull` projectiles outward with rotating angular offsets.
+  * Completes after `channelTicks` and cleanly restores autonomous AI.
+
+---
+
+## 6. External Sequence JSON Schemas
+
+External sequences and orchestration files can trigger attacks using the following schemas:
+
+### A. Void Leap Slam JSON Specification
+
 ```json
 {
-  "type": "puppet_action",
-  "actionId": "mymod:thunder_strike",
-  "targetSelector": "@e[type=mymod:boss_demon]",
-  "windupTicks": 60,
-  "durationTicks": 1,
+  "action": "fractured_utils:leap_slam",
   "params": {
-    "x": 100.5,
-    "y": 64.0,
-    "z": -250.5,
-    "radius": 4.0
+    "target": {
+      "type": "selector",
+      "selector": "@p"
+    },
+    "slamRadius": 6.0,
+    "damage": 18.0,
+    "windupTicks": 40,
+    "recoveryTicks": 25
   }
 }
 ```
 
-#### 2. Move To Coordinates (`puppet_move_to` / `puppet_move`)
+*Alternative target formats:*
+```json
+// Static position:
+"target": [128.5, 70.0, -256.0]
+
+// Explicit Entity UUID:
+"target": "c7a840e5-79a4-4a4b-8cf7-21a4f00bcf9e"
+```
+
+### B. Abyssal Barrage JSON Specification
+
 ```json
 {
-  "type": "puppet_move_to",
-  "x": 100.5,
-  "y": 64.0,
-  "z": -250.5,
-  "speed": 1.5,
-  "targetSelector": "@e[type=mymod:boss_demon]"
+  "action": "fractured_utils:abyssal_barrage",
+  "params": {
+    "channelTicks": 120,
+    "waveInterval": 20,
+    "projectileSpeed": 0.8
+  }
 }
 ```
 
-#### 3. Look At Position or Entity (`puppet_look_at` / `puppet_look`)
+---
+
+## 7. Entity Implementation: Void Herald Boss
+
+Any `Mob` (such as [`VoidHeraldBoss`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/boss/VoidHeraldBoss.java)) implements GeckoLib's `GeoEntity` and can dispatch attacks via the capability:
+
+```java
+// Inside custom boss entity or AI step:
+this.getCapability(PuppetCapabilityProvider.PUPPET_HANDLER).ifPresent(handler -> {
+    if (!handler.isPuppetingActive()) {
+        handler.dispatch(
+            ModPuppetActions.LEAP_SLAM,
+            new LeapSlamAction.LeapSlamParams(
+                ActionTarget.fromEntity(target.getUUID()),
+                6.0,   // slamRadius
+                18.0F, // damage
+                40,    // windupTicks
+                30     // recoveryTicks
+            )
+        );
+    }
+});
+```
+
+---
+
+## 8. Debug Boss Entity Registration & Config Control
+
+The Void Herald Boss is registered as a real entity (`fractured_utils:void_herald`) with client GeckoLib rendering and a creative spawn egg (`fractured_utils:void_herald_spawn_egg`).
+
+### A. Config Control (`fracturedutils-server.json`)
+
+Its presence in the game is strictly governed by `enableDebugBoss`:
+
 ```json
 {
-  "type": "puppet_look_at",
-  "x": 100.5,
-  "y": 65.0,
-  "z": -250.5,
-  "lookTargetSelector": "@p",
-  "targetSelector": "@e[type=mymod:boss_demon]"
+  "keepInventoryNoXp": false,
+  "enableDebugBoss": true,
+  "teamWipeScreenDurationSeconds": 3
 }
 ```
 
-#### 4. Configure AI Aspect Suppression (`puppet_suppress_ai` / `puppet_suppress`)
-Toggles AI suppression flags on target puppet entities. Set `suppressAi` (or `disableAi`) to `true` to completely disable the mob's autonomous AI (suppressing all goals, targeting, and autonomous movement) while preserving full receptivity to manual actions (`puppet_action`, `puppet_move_to`, `puppet_look_at`) from the command orchestrator:
-```json
-{
-  "type": "puppet_suppress_ai",
-  "suppressAi": true,
-  "suppressNavigation": true,
-  "suppressTargeting": true,
-  "suppressLook": false,
-  "puppetingActive": true,
-  "targetSelector": "@e[type=mymod:boss_demon]"
-}
+* **When `enableDebugBoss` is `false` (default)**:
+  * Any spawned or existing instances are discarded immediately on spawn/tick (`discard()`).
+  * `checkSpawnRules` prevents natural or automated spawning.
+  * In-game attempts to spawn via `/puppetboss spawn` will notify the operator that it is disabled.
+* **When `enableDebugBoss` is `true`**:
+  * The boss can spawn naturally, via spawn egg, or with commands.
+
+### B. In-Game Debug Commands (`/puppetboss`)
+
+| Command | Permission | Description |
+| :--- | :--- | :--- |
+| `/puppetboss status` | Level 2 (OP) | Checks config status and counts active Void Herald bosses. |
+| `/puppetboss enable` | Level 2 (OP) | Enables `enableDebugBoss` in config and saves immediately. |
+| `/puppetboss disable` | Level 2 (OP) | Disables `enableDebugBoss` and automatically discards all active instances. |
+| `/puppetboss spawn` | Level 2 (OP) | Spawns a Void Herald at the executor's position (if enabled). |
+| `/puppetboss action <action_name>` | Level 2 (OP) | Triggers `leap_slam` or `abyssal_barrage` on nearby Void Herald boss. |
+
+---
+
+## 9. Circular Attack Indicator Utilities (`attackIndicatorCircle.png`)
+
+Actions can display rendered ground decals using the dedicated attack indicator circle texture (`textures/misc/attack_indicator_circle.png`). Indicators automatically synchronize from the server to nearby tracking clients and render smoothly with depth and pulse animations.
+
+### A. Calling from Any `PuppetActionInstance`
+
+Within any custom action subclassing `PuppetActionInstance`:
+
+```java
+// Spawn indicator at position with radius and duration (in ticks):
+int indicatorId = showCircleIndicator(targetPos, radius, durationTicks);
+
+// Spawn with custom color preset (e.g. AttackIndicatorUtils.COLOR_VOID, COLOR_RED, COLOR_ORANGE, COLOR_CYAN):
+int indicatorId = showCircleIndicator(targetPos, radius, durationTicks, AttackIndicatorUtils.COLOR_VOID);
+
+// Update position or radius as target moves during windup:
+updateCircleIndicator(indicatorId, updatedPos, radius);
+
+// Remove early (e.g. when attack lands or is canceled):
+removeCircleIndicator(indicatorId, impactPos);
 ```
 
-#### 5. Stop Active Action (`puppet_stop_action` / `puppet_stop`)
-```json
-{
-  "type": "puppet_stop_action",
-  "targetSelector": "@e[type=mymod:boss_demon]"
-}
+### B. Calling via `AttackIndicatorUtils` Static Methods
+
+From commands, event listeners, or mob tick loops:
+
+```java
+// Spawn
+int id = AttackIndicatorUtils.spawnCircle(serverLevel, targetPos, 7.0, 40, AttackIndicatorUtils.COLOR_RED);
+
+// Update
+AttackIndicatorUtils.updateCircle(serverLevel, id, newPos, 7.0);
+
+// Remove
+AttackIndicatorUtils.removeCircle(serverLevel, id, newPos);
 ```
+
+### Color Presets Available in `AttackIndicatorUtils`
+- `COLOR_VOID` (`0xD4B026FF`) - Glowing void violet
+- `COLOR_RED` (`0xD4FF2222`) - Danger crimson
+- `COLOR_ORANGE` (`0xD4FF8800`) - Warning amber
+- `COLOR_CYAN` (`0xD400E5FF`) - Arcane cyan
+- `COLOR_YELLOW` (`0xD4FFDD00`) - Hazard yellow
 
 

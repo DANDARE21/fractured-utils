@@ -222,7 +222,7 @@ public class OrchestratorManager {
             }
             return String.format(Locale.ROOT, "puppet look at %.1f,%.1f,%.1f", pla.getX(), pla.getY(), pla.getZ());
         } else if (action instanceof PuppetSuppressAction psa) {
-            return String.format(Locale.ROOT, "puppet suppress (nav=%b, tgt=%b, look=%b)", psa.isSuppressNavigation(), psa.isSuppressTargeting(), psa.isSuppressLook());
+            return String.format(Locale.ROOT, "puppet suppress (nav=%b, tgt=%b, look=%b, actions=%b)", psa.isSuppressNavigation(), psa.isSuppressTargeting(), psa.isSuppressLook(), psa.isSuppressActions());
         } else if (action instanceof PuppetStopAction) {
             return "puppet stop action";
         }

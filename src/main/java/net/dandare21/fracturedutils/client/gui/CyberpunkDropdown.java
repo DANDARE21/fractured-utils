@@ -164,17 +164,19 @@ public class CyberpunkDropdown<T> extends AbstractWidget {
     }
 
     public int getEffectiveMaxVisibleItems() {
-        int maxVis = maxVisibleItems;
+        int maxVis = Math.max(4, maxVisibleItems);
         Minecraft mc = Minecraft.getInstance();
         if (mc.getWindow() != null) {
             int screenH = mc.getWindow().getGuiScaledHeight();
             int availableH = screenH - (this.getY() + this.height + 8);
-            if (availableH > 0) {
-                int maxPossible = Math.max(1, availableH / itemHeight);
+            if (availableH > itemHeight * 2) {
+                int maxPossible = Math.max(4, availableH / itemHeight);
                 maxVis = Math.min(maxVis, maxPossible);
+            } else {
+                maxVis = Math.max(4, Math.min(maxVis, 6));
             }
         }
-        return Math.max(1, maxVis);
+        return Math.max(3, maxVis);
     }
 
     public int getVisibleItemCount() {

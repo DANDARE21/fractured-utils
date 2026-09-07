@@ -8,8 +8,20 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 
 public class CyberpunkButton extends Button {
-    private final int accentColor;
+    private int accentColor;
     private final boolean isSelected;
+
+    public void setAccentColor(int accentColor) {
+        this.accentColor = accentColor;
+    }
+
+    public void setColor(int color) {
+        this.accentColor = color;
+    }
+
+    public int getAccentColor() {
+        return accentColor;
+    }
 
     public CyberpunkButton(int x, int y, int width, int height, Component message, OnPress onPress) {
         this(x, y, width, height, message, onPress, 0xFF00E5FF, false, null);

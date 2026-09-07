@@ -11,5 +11,7 @@
   "gui.fracturedutils.waiting_room.press": "PRESS",
   "gui.fracturedutils.waiting_room.hold": "HOLD",
   "gui.fracturedutils.waiting_room.enter_prompt": "] ENTER EVENT WAITING ROOM (NO GOING BACK!)",
-  "gui.fracturedutils.waiting_room.starting_in": "STARTING IN %02d:%02d"
+  "gui.fracturedutils.waiting_room.starting_in": "STARTING IN %02d:%02d",
+  "entity.fractured_utils.void_herald": "Void Herald",
+  "item.fractured_utils.void_herald_spawn_egg": "Void Herald Spawn Egg"
 }

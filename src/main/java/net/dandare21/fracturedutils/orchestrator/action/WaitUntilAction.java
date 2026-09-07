@@ -232,6 +232,45 @@ public class WaitUntilAction implements OrchestratorAction {
             }
             OrchestratorManager.getInstance().registerOperatorAction(server, effectiveTrigger, (label != null && !label.isBlank()) ? label : ("Resume " + instance.getSequenceName()));
             return ActionResult.BLOCK;
+        } else if (mode.equals("puppet_action") || mode.equals("puppet_action_end") || mode.equals("puppet_idle") || mode.equals("puppet_finish") || mode.equals("puppet_action_finish")) {
+            String targetUuid = (triggerId != null && !triggerId.isBlank()) ? triggerId : "";
+            java.util.List<net.dandare21.fracturedutils.puppet.capability.IPuppetHandler> handlers =
+                    net.dandare21.fracturedutils.util.SelectorUtils.getPuppetHandlers(server, targetUuid, targetSelector);
+
+            boolean anyActive = false;
+            for (net.dandare21.fracturedutils.puppet.capability.IPuppetHandler handler : handlers) {
+                if (handler.isPuppetingActive() || handler.getActiveAction() != null) {
+                    anyActive = true;
+                    break;
+                }
+            }
+
+            if (!anyActive) {
+                java.util.List<net.dandare21.fracturedutils.puppet.IPuppetEntity> legacyPuppets =
+                        net.dandare21.fracturedutils.util.SelectorUtils.getPuppetEntities(server, targetUuid, targetSelector);
+                for (net.dandare21.fracturedutils.puppet.IPuppetEntity puppet : legacyPuppets) {
+                    if (puppet.getPuppetController() != null && puppet.getPuppetController().isPuppetingActive()) {
+                        anyActive = true;
+                        break;
+                    }
+                }
+            }
+
+            if (anyActive) {
+                hasSeenActive = true;
+                return ActionResult.BLOCK;
+            }
+            if (hasSeenActive) {
+                hasSeenActive = false;
+                graceTicks = 0;
+                return ActionResult.SUCCESS;
+            }
+            graceTicks++;
+            if (graceTicks < 5) {
+                return ActionResult.BLOCK;
+            }
+            graceTicks = 0;
+            return ActionResult.SUCCESS;
         } else if (mode.equals("video") || mode.equals("video_end") || mode.equals("cutscene") || mode.equals("cinematic")) {
             boolean activeNow = net.dandare21.fracturedutils.cutscene.ServerCutsceneManager.getInstance().isCutsceneActive();
             if (activeNow) {

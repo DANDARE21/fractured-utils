@@ -32,6 +32,12 @@ public class PuppetStopAction implements OrchestratorAction {
     public ActionResult execute(SequenceInstance instance, MinecraftServer server) {
         if (server == null) return ActionResult.SUCCESS;
 
+        List<net.dandare21.fracturedutils.puppet.capability.IPuppetHandler> handlers =
+                SelectorUtils.getPuppetHandlers(server, entityUuid, targetSelector);
+        for (net.dandare21.fracturedutils.puppet.capability.IPuppetHandler handler : handlers) {
+            handler.stopActiveAction();
+        }
+
         List<IPuppetEntity> targets = SelectorUtils.getPuppetEntities(server, entityUuid, targetSelector);
         for (IPuppetEntity puppetEntity : targets) {
             puppetEntity.getPuppetController().stopAction();

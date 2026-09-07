@@ -53,9 +53,6 @@ public class PuppetLookAtAction implements OrchestratorAction {
     public ActionResult execute(SequenceInstance instance, MinecraftServer server) {
         if (server == null) return ActionResult.SUCCESS;
 
-        List<IPuppetEntity> targets = SelectorUtils.getPuppetEntities(server, entityUuid, targetSelector);
-        if (targets.isEmpty()) return ActionResult.SUCCESS;
-
         Entity lookTargetEntity = null;
         if (lookTargetSelector != null && !lookTargetSelector.isBlank()) {
             List<Entity> matches = SelectorUtils.getTargetEntities(server, lookTargetSelector);
@@ -64,7 +61,18 @@ public class PuppetLookAtAction implements OrchestratorAction {
             }
         }
 
-        for (IPuppetEntity puppetEntity : targets) {
+        List<net.dandare21.fracturedutils.puppet.capability.IPuppetHandler> handlers =
+                SelectorUtils.getPuppetHandlers(server, entityUuid, targetSelector);
+        for (net.dandare21.fracturedutils.puppet.capability.IPuppetHandler handler : handlers) {
+            if (lookTargetEntity != null) {
+                handler.forceLookAt(lookTargetEntity);
+            } else {
+                handler.forceLookAt(x, y, z);
+            }
+        }
+
+        List<IPuppetEntity> legacyTargets = SelectorUtils.getPuppetEntities(server, entityUuid, targetSelector);
+        for (IPuppetEntity puppetEntity : legacyTargets) {
             if (lookTargetEntity != null) {
                 puppetEntity.getPuppetController().forceLookAt(lookTargetEntity);
             } else {

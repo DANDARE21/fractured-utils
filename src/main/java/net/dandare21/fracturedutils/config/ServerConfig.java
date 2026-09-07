@@ -16,6 +16,7 @@ public class ServerConfig {
     private static final Path CONFIG_FILE = FMLPaths.CONFIGDIR.get().resolve("fracturedutils-server.json");
 
     private static boolean keepInventoryNoXp = false;
+    private static boolean enableDebugBoss = false;
     private static int teamWipeScreenDurationSeconds = 3;
     private static int eventAudioPort = 8085;
     private static String eventAudioExternalUrl = "";
@@ -32,6 +33,9 @@ public class ServerConfig {
                     if (json != null) {
                         if (json.has("keepInventoryNoXp")) {
                             keepInventoryNoXp = json.get("keepInventoryNoXp").getAsBoolean();
+                        }
+                        if (json.has("enableDebugBoss")) {
+                            enableDebugBoss = json.get("enableDebugBoss").getAsBoolean();
                         }
                         if (json.has("teamWipeScreenDurationSeconds")) {
                             teamWipeScreenDurationSeconds = Math.max(1, json.get("teamWipeScreenDurationSeconds").getAsInt());
@@ -65,6 +69,7 @@ public class ServerConfig {
         try {
             JsonObject json = new JsonObject();
             json.addProperty("keepInventoryNoXp", keepInventoryNoXp);
+            json.addProperty("enableDebugBoss", enableDebugBoss);
             json.addProperty("teamWipeScreenDurationSeconds", teamWipeScreenDurationSeconds);
             json.addProperty("eventAudioPort", eventAudioPort);
             json.addProperty("eventAudioExternalUrl", eventAudioExternalUrl);
@@ -88,6 +93,19 @@ public class ServerConfig {
         load();
         if (keepInventoryNoXp != enabled) {
             keepInventoryNoXp = enabled;
+            save();
+        }
+    }
+
+    public static boolean isEnableDebugBoss() {
+        load();
+        return enableDebugBoss;
+    }
+
+    public static void setEnableDebugBoss(boolean enabled) {
+        load();
+        if (enableDebugBoss != enabled) {
+            enableDebugBoss = enabled;
             save();
         }
     }

@@ -1,0 +1,56 @@
+{
+  "event.fracture": {
+    "category": "record",
+    "sounds": [
+      {
+        "name": "fracturedutils:music/fracture",
+        "stream": true
+      }
+    ]
+  },
+  "fracture": {
+    "category": "record",
+    "sounds": [
+      {
+        "name": "fracturedutils:music/fracture",
+        "stream": true
+      }
+    ]
+  },
+  "event.gamersillo": {
+    "category": "record",
+    "sounds": [
+      {
+        "name": "fracturedutils:music/gamersillo",
+        "stream": true
+      }
+    ]
+  },
+  "gamersillo": {
+    "category": "record",
+    "sounds": [
+      {
+        "name": "fracturedutils:music/gamersillo",
+        "stream": true
+      }
+    ]
+  },
+  "event.new_best_friend": {
+    "category": "record",
+    "sounds": [
+      {
+        "name": "fracturedutils:music/new_best_friend",
+        "stream": true
+      }
+    ]
+  },
+  "new_best_friend": {
+    "category": "record",
+    "sounds": [
+      {
+        "name": "fracturedutils:music/new_best_friend",
+        "stream": true
+      }
+    ]
+  }
+}

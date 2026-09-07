@@ -55,6 +55,14 @@ public class MusicSequence {
         this.sequenceName = sequenceName != null ? sequenceName : "new_music_sequence";
     }
 
+    public String getFileName() {
+        return sequenceName;
+    }
+
+    public void setFileName(String fileName) {
+        setSequenceName(fileName);
+    }
+
     public String getSongTrack() {
         return songTrack;
     }

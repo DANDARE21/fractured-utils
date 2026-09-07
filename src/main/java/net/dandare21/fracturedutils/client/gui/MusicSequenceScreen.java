@@ -42,10 +42,11 @@ public class MusicSequenceScreen extends Screen {
     private String currentFileName;
     private MusicSequence currentSequence = new MusicSequence();
 
+    private MusicSequenceSelectScreen parentSelectScreen;
+
     private CyberpunkDropdown<String> fileDropdown;
     private CyberpunkDropdown<String> trackDropdown;
     private CyberpunkCheckbox loopingCheckbox;
-    private EditBox newFileEditBox;
     private EditBox bpmEditBox;
 
     // Timeline Zoom & Scroll Controls
@@ -87,28 +88,11 @@ public class MusicSequenceScreen extends Screen {
         this.savedClientSequenceFiles = loadLocalClientSequences();
         this.workingClientSequenceFiles = new HashMap<>(this.savedClientSequenceFiles);
 
-        // Populate available songs from resourcepack, SoundManager & server suggestions
         Set<String> trackSet = new LinkedHashSet<>();
         if (availableTracks != null) {
             trackSet.addAll(availableTracks);
         }
-        trackSet.addAll(ClientAudioPackManager.getInstance().getAvailableTracks());
-        trackSet.addAll(EventAudioManager.getInstance().getAvailableTrackSuggestions());
-
-        try {
-            var soundManager = Minecraft.getInstance().getSoundManager();
-            if (soundManager != null) {
-                for (net.minecraft.resources.ResourceLocation loc : soundManager.getAvailableSounds()) {
-                    if (loc != null && (loc.getPath().contains("event") || loc.getNamespace().equals("fracturedutils"))) {
-                        trackSet.add(loc.getPath());
-                        trackSet.add(loc.toString());
-                        if (loc.getPath().startsWith("event.")) {
-                            trackSet.add(loc.getPath().substring(6));
-                        }
-                    }
-                }
-            }
-        } catch (Exception ignored) {}
+        trackSet.addAll(net.dandare21.fracturedutils.sound.event.AudioTrackDiscovery.getAllAvailableTracks());
 
         this.availableTracks = new ArrayList<>(trackSet);
 
@@ -128,6 +112,38 @@ public class MusicSequenceScreen extends Screen {
             this.currentSequence = new MusicSequence(currentFileName, "", false, 1.0f, 1.0f, new ArrayList<>());
             activeMap.put(currentFileName, GSON.toJson(currentSequence));
             getActiveSavedMap().put(currentFileName, GSON.toJson(currentSequence));
+        }
+    }
+
+    public void setParentSelectScreen(MusicSequenceSelectScreen parentSelectScreen) {
+        this.parentSelectScreen = parentSelectScreen;
+    }
+
+    public MusicSequenceSelectScreen getParentSelectScreen() {
+        return parentSelectScreen;
+    }
+
+    public Map<String, String> getWorkingServerSequenceFiles() {
+        return workingServerSequenceFiles;
+    }
+
+    public List<String> getAvailableTracks() {
+        return availableTracks;
+    }
+
+    public boolean isClientMode() {
+        return isClientMode;
+    }
+
+    public void selectSequenceFileDirectly(String fileName, boolean clientMode) {
+        this.isClientMode = clientMode;
+        saveCurrentSequenceToWorkingMap();
+        this.currentFileName = fileName;
+        loadCurrentFileSequence();
+        this.playheadMs = 0;
+        this.timeScrollMs = 0;
+        if (this.minecraft != null && this.minecraft.screen == this) {
+            this.init();
         }
     }
 
@@ -234,20 +250,13 @@ public class MusicSequenceScreen extends Screen {
         this.fileDropdown.setOnSelect(entry -> selectSequenceFile(entry.getValue()));
         this.addRenderableWidget(this.fileDropdown);
 
-        // New File Input & Add Button
-        this.newFileEditBox = new EditBox(this.font, leftX + 155, topY, 80, 20, Component.literal("New file"));
-        this.newFileEditBox.setMaxLength(64);
-        this.newFileEditBox.setHint(Component.literal("new_sequence"));
-        this.addRenderableWidget(this.newFileEditBox);
-
-        CyberpunkButton addFileBtn = new CyberpunkButton(leftX + 240, topY, 25, 20, Component.literal("+"), b -> createNewSequenceFile(), CYAN_MAIN, false);
-        addFileBtn.setTooltip(Tooltip.create(Component.literal("Create new sequence file")));
+        CyberpunkButton addFileBtn = new CyberpunkButton(leftX + 155, topY, 55, 20, Component.literal("+ NEW"), b -> openCreateSequenceModal(), CYAN_MAIN, false);
+        addFileBtn.setTooltip(Tooltip.create(Component.literal("Create a new music sequence (select song first)")));
         this.addRenderableWidget(addFileBtn);
 
         // 2. Resourcepack Song Selector Dropdown
         Set<String> dynamicTracks = new LinkedHashSet<>(availableTracks);
-        dynamicTracks.addAll(ClientAudioPackManager.getInstance().getAvailableTracks());
-        dynamicTracks.addAll(EventAudioManager.getInstance().getAvailableTrackSuggestions());
+        dynamicTracks.addAll(net.dandare21.fracturedutils.sound.event.AudioTrackDiscovery.getAllAvailableTracks());
         if (currentSequence.getSongTrack() != null && !currentSequence.getSongTrack().isEmpty()) {
             dynamicTracks.add(currentSequence.getSongTrack());
         }
@@ -256,12 +265,12 @@ public class MusicSequenceScreen extends Screen {
         songEntries.add(new CyberpunkDropdown.DropdownEntry<>("", Component.literal("[None / No Song]"), Component.literal("Sequence runs timed actions without audio track")));
 
         for (String track : dynamicTracks) {
-            String label = track;
-            if (label.startsWith("event.")) label = label.substring(6);
+            String label = net.dandare21.fracturedutils.sound.event.AudioTrackDiscovery.formatTrackLabel(track);
             songEntries.add(new CyberpunkDropdown.DropdownEntry<>(track, Component.literal(label), Component.literal(track)));
         }
 
-        this.trackDropdown = new CyberpunkDropdown<>(leftX + 270, topY, 175, 20, Component.literal("Song Track"));
+        this.trackDropdown = new CyberpunkDropdown<>(leftX + 215, topY, 190, 20, Component.literal("Song Track"));
+        this.trackDropdown.setMaxVisibleItems(8);
         this.trackDropdown.setOptions(songEntries);
         this.trackDropdown.selectByValue(currentSequence.getSongTrack());
         this.trackDropdown.setOnSelect(selected -> {
@@ -271,7 +280,7 @@ public class MusicSequenceScreen extends Screen {
         this.addRenderableWidget(this.trackDropdown);
 
         // BPM Input Box
-        this.bpmEditBox = new EditBox(this.font, leftX + 450, topY, 45, 20, Component.literal("BPM"));
+        this.bpmEditBox = new EditBox(this.font, leftX + 410, topY, 45, 20, Component.literal("BPM"));
         this.bpmEditBox.setMaxLength(3);
         this.bpmEditBox.setValue(String.valueOf(currentSequence.getBpm()));
         this.bpmEditBox.setHint(Component.literal("120"));
@@ -289,7 +298,7 @@ public class MusicSequenceScreen extends Screen {
 
         // Looping Checkbox
         this.loopingCheckbox = new CyberpunkCheckbox(
-                leftX + 500, topY, 75, 20,
+                leftX + 460, topY, 75, 20,
                 Component.literal("Loop Song"),
                 currentSequence.isLooping(),
                 checked -> {
@@ -360,11 +369,15 @@ public class MusicSequenceScreen extends Screen {
         CyberpunkButton saveBtn = new CyberpunkButton(effWidth - 115, footerY, 100, 22, Component.literal("SAVE FILE"), b -> saveCurrentFile(), CYAN_MAIN, false);
         CyberpunkButton runBtn = new CyberpunkButton(effWidth - 225, footerY, 100, 22, Component.literal("▶ RUN SERVER"), b -> startSequencePlayback(currentFileName), 0xFF00FF88, false);
         CyberpunkButton stopBtn = new CyberpunkButton(effWidth - 325, footerY, 90, 22, Component.literal("⏹ STOP MUSIC"), b -> MusicSequenceManager.getInstance().stopAllSequences(Minecraft.getInstance().getSingleplayerServer()), 0xFFFF3366, false);
-        CyberpunkButton closeBtn = new CyberpunkButton(leftX, footerY, 100, 22, Component.literal("CLOSE"), b -> this.onClose(), 0xFF8899AA, false);
+        
+        CyberpunkButton hubBtn = new CyberpunkButton(leftX, footerY, 125, 22, Component.literal("← ALL SEQUENCES"), b -> returnToSelectScreen(), CYAN_MAIN, false);
+        hubBtn.setTooltip(Tooltip.create(Component.literal("Return to Music Sequence Hub selection menu")));
+        CyberpunkButton closeBtn = new CyberpunkButton(leftX + 130, footerY, 70, 22, Component.literal("CLOSE"), b -> this.onClose(), 0xFF8899AA, false);
 
         this.addRenderableWidget(saveBtn);
         this.addRenderableWidget(runBtn);
         this.addRenderableWidget(stopBtn);
+        this.addRenderableWidget(hubBtn);
         this.addRenderableWidget(closeBtn);
     }
 
@@ -394,12 +407,37 @@ public class MusicSequenceScreen extends Screen {
         this.init();
     }
 
+    private void returnToSelectScreen() {
+        saveCurrentSequenceToWorkingMap();
+        if (isPreviewPlaying) {
+            EventAudioClientController.getInstance().stopAudio(0);
+            this.isPreviewPlaying = false;
+        }
+        if (this.minecraft != null) {
+            if (this.parentSelectScreen != null) {
+                this.parentSelectScreen.getWorkingServerSequenceFiles().clear();
+                this.parentSelectScreen.getWorkingServerSequenceFiles().putAll(this.workingServerSequenceFiles);
+                this.minecraft.setScreen(this.parentSelectScreen);
+            } else {
+                MusicSequenceSelectScreen selectScreen = new MusicSequenceSelectScreen(this);
+                this.minecraft.setScreen(selectScreen);
+            }
+        }
+    }
+
     @Override
     public void onClose() {
         if (isPreviewPlaying) {
             EventAudioClientController.getInstance().stopAudio(0);
+            this.isPreviewPlaying = false;
         }
-        super.onClose();
+        if (this.parentSelectScreen != null && this.minecraft != null) {
+            this.parentSelectScreen.getWorkingServerSequenceFiles().clear();
+            this.parentSelectScreen.getWorkingServerSequenceFiles().putAll(this.workingServerSequenceFiles);
+            this.minecraft.setScreen(this.parentSelectScreen);
+        } else {
+            super.onClose();
+        }
     }
 
     private void adjustZoom(double factor) {
@@ -415,18 +453,28 @@ public class MusicSequenceScreen extends Screen {
         this.init();
     }
 
-    private void createNewSequenceFile() {
-        String name = this.newFileEditBox.getValue().trim();
-        if (name.isEmpty()) return;
-        if (!name.endsWith(".json")) {
-            name += ".json";
-        }
+    private void openCreateSequenceModal() {
         saveCurrentSequenceToWorkingMap();
-        this.currentFileName = name;
-        this.currentSequence = new MusicSequence(currentFileName, "", false, 1.0f, 1.0f, new ArrayList<>());
-        getActiveSequenceMap().put(currentFileName, GSON.toJson(currentSequence));
-        this.newFileEditBox.setValue("");
-        this.init();
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(new CreateMusicSequenceModalScreen(this, availableTracks, newSequence -> {
+                String fileName = newSequence.getFileName();
+                if (fileName == null || fileName.isBlank()) fileName = "sequence.json";
+                if (!fileName.endsWith(".json")) fileName += ".json";
+                fileName = fileName.replaceAll("[^a-zA-Z0-9._\\-]", "_");
+                newSequence.setFileName(fileName);
+                String json = GSON.toJson(newSequence);
+
+                getActiveWorkingMap().put(fileName, json);
+                if (isClientMode) {
+                    MusicSequenceManager.getInstance().saveSequenceFile(fileName, json);
+                    savedClientSequenceFiles.put(fileName, json);
+                } else {
+                    ModMessages.sendToServer(new C2SSaveMusicSequencePacket(fileName, json));
+                    savedServerSequenceFiles.put(fileName, json);
+                }
+                selectSequenceFile(fileName);
+            }));
+        }
     }
 
     public void openEditEntryModal(int index) {
@@ -854,7 +902,6 @@ public class MusicSequenceScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (newFileEditBox != null && newFileEditBox.isFocused()) return super.keyPressed(keyCode, scanCode, modifiers);
         if (bpmEditBox != null && bpmEditBox.isFocused()) return super.keyPressed(keyCode, scanCode, modifiers);
 
         if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE) {

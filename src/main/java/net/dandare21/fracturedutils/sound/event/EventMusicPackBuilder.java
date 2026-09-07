@@ -12,9 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -43,10 +41,26 @@ public class EventMusicPackBuilder {
             }
 
             List<File> oggFiles = new ArrayList<>();
-            try (var stream = Files.walk(tracksDir)) {
-                stream.filter(Files::isRegularFile)
-                        .filter(p -> p.toString().toLowerCase().endsWith(".ogg"))
-                        .forEach(p -> oggFiles.add(p.toFile()));
+            List<Path> searchDirs = new ArrayList<>();
+            if (Files.exists(tracksDir)) searchDirs.add(tracksDir);
+            if (Files.exists(baseDir)) searchDirs.add(baseDir);
+            Path parentTracks = baseDir.getParent() != null ? baseDir.getParent().resolve("event_music").resolve("tracks") : null;
+            if (parentTracks != null && Files.exists(parentTracks) && !parentTracks.equals(tracksDir)) {
+                searchDirs.add(parentTracks);
+            }
+
+            Set<String> seenNames = new HashSet<>();
+            for (Path dir : searchDirs) {
+                try (var stream = Files.walk(dir)) {
+                    stream.filter(Files::isRegularFile)
+                            .filter(p -> p.toString().toLowerCase().endsWith(".ogg"))
+                            .forEach(p -> {
+                                String name = p.getFileName().toString();
+                                if (seenNames.add(name)) {
+                                    oggFiles.add(p.toFile());
+                                }
+                            });
+                } catch (Exception ignored) {}
             }
 
             // Sort files alphabetically for consistent content ordering & zip reproducibility across OSes & server resets

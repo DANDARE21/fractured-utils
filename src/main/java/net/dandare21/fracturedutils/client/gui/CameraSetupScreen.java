@@ -22,9 +22,10 @@ public class CameraSetupScreen extends Screen {
     private static final int CYAN_BG = 0xFF05090C;
     private static final int RED_CANCEL = 0xFFFF3355;
 
+    public record CameraResult(boolean useCamera, double x, double y, double z, float yaw, float pitch, double fov) {}
+
     private final Screen parentScreen;
-    private final DialogLine line;
-    private final Consumer<DialogLine> onSave;
+    private final Consumer<CameraResult> onGenericSave;
 
     private boolean useCamera;
     private double cameraX;
@@ -41,16 +42,42 @@ public class CameraSetupScreen extends Screen {
     private boolean updatingBoxes = false;
 
     public CameraSetupScreen(Screen parentScreen, DialogLine line, Consumer<DialogLine> onSave) {
+        this(parentScreen,
+                line != null ? line.getCameraX() : 0.0,
+                line != null ? line.getCameraY() : 0.0,
+                line != null ? line.getCameraZ() : 0.0,
+                line != null ? line.getCameraYaw() : 0.0f,
+                line != null ? line.getCameraPitch() : 0.0f,
+                line != null ? line.getCameraFov() : 70.0,
+                line != null && line.isUseCamera(),
+                res -> {
+                    if (line != null) {
+                        line.setUseCamera(res.useCamera());
+                        line.setCameraX(res.x());
+                        line.setCameraY(res.y());
+                        line.setCameraZ(res.z());
+                        line.setCameraYaw(res.yaw());
+                        line.setCameraPitch(res.pitch());
+                        line.setCameraFov(res.fov());
+                        if (onSave != null) {
+                            onSave.accept(line);
+                        }
+                    }
+                });
+    }
+
+    public CameraSetupScreen(Screen parentScreen, double initialX, double initialY, double initialZ,
+                             float initialYaw, float initialPitch, double initialFov, boolean initialUseCamera,
+                             Consumer<CameraResult> onGenericSave) {
         super(Component.literal("Camera Setup"));
         this.parentScreen = parentScreen;
-        this.line = line != null ? line.copy() : new DialogLine();
-        this.onSave = onSave;
+        this.onGenericSave = onGenericSave;
+        this.useCamera = initialUseCamera;
 
-        this.useCamera = this.line.isUseCamera();
         Minecraft mc = Minecraft.getInstance();
 
-        // If no position saved yet, default to player's current eye position and view angles
-        if (!this.useCamera || (this.line.getCameraX() == 0.0 && this.line.getCameraY() == 0.0 && this.line.getCameraZ() == 0.0)) {
+        // If no position saved yet or not active, default to player's current eye position and view angles
+        if (!this.useCamera || (initialX == 0.0 && initialY == 0.0 && initialZ == 0.0)) {
             if (mc.player != null) {
                 Vec3 eyePos = mc.player.getEyePosition();
                 this.cameraX = eyePos.x;
@@ -67,13 +94,13 @@ public class CameraSetupScreen extends Screen {
             }
             this.useCamera = true;
         } else {
-            this.cameraX = this.line.getCameraX();
-            this.cameraY = this.line.getCameraY();
-            this.cameraZ = this.line.getCameraZ();
-            this.cameraYaw = this.line.getCameraYaw();
-            this.cameraPitch = this.line.getCameraPitch();
+            this.cameraX = initialX;
+            this.cameraY = initialY;
+            this.cameraZ = initialZ;
+            this.cameraYaw = initialYaw;
+            this.cameraPitch = initialPitch;
         }
-        this.cameraFov = this.line.getCameraFov();
+        this.cameraFov = initialFov > 0.0 ? initialFov : 70.0;
     }
 
     @Override
@@ -152,9 +179,8 @@ public class CameraSetupScreen extends Screen {
         // 5. Save & Cancel Buttons
         int btnY = panelTop + panelHeight - 24;
         CyberpunkButton saveBtn = new CyberpunkButton(panelLeft + panelWidth - 110, btnY, 95, 18, Component.literal("✓ Save Camera"), b -> {
-            applyToLine();
-            if (onSave != null) {
-                onSave.accept(line);
+            if (onGenericSave != null) {
+                onGenericSave.accept(new CameraResult(this.useCamera, this.cameraX, this.cameraY, this.cameraZ, this.cameraYaw, this.cameraPitch, this.cameraFov));
             }
             CustomCameraManager.clearCustomCamera();
             this.minecraft.setScreen(parentScreen);
@@ -328,16 +354,6 @@ public class CameraSetupScreen extends Screen {
         } else {
             CustomCameraManager.clearCustomCamera();
         }
-    }
-
-    private void applyToLine() {
-        line.setUseCamera(this.useCamera);
-        line.setCameraX(this.cameraX);
-        line.setCameraY(this.cameraY);
-        line.setCameraZ(this.cameraZ);
-        line.setCameraYaw(this.cameraYaw);
-        line.setCameraPitch(this.cameraPitch);
-        line.setCameraFov(this.cameraFov);
     }
 
     private double getLayoutScale() {

@@ -131,6 +131,11 @@ public class DialogSequenceInstance {
         }
     }
 
+    public synchronized void cancelWithoutClear() {
+        this.finished = true;
+        this.readyPlayers.clear();
+    }
+
     public synchronized void tick(MinecraftServer server) {
         if (finished || server == null || lines.isEmpty()) {
             return;

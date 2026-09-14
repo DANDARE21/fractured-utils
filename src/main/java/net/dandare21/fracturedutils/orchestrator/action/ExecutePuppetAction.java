@@ -100,8 +100,14 @@ public class ExecutePuppetAction implements OrchestratorAction {
                 }
             }
 
-            if (windupTicks > 0 && !resolvedParams.contains("windupTicks")) {
-                resolvedParams.putInt("windupTicks", windupTicks);
+            if (windupTicks > 0) {
+                if (!resolvedParams.contains("windupTicks")) resolvedParams.putInt("windupTicks", windupTicks);
+                if (!resolvedParams.contains("indicationTicks")) resolvedParams.putInt("indicationTicks", Math.max(1, windupTicks / 4));
+                if (!resolvedParams.contains("jumpTicks")) resolvedParams.putInt("jumpTicks", Math.max(2, windupTicks - (windupTicks / 4)));
+            }
+            if (durationTicks > 0) {
+                if (!resolvedParams.contains("durationTicks")) resolvedParams.putInt("durationTicks", durationTicks);
+                if (!resolvedParams.contains("channelTicks")) resolvedParams.putInt("channelTicks", durationTicks);
             }
 
             dispatchToHandlers(handlers, actionType, resolvedParams);

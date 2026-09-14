@@ -144,6 +144,24 @@ public class DialogManager {
         return startSequence(fileName, null);
     }
 
+    public boolean startSingleDialog(DialogLine line, Collection<ServerPlayer> targets) {
+        if (line == null) return false;
+        DialogLine copy = line.copy();
+        copy.setWaitForInput(false);
+        copy.setUseCamera(false);
+
+        for (DialogSequenceInstance existing : activeSequences) {
+            if ("single_dialog".equals(existing.getFileName())) {
+                existing.cancelWithoutClear();
+            }
+        }
+        activeSequences.removeIf(DialogSequenceInstance::isFinished);
+
+        DialogSequenceInstance instance = new DialogSequenceInstance("single_dialog", List.of(copy), targets);
+        activeSequences.add(instance);
+        return true;
+    }
+
     public void stopAllSequences(MinecraftServer server) {
         for (DialogSequenceInstance instance : activeSequences) {
             instance.stop(server);

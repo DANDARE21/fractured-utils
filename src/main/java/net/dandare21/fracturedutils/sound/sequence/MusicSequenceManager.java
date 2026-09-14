@@ -3,13 +3,47 @@ package net.dandare21.fracturedutils.sound.sequence;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.dandare21.fracturedutils.FracturedUtils;
+import net.dandare21.fracturedutils.dialog.DialogLine;
+import net.dandare21.fracturedutils.dialog.DialogManager;
+import net.dandare21.fracturedutils.objective.ObjectiveManager;
+import net.dandare21.fracturedutils.puppet.IPuppetEntity;
+import net.dandare21.fracturedutils.puppet.action.AbyssalBarrageAction;
+import net.dandare21.fracturedutils.puppet.action.LeapSlamAction;
+import net.dandare21.fracturedutils.puppet.boss.VoidHeraldBoss;
+import net.dandare21.fracturedutils.puppet.capability.IPuppetHandler;
+import net.dandare21.fracturedutils.puppet.capability.PuppetCapabilityProvider;
+import net.dandare21.fracturedutils.puppet.fsm.PuppetActionType;
+import net.dandare21.fracturedutils.puppet.registry.ModPuppetActions;
+import net.dandare21.fracturedutils.puppet.target.ActionTarget;
+import net.dandare21.fracturedutils.network.ModMessages;
+import net.dandare21.fracturedutils.network.packet.S2CCameraOverridePacket;
+import net.dandare21.fracturedutils.screeneffect.ScreenEffectInstance;
+import net.dandare21.fracturedutils.screeneffect.ScreenEffectManager;
+import net.dandare21.fracturedutils.screeneffect.effects.HueShiftEffect;
+import net.dandare21.fracturedutils.screeneffect.effects.ImpactFrameEffect;
+import net.dandare21.fracturedutils.screeneffect.effects.InvertColorsEffect;
+import net.dandare21.fracturedutils.screeneffect.effects.ScreenShakeEffect;
+import net.dandare21.fracturedutils.screeneffect.effects.StrobeEffect;
 import net.dandare21.fracturedutils.sound.ModSoundSources;
 import net.dandare21.fracturedutils.sound.event.EventAudioManager;
 import net.dandare21.fracturedutils.network.packet.S2CPlayEventAudioPacket.PlaybackMode;
+import net.dandare21.fracturedutils.util.SelectorUtils;
+import net.dandare21.fracturedutils.puppet.registry.ModEntities;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.TagParser;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.fml.loading.FMLPaths;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.io.File;
 import java.io.IOException;
@@ -28,7 +62,7 @@ public class MusicSequenceManager {
     public static class ActiveMusicSequence {
         private final String fileName;
         private final MusicSequence sequence;
-        private final long startTimeMs;
+        private long startTimeMs;
         private final long expectedDurationMs;
         private final Set<UUID> targetPlayerUuids;
         private final Set<Integer> executedEntryIndices = new HashSet<>();
@@ -81,12 +115,39 @@ public class MusicSequenceManager {
             return startTimeMs;
         }
 
+        public void setStartTimeMs(long startTimeMs) {
+            this.startTimeMs = startTimeMs;
+        }
+
         public long getExpectedDurationMs() {
             return expectedDurationMs;
         }
 
         public boolean isFinished() {
             return finished;
+        }
+
+        public void setFinished(boolean finished) {
+            this.finished = finished;
+        }
+
+        public Set<UUID> getTargetPlayerUuids() {
+            return targetPlayerUuids;
+        }
+
+        public Set<Integer> getExecutedEntryIndices() {
+            return executedEntryIndices;
+        }
+
+        public Collection<ServerPlayer> getTargets(MinecraftServer server) {
+            if (server == null) return Collections.emptyList();
+            if (targetPlayerUuids.isEmpty()) return server.getPlayerList().getPlayers();
+            List<ServerPlayer> targets = new ArrayList<>();
+            for (UUID u : targetPlayerUuids) {
+                ServerPlayer p = server.getPlayerList().getPlayer(u);
+                if (p != null) targets.add(p);
+            }
+            return targets;
         }
     }
 
@@ -297,7 +358,8 @@ public class MusicSequenceManager {
             );
         }
 
-        // 2. Track Active Sequence for Timed Action Execution
+        // 2. Track Active Sequence for Timed Action Execution (cleanly stop prior instance of this sequence if running)
+        activeSequences.removeIf(seq -> seq.getFileName().equalsIgnoreCase(fileName));
         ActiveMusicSequence activeSeq = new ActiveMusicSequence(fileName, sequence, targets);
         activeSequences.add(activeSeq);
         FracturedUtils.LOGGER.info("[MusicSequenceManager] Started music sequence '{}' with {} entries (expected duration: {}ms).", fileName, sequence.getEntries().size(), activeSeq.getExpectedDurationMs());
@@ -305,8 +367,18 @@ public class MusicSequenceManager {
     }
 
     public void stopAllSequences(MinecraftServer server) {
+        if (server != null) {
+            S2CCameraOverridePacket clearPacket = new S2CCameraOverridePacket(
+                    false, "CLEAR", 0, 0, 0, 0, 0, 0, 70.0, 0, false, -1, 0, 0, 0
+            );
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                ModMessages.sendToPlayer(clearPacket, player);
+            }
+            ScreenEffectManager.stopAllEffects(server);
+        }
         activeSequences.clear();
         EventAudioManager.getInstance().stopAudio(server, null, 1000);
+        DialogManager.getInstance().stopAllSequences(server);
         FracturedUtils.LOGGER.info("[MusicSequenceManager] Stopped all active music sequences.");
     }
 
@@ -320,21 +392,37 @@ public class MusicSequenceManager {
             List<MusicSequenceEntry> entries = activeSeq.getSequence().getEntries();
 
             for (int i = 0; i < entries.size(); i++) {
-                if (activeSeq.executedEntryIndices.contains(i)) {
+                if (activeSeq.getExecutedEntryIndices().contains(i)) {
                     continue;
                 }
 
                 MusicSequenceEntry entry = entries.get(i);
                 if (elapsedMs >= entry.getTimestampMs()) {
                     executeEntry(server, activeSeq, entry);
-                    activeSeq.executedEntryIndices.add(i);
+                    activeSeq.getExecutedEntryIndices().add(i);
                 }
             }
 
-            // Mark finished ONLY when non-looping AND song track playback has completed (elapsedMs >= expectedDurationMs)
-            if (!activeSeq.getSequence().isLooping()) {
-                if (elapsedMs >= activeSeq.getExpectedDurationMs()) {
-                    activeSeq.finished = true;
+            long endMs = activeSeq.getSequence().getEndMs() > 0 ? activeSeq.getSequence().getEndMs() : activeSeq.getExpectedDurationMs();
+
+            if (elapsedMs >= endMs) {
+                if (activeSeq.getSequence().isLooping()) {
+                    activeSeq.setStartTimeMs(now - activeSeq.getSequence().getStartMs());
+                    activeSeq.getExecutedEntryIndices().clear();
+                    FracturedUtils.LOGGER.info("[MusicSequenceManager] Looping sequence '{}' (reset to {}ms)",
+                            activeSeq.getFileName(), activeSeq.getSequence().getStartMs());
+                } else {
+                    activeSeq.setFinished(true);
+                    EventAudioManager.getInstance().stopAudio(server, activeSeq.getTargets(server), 500);
+                    S2CCameraOverridePacket clearPacket = new S2CCameraOverridePacket(
+                            false, "CLEAR", 0, 0, 0, 0, 0, 0, 70.0, 0, false, -1, 0, 0, 0
+                    );
+                    for (ServerPlayer player : activeSeq.getTargets(server)) {
+                        ModMessages.sendToPlayer(clearPacket, player);
+                        ScreenEffectManager.stopAllEffects(player);
+                    }
+                    FracturedUtils.LOGGER.info("[MusicSequenceManager] Sequence '{}' reached OUT marker at {}ms. Stopped audio and finished.",
+                            activeSeq.getFileName(), endMs);
                 }
             }
         }
@@ -343,6 +431,82 @@ public class MusicSequenceManager {
     }
 
     private void executeEntry(MinecraftServer server, ActiveMusicSequence activeSeq, MusicSequenceEntry entry) {
+        ServerPlayer contextPlayer = null;
+        for (UUID uuid : activeSeq.getTargetPlayerUuids()) {
+            ServerPlayer p = server.getPlayerList().getPlayer(uuid);
+            if (p != null) {
+                contextPlayer = p;
+                break;
+            }
+        }
+        if (contextPlayer == null && !server.getPlayerList().getPlayers().isEmpty()) {
+            contextPlayer = server.getPlayerList().getPlayers().get(0);
+        }
+
+        MusicSequenceChannel matchedChannel = null;
+        for (MusicSequenceChannel ch : activeSeq.getSequence().getChannels()) {
+            if (ch.getId().equalsIgnoreCase(entry.getChannelId())) {
+                matchedChannel = ch;
+                break;
+            }
+        }
+
+        boolean isCameraChannel = (matchedChannel != null && MusicSequenceChannel.TYPE_CAMERA.equalsIgnoreCase(matchedChannel.getType()));
+        boolean isCameraEntry = isCameraChannel || entry.isUseCamera() || "CAMERA".equalsIgnoreCase(entry.getActionType());
+
+        if (isCameraEntry) {
+            executeCameraEntry(server, activeSeq, entry, contextPlayer);
+            return;
+        }
+
+        boolean isScreenEffectChannel = (matchedChannel != null && (MusicSequenceChannel.TYPE_SCREEN_EFFECT.equalsIgnoreCase(matchedChannel.getType()) || MusicSequenceChannel.TYPE_OBJECTIVE.equalsIgnoreCase(matchedChannel.getType())));
+        boolean isScreenEffectEntry = isScreenEffectChannel || "SCREEN_EFFECT".equalsIgnoreCase(entry.getActionType()) || "SCREEN_EFFECTS".equalsIgnoreCase(entry.getActionType());
+
+        if (isScreenEffectEntry) {
+            executeScreenEffectEntry(server, activeSeq, entry, contextPlayer);
+            return;
+        }
+
+        String rawCmd = entry.getCommand() != null ? entry.getCommand().trim() : "";
+        boolean isPuppetChannel = (matchedChannel != null && "PUPPET".equalsIgnoreCase(matchedChannel.getType()));
+        boolean isPuppetCmd = rawCmd.startsWith("puppet_action") || rawCmd.startsWith("puppet_suppress") || rawCmd.startsWith("puppet_restore") || "PUPPET".equalsIgnoreCase(entry.getActionType());
+
+        if (isPuppetChannel || isPuppetCmd) {
+            executePuppetEntry(server, activeSeq, entry, contextPlayer);
+            return;
+        }
+
+        if ("DIALOG".equalsIgnoreCase(entry.getActionType())) {
+            DialogLine dialogLine = entry.getDialog();
+            if (dialogLine != null) {
+                DialogManager.getInstance().startSingleDialog(dialogLine, activeSeq.getTargets(server));
+                FracturedUtils.LOGGER.info("[MusicSequenceManager] Started single dialog '{}' at {}ms", entry.getDescription(), entry.getTimestampMs());
+                return;
+            }
+
+            String cmd = entry.getCommand() != null ? entry.getCommand().trim() : "";
+            if (!cmd.startsWith("/")) {
+                if (cmd.endsWith(".json")) {
+                    DialogManager.getInstance().startSequence(cmd, activeSeq.getTargets(server));
+                    FracturedUtils.LOGGER.info("[MusicSequenceManager] Started legacy dialog sequence '{}' at {}ms", cmd, entry.getTimestampMs());
+                } else if (!cmd.isEmpty()) {
+                    DialogLine fallback = new DialogLine();
+                    fallback.setText(cmd);
+                    fallback.setSpeaker(entry.getDescription() != null ? entry.getDescription() : "");
+                    fallback.setWaitForInput(false);
+                    fallback.setUseCamera(false);
+                    DialogManager.getInstance().startSingleDialog(fallback, activeSeq.getTargets(server));
+                    FracturedUtils.LOGGER.info("[MusicSequenceManager] Started fallback single dialog '{}' at {}ms", cmd, entry.getTimestampMs());
+                }
+                return;
+            }
+        }
+
+        if ("SCREEN_EFFECT".equalsIgnoreCase(entry.getActionType()) || "SCREEN_EFFECTS".equalsIgnoreCase(entry.getActionType())) {
+            executeScreenEffectEntry(server, activeSeq, entry, contextPlayer);
+            return;
+        }
+
         if (entry.getCommand() == null || entry.getCommand().trim().isEmpty()) return;
 
         String cmd = entry.getCommand().trim();
@@ -350,13 +514,631 @@ public class MusicSequenceManager {
             cmd = cmd.substring(1);
         }
 
-        CommandSourceStack sourceStack = server.createCommandSourceStack();
+        // Do not pass internal puppet directives to the server command manager
+        if (cmd.startsWith("puppet_action") || cmd.startsWith("puppet_suppress") || cmd.startsWith("puppet_restore")) {
+            return;
+        }
+
+        if (contextPlayer != null) {
+            cmd = cmd.replace("%player%", contextPlayer.getGameProfile().getName());
+            cmd = cmd.replace("%uuid%", contextPlayer.getStringUUID());
+        } else {
+            cmd = cmd.replace("%player%", "@p");
+            cmd = cmd.replace("%uuid%", "");
+        }
+
+        CommandSourceStack sourceStack = contextPlayer != null
+                ? contextPlayer.createCommandSourceStack().withPermission(4).withSuppressedOutput()
+                : server.createCommandSourceStack();
 
         try {
             server.getCommands().performPrefixedCommand(sourceStack, cmd);
             FracturedUtils.LOGGER.info("[MusicSequenceManager] Executed entry command at {}ms: '{}'", entry.getTimestampMs(), cmd);
         } catch (Exception e) {
             FracturedUtils.LOGGER.error("[MusicSequenceManager] Error executing entry command '{}' in sequence {}", cmd, activeSeq.getFileName(), e);
+        }
+    }
+
+    private void executeCameraEntry(MinecraftServer server, ActiveMusicSequence activeSeq, MusicSequenceEntry entry, ServerPlayer contextPlayer) {
+        String mode = entry.getCameraMode();
+        if (mode == null || mode.isBlank()) {
+            mode = "STATIC";
+        }
+
+        int targetEntityId = -1;
+        if ("FOLLOW".equalsIgnoreCase(mode) || "OVER_THE_SHOULDER".equalsIgnoreCase(mode)) {
+            String targetSelector = entry.getCameraTarget();
+            if (targetSelector == null || targetSelector.isBlank() || "@p".equalsIgnoreCase(targetSelector)) {
+                if (contextPlayer != null) {
+                    targetEntityId = contextPlayer.getId();
+                }
+            } else {
+                List<Entity> found = SelectorUtils.getTargetEntities(server, targetSelector);
+                if (!found.isEmpty()) {
+                    targetEntityId = found.get(0).getId();
+                } else if (contextPlayer != null) {
+                    targetEntityId = contextPlayer.getId();
+                }
+            }
+        }
+
+        int durationMs = (int) entry.getTotalDurationMs();
+        if (durationMs <= 0) {
+            durationMs = 3000;
+        }
+
+        S2CCameraOverridePacket packet = new S2CCameraOverridePacket(
+                !"CLEAR".equalsIgnoreCase(mode),
+                mode,
+                entry.getCameraX(),
+                entry.getCameraY(),
+                entry.getCameraZ(),
+                entry.getCameraYaw(),
+                entry.getCameraPitch(),
+                entry.getCameraRoll(),
+                entry.getCameraFov(),
+                durationMs,
+                entry.isCameraInterpolate(),
+                targetEntityId,
+                entry.getCameraHeightOffset(),
+                entry.getCameraBackDistance(),
+                entry.getCameraShoulderOffset()
+        );
+
+        for (ServerPlayer player : activeSeq.getTargets(server)) {
+            ModMessages.sendToPlayer(packet, player);
+        }
+
+        FracturedUtils.LOGGER.info("[MusicSequenceManager] Dispatched camera override (mode={}, dur={}ms) to {} players",
+                mode, durationMs, activeSeq.getTargets(server).size());
+    }
+
+    private void executeScreenEffectEntry(MinecraftServer server, ActiveMusicSequence activeSeq, MusicSequenceEntry entry, ServerPlayer contextPlayer) {
+        int durationMs = (int) entry.getTotalDurationMs();
+        if (durationMs <= 0) {
+            durationMs = entry.getDurationMs() > 0 ? entry.getDurationMs() : 1000;
+        }
+
+        String effectId = entry.getScreenEffectId();
+        if (effectId == null || effectId.isBlank()) {
+            effectId = entry.getSubAction();
+        }
+        if (effectId == null || effectId.isBlank()) {
+            effectId = "fractured_utils:screen_shake";
+        }
+
+        ScreenEffectInstance instance;
+        if (effectId.equalsIgnoreCase("fractured_utils:invert_colors") || effectId.equalsIgnoreCase("invert") || effectId.equalsIgnoreCase("invert_colors")) {
+            instance = new InvertColorsEffect.InvertColorsInstance(durationMs, entry.isScreenEffectPulse(), entry.getScreenEffectFrequency());
+        } else if (effectId.equalsIgnoreCase("fractured_utils:strobe") || effectId.equalsIgnoreCase("strobe")) {
+            instance = new StrobeEffect.StrobeInstance(durationMs, entry.getScreenEffectFrequency(), entry.getScreenEffectColor(), entry.isScreenEffectSmooth(), entry.getScreenEffectMaxAlpha());
+        } else if (effectId.equalsIgnoreCase("fractured_utils:hue_shift") || effectId.equalsIgnoreCase("hue_shift") || effectId.equalsIgnoreCase("hue")) {
+            instance = new HueShiftEffect.HueShiftInstance(durationMs, entry.getScreenEffectFrequency(), entry.isScreenEffectContinuous(), entry.getScreenEffectAngle(), entry.getScreenEffectIntensity());
+        } else if (effectId.equalsIgnoreCase("fractured_utils:impact_frame") || effectId.equalsIgnoreCase("impact_frame") || effectId.equalsIgnoreCase("impact")) {
+            int frameInterval = entry.getScreenEffectFrequency() > 0 ? (int) (1000.0f / entry.getScreenEffectFrequency()) : 35;
+            if (frameInterval < 10) frameInterval = 35;
+            instance = new ImpactFrameEffect.ImpactFrameInstance(durationMs, entry.getScreenEffectColor(), entry.getScreenEffectSecondaryColor(), frameInterval, entry.isScreenEffectPulse(), entry.getScreenEffectStyle());
+        } else {
+            // Default: screen shake
+            instance = new ScreenShakeEffect.ScreenShakeInstance(durationMs, entry.getScreenEffectIntensity(), entry.getScreenEffectFrequency(), entry.isScreenEffectDecay());
+        }
+
+        ScreenEffectManager.playEffect(activeSeq.getTargets(server), instance);
+        FracturedUtils.LOGGER.info("[MusicSequenceManager] Dispatched screen effect (type={}, dur={}ms) to {} players",
+                instance.getType().getId(), durationMs, activeSeq.getTargets(server).size());
+    }
+
+    private String resolveActorTag(MusicSequenceChannel channel, MusicSequenceEntry entry) {
+        String cmd = entry.getCommand() != null ? entry.getCommand().trim() : "";
+        if (cmd.contains("tag:")) {
+            int idx = cmd.indexOf("tag:") + 4;
+            int space = cmd.indexOf(" ", idx);
+            if (space == -1) space = cmd.indexOf("}", idx);
+            if (space == -1) space = cmd.length();
+            String tag = SelectorUtils.cleanTag(cmd.substring(idx, space));
+            if (!tag.isEmpty()) return tag;
+        }
+        if (channel != null && !channel.getActorTag().isBlank()) {
+            return SelectorUtils.cleanTag(channel.getActorTag());
+        }
+        if (channel != null && !channel.getPuppetActor().isBlank()) {
+            String tag = SelectorUtils.cleanTag(channel.getPuppetActor());
+            if (!tag.isEmpty()) return tag;
+        }
+        if (cmd.contains("Tags:[\"")) {
+            int start = cmd.indexOf("Tags:[\"") + 7;
+            int end = cmd.indexOf("\"", start);
+            if (end != -1) return SelectorUtils.cleanTag(cmd.substring(start, end));
+        }
+        if (entry.getDescription() != null && entry.getDescription().contains("#")) {
+            int start = entry.getDescription().indexOf("#") + 1;
+            int end = entry.getDescription().indexOf(")", start);
+            if (end == -1) end = entry.getDescription().indexOf(" ", start);
+            if (end == -1) end = entry.getDescription().length();
+            return SelectorUtils.cleanTag(entry.getDescription().substring(start, end));
+        }
+        return (channel != null && !channel.getName().isBlank()) ? channel.getName().toLowerCase(Locale.ROOT).replace(" ", "_") : "";
+    }
+
+    private void executePuppetEntry(MinecraftServer server, ActiveMusicSequence activeSeq, MusicSequenceEntry entry, ServerPlayer contextPlayer) {
+        MusicSequenceChannel channel = null;
+        for (MusicSequenceChannel ch : activeSeq.getSequence().getChannels()) {
+            if (ch.getId().equalsIgnoreCase(entry.getChannelId())) {
+                channel = ch;
+                break;
+            }
+        }
+        if (channel == null) {
+            for (MusicSequenceChannel ch : activeSeq.getSequence().getChannels()) {
+                if ("PUPPET".equalsIgnoreCase(ch.getType())) {
+                    channel = ch;
+                    break;
+                }
+            }
+        }
+
+        String sub = entry.getSubAction();
+        String cmd = entry.getCommand() != null ? entry.getCommand().trim() : "";
+        if (sub == null || sub.isBlank()) {
+            String lowerCmd = cmd.toLowerCase(Locale.ROOT);
+            if (lowerCmd.startsWith("summon")) {
+                sub = "SPAWN";
+            } else if (lowerCmd.startsWith("kill")) {
+                sub = "DESPAWN";
+            } else if (lowerCmd.startsWith("puppet_suppress") || lowerCmd.startsWith("puppet_restore")) {
+                sub = "TOGGLE_AI";
+            } else {
+                sub = "EXECUTE_ACTION";
+            }
+        }
+        if ("ACTION".equalsIgnoreCase(sub)) {
+            sub = "EXECUTE_ACTION";
+        }
+
+        String actorTag = resolveActorTag(channel, entry);
+
+        FracturedUtils.LOGGER.info("[MusicSequenceManager] Executing puppet sub-action '{}' for actor tag '{}' at {}ms (cmd: '{}')",
+                sub, actorTag, entry.getTimestampMs(), cmd);
+
+        CommandSourceStack sourceStack = contextPlayer != null
+                ? contextPlayer.createCommandSourceStack().withPermission(4).withSuppressedOutput()
+                : server.createCommandSourceStack();
+
+        if ("SPAWN".equalsIgnoreCase(sub)) {
+            spawnPuppetActor(server, activeSeq, entry, channel, actorTag, contextPlayer);
+        } else if ("DESPAWN".equalsIgnoreCase(sub)) {
+            try {
+                List<Entity> taggedEntities = SelectorUtils.getEntitiesByTag(server, actorTag);
+                if (taggedEntities.isEmpty() && channel != null && !channel.getActorTag().isBlank()) {
+                    taggedEntities = SelectorUtils.getEntitiesByTag(server, channel.getActorTag());
+                }
+                if (!taggedEntities.isEmpty()) {
+                    for (Entity e : taggedEntities) {
+                        e.discard();
+                    }
+                    FracturedUtils.LOGGER.info("[MusicSequenceManager] Despawned {} entity/entities with custom tag '{}'",
+                            taggedEntities.size(), actorTag);
+                } else {
+                    String killCmd = "kill @e[tag=" + actorTag + "]";
+                    server.getCommands().performPrefixedCommand(sourceStack, killCmd);
+                }
+            } catch (Exception e) {
+                FracturedUtils.LOGGER.error("[MusicSequenceManager] Error despawning puppet with tag " + actorTag, e);
+            }
+        } else if ("TOGGLE_AI".equalsIgnoreCase(sub)) {
+            try {
+                List<IPuppetHandler> handlers = SelectorUtils.getPuppetHandlersByTag(server, actorTag);
+                if (handlers.isEmpty() && channel != null && !channel.getActorTag().isBlank()) {
+                    handlers = SelectorUtils.getPuppetHandlersByTag(server, channel.getActorTag());
+                }
+                if (handlers.isEmpty()) {
+                    handlers = SelectorUtils.getPuppetHandlersByTag(server, "puppet_actor");
+                }
+                if (handlers.isEmpty()) {
+                    FracturedUtils.LOGGER.warn("[MusicSequenceManager] No active puppet handlers found with tag '{}' to toggle AI", actorTag);
+                    return;
+                }
+                boolean isRestore = cmd.contains("puppet_restore") || entry.getDescription().toLowerCase(Locale.ROOT).contains("restore");
+                for (IPuppetHandler h : handlers) {
+                    if (isRestore) {
+                        h.restoreAi();
+                    } else {
+                        boolean fullAi = cmd.contains("ai:true");
+                        boolean nav = cmd.contains("nav:true");
+                        boolean tgt = cmd.contains("tgt:true");
+                        boolean look = cmd.contains("look:true");
+                        boolean act = cmd.contains("actions:true");
+                        h.setSuppressAi(fullAi);
+                        h.setSuppressNavigation(nav);
+                        h.setSuppressTargeting(tgt);
+                        h.setSuppressLook(look);
+                        h.setSuppressActions(act);
+                    }
+                }
+                FracturedUtils.LOGGER.info("[MusicSequenceManager] Toggled AI on {} puppet handler(s) with tag '{}' (restore={})",
+                        handlers.size(), actorTag, isRestore);
+            } catch (Exception e) {
+                FracturedUtils.LOGGER.error("[MusicSequenceManager] Error toggling puppet AI", e);
+            }
+        } else if ("EXECUTE_ACTION".equalsIgnoreCase(sub)) {
+            try {
+                String actionId = "";
+                String combatTarget = "@p";
+                int windupTicks = entry.getWindupMs() > 0 ? entry.getWindupMs() / 50 : 0;
+                int jumpTicks = entry.getJumpMs() > 0 ? entry.getJumpMs() / 50 : 0;
+                int durationTicks = entry.getDurationMs() > 0 ? entry.getDurationMs() / 50 : 0;
+                int recoveryTicks = entry.getRecoveryMs() > 0 ? entry.getRecoveryMs() / 50 : 0;
+
+                if (cmd.startsWith("puppet_action")) {
+                    if (cmd.contains("action:")) {
+                        for (String part : cmd.split("\\s+")) {
+                            if (part.startsWith("action:")) {
+                                actionId = part.substring(7).trim();
+                            } else if (part.startsWith("target:")) {
+                                combatTarget = part.substring(7).trim();
+                            } else if (part.startsWith("tag:")) {
+                                String parsedTag = SelectorUtils.cleanTag(part.substring(4).trim());
+                                if (!parsedTag.isBlank()) {
+                                    actorTag = parsedTag;
+                                }
+                            } else if (part.startsWith("windup:")) {
+                                try {
+                                    int ms = Integer.parseInt(part.substring(7).trim());
+                                    windupTicks = Math.max(0, ms / 50);
+                                } catch (Exception ignored) {}
+                            } else if (part.startsWith("jump:")) {
+                                try {
+                                    int ms = Integer.parseInt(part.substring(5).trim());
+                                    jumpTicks = Math.max(0, ms / 50);
+                                } catch (Exception ignored) {}
+                            } else if (part.startsWith("duration:")) {
+                                try {
+                                    int ms = Integer.parseInt(part.substring(9).trim());
+                                    durationTicks = Math.max(0, ms / 50);
+                                } catch (Exception ignored) {}
+                            } else if (part.startsWith("recovery:")) {
+                                try {
+                                    int ms = Integer.parseInt(part.substring(9).trim());
+                                    recoveryTicks = Math.max(0, ms / 50);
+                                } catch (Exception ignored) {}
+                            }
+                        }
+                    } else {
+                        String[] parts = cmd.split("\\s+");
+                        if (parts.length > 1) actionId = parts[1].trim();
+                        if (parts.length > 2) combatTarget = parts[2].trim();
+                    }
+                } else {
+                    actionId = cmd;
+                }
+
+                if (actionId.isEmpty()) {
+                    actionId = "fractured_utils:leap_slam";
+                }
+
+                List<IPuppetHandler> handlers = new ArrayList<>();
+                if (!actorTag.isBlank()) {
+                    handlers.addAll(SelectorUtils.getPuppetHandlersByTag(server, actorTag));
+                }
+                if (handlers.isEmpty() && channel != null && !channel.getActorTag().isBlank()) {
+                    handlers.addAll(SelectorUtils.getPuppetHandlersByTag(server, channel.getActorTag()));
+                }
+                if (handlers.isEmpty() && channel != null && !channel.getName().isBlank()) {
+                    handlers.addAll(SelectorUtils.getPuppetHandlersByTag(server, channel.getName().toLowerCase(Locale.ROOT).replace(" ", "_")));
+                }
+                if (handlers.isEmpty()) {
+                    handlers.addAll(SelectorUtils.getPuppetHandlersByTag(server, "puppet_actor"));
+                }
+                if (handlers.isEmpty()) {
+                    for (ServerLevel level : server.getAllLevels()) {
+                        for (Entity e : level.getAllEntities()) {
+                            if (e.isAlive() && e instanceof Mob mob) {
+                                if (mob instanceof VoidHeraldBoss || mob.getTags().contains("puppet_actor") || (!actorTag.isBlank() && mob.getTags().contains(actorTag))) {
+                                    mob.getCapability(PuppetCapabilityProvider.PUPPET_HANDLER).ifPresent(h -> {
+                                        if (!handlers.contains(h)) handlers.add(h);
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (handlers.isEmpty()) {
+                    FracturedUtils.LOGGER.warn("[MusicSequenceManager] Cannot execute action '{}': No alive mob found with custom tag '{}' or 'puppet_actor'!",
+                            actionId, actorTag);
+                    return;
+                }
+
+                // Ensure mob physics is enabled
+                for (IPuppetHandler h : handlers) {
+                    Mob mob = h.getMob();
+                    if (mob != null && mob.isNoAi()) {
+                        mob.setNoAi(false);
+                        FracturedUtils.LOGGER.info("[MusicSequenceManager] Cleared NoAI on puppet mob '{}' for action execution", mob.getName().getString());
+                    }
+                }
+
+                ResourceLocation resLoc = ResourceLocation.tryParse(actionId);
+                if (resLoc == null && !actionId.contains(":")) {
+                    resLoc = new ResourceLocation(FracturedUtils.MOD_ID, actionId);
+                }
+
+                PuppetActionType<?> actionType = resLoc != null ? ModPuppetActions.get(resLoc) : null;
+                if (actionType == null) {
+                    String norm = actionId.toLowerCase(Locale.ROOT);
+                    if (norm.contains("leap")) {
+                        actionType = ModPuppetActions.LEAP_SLAM;
+                        resLoc = ModPuppetActions.LEAP_SLAM.getId();
+                    } else if (norm.contains("barrage")) {
+                        actionType = ModPuppetActions.ABYSSAL_BARRAGE;
+                        resLoc = ModPuppetActions.ABYSSAL_BARRAGE.getId();
+                    }
+                }
+
+                // Fallback to entry defaults if not set by command
+                if (windupTicks <= 0 && entry.getWindupMs() > 0) windupTicks = entry.getWindupMs() / 50;
+                if (jumpTicks <= 0 && entry.getJumpMs() > 0) jumpTicks = entry.getJumpMs() / 50;
+                if (durationTicks <= 0 && entry.getDurationMs() > 0) durationTicks = entry.getDurationMs() / 50;
+                if (recoveryTicks <= 0 && entry.getRecoveryMs() > 0) recoveryTicks = entry.getRecoveryMs() / 50;
+
+                // For Leap Slam backward compatibility: If jumpMs was 0, but duration was the jump duration (>= 1500ms)
+                if (actionType == ModPuppetActions.LEAP_SLAM && jumpTicks == 0 && durationTicks >= 30 && !cmd.contains("jump:")) {
+                    jumpTicks = durationTicks;
+                    durationTicks = 16;
+                }
+
+                // Check if any timings were explicitly set in the command or the entry
+                boolean hasExplicitTiming = (entry.getTotalDurationMs() > 0)
+                        || cmd.contains("windup:") || cmd.contains("jump:") || cmd.contains("duration:") || cmd.contains("recovery:");
+
+                // Effective fallbacks: Only apply defaults if completely unconfigured
+                int effWindupTicks = hasExplicitTiming ? windupTicks : 10;
+                int effJumpTicks = hasExplicitTiming ? jumpTicks : 30;
+                int effDurationTicks = hasExplicitTiming ? durationTicks : 16;
+                int effRecoveryTicks = hasExplicitTiming ? recoveryTicks : 12;
+
+                String targetSelectorStr = "@p";
+                if (contextPlayer != null && ("@p".equalsIgnoreCase(combatTarget) || combatTarget.isBlank())) {
+                    targetSelectorStr = contextPlayer.getStringUUID();
+                } else if (!combatTarget.isBlank()) {
+                    targetSelectorStr = combatTarget;
+                }
+
+                CompoundTag paramsTag = new CompoundTag();
+                paramsTag.putString("target", targetSelectorStr);
+                paramsTag.putInt("windupTicks", effWindupTicks);
+                paramsTag.putInt("indicationTicks", effWindupTicks);
+                paramsTag.putInt("windupMs", effWindupTicks * 50);
+                paramsTag.putInt("jumpTicks", effJumpTicks);
+                paramsTag.putInt("jumpMs", effJumpTicks * 50);
+                paramsTag.putInt("durationTicks", effDurationTicks);
+                paramsTag.putInt("durationMs", effDurationTicks * 50);
+                paramsTag.putInt("channelTicks", effDurationTicks);
+                paramsTag.putInt("recoveryTicks", effRecoveryTicks);
+                paramsTag.putInt("recoveryMs", effRecoveryTicks * 50);
+
+                ActionTarget directTarget = (contextPlayer != null && ("@p".equalsIgnoreCase(combatTarget) || combatTarget.isBlank()))
+                        ? ActionTarget.fromEntity(contextPlayer.getUUID())
+                        : ActionTarget.fromSelector(targetSelectorStr);
+
+                if (actionType != null) {
+                    com.mojang.serialization.DataResult<?> parseResult = actionType.getCodec().parse(net.minecraft.nbt.NbtOps.INSTANCE, paramsTag);
+                    if (parseResult.result().isPresent()) {
+                        dispatchTyped(handlers, actionType, parseResult.result().get());
+                        FracturedUtils.LOGGER.info("[MusicSequenceManager] Dispatched action '{}' to {} handler(s) with tag '{}' (target: '{}')",
+                                resLoc, handlers.size(), actorTag, targetSelectorStr);
+                    } else {
+                        FracturedUtils.LOGGER.warn("[MusicSequenceManager] Codec parse failed for '{}': {}. Falling back to manual dispatch.",
+                                resLoc, parseResult.error().map(com.mojang.serialization.DataResult.PartialResult::message).orElse("Unknown"));
+                        if (actionType == ModPuppetActions.LEAP_SLAM) {
+                            LeapSlamAction.LeapSlamParams fallbackParams = new LeapSlamAction.LeapSlamParams(
+                                    directTarget, 6.0, 20.0F,
+                                    effWindupTicks,
+                                    effJumpTicks,
+                                    effDurationTicks,
+                                    effRecoveryTicks
+                            );
+                            for (IPuppetHandler h : handlers) {
+                                h.dispatch(ModPuppetActions.LEAP_SLAM, fallbackParams);
+                            }
+                            FracturedUtils.LOGGER.info("[MusicSequenceManager] Dispatched fallback LeapSlam to {} handler(s)", handlers.size());
+                        } else if (actionType == ModPuppetActions.ABYSSAL_BARRAGE) {
+                            AbyssalBarrageAction.AbyssalBarrageParams fallbackParams = new AbyssalBarrageAction.AbyssalBarrageParams(
+                                    durationTicks > 0 ? durationTicks : 100, 20, 0.75
+                            );
+                            for (IPuppetHandler h : handlers) {
+                                h.dispatch(ModPuppetActions.ABYSSAL_BARRAGE, fallbackParams);
+                            }
+                            FracturedUtils.LOGGER.info("[MusicSequenceManager] Dispatched fallback AbyssalBarrage to {} handler(s)", handlers.size());
+                        }
+                    }
+                } else {
+                    List<Entity> taggedEntities = SelectorUtils.getEntitiesByTag(server, actorTag);
+                    for (Entity entity : taggedEntities) {
+                        if (entity instanceof VoidHeraldBoss boss) {
+                            boss.triggerOrchestratedAction(actionId, directTarget);
+                            FracturedUtils.LOGGER.info("[MusicSequenceManager] Dispatched orchestrated action '{}' to VoidHeraldBoss with tag '{}'",
+                                    actionId, actorTag);
+                        } else if (entity instanceof IPuppetEntity puppet) {
+                            puppet.getPuppetController().executeAction(resLoc, paramsTag, windupTicks, durationTicks, null);
+                            FracturedUtils.LOGGER.info("[MusicSequenceManager] Dispatched legacy action '{}' to puppet entity with tag '{}'",
+                                    resLoc, actorTag);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                FracturedUtils.LOGGER.error("[MusicSequenceManager] Error executing puppet action", e);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> void dispatchTyped(List<IPuppetHandler> handlers, PuppetActionType<T> actionType, Object params) {
+        for (IPuppetHandler handler : handlers) {
+            handler.dispatch(actionType, (T) params);
+        }
+    }
+
+    private void spawnPuppetActor(MinecraftServer server, ActiveMusicSequence activeSeq, MusicSequenceEntry entry,
+                                  MusicSequenceChannel channel, String actorTag, ServerPlayer contextPlayer) {
+        String cmd = entry.getCommand() != null ? entry.getCommand().trim() : "";
+        if (cmd.startsWith("/")) cmd = cmd.substring(1);
+
+        String entityTypeStr = (channel != null && !channel.getEntityTypeId().isBlank())
+                ? channel.getEntityTypeId()
+                : "fractured_utils:void_herald";
+
+        String actorName = (channel != null && !channel.getActorName().isBlank())
+                ? channel.getActorName()
+                : (channel != null && !channel.getName().isBlank() ? channel.getName() : "Puppet Actor");
+
+        boolean disableAi = false;
+        String xStr = "~";
+        String yStr = "~";
+        String zStr = "~";
+
+        if (cmd.startsWith("summon")) {
+            String[] parts = cmd.split("\\s+");
+            if (parts.length > 1 && !parts[1].isBlank()) {
+                entityTypeStr = parts[1].trim();
+            }
+            if (parts.length > 4) {
+                xStr = parts[2].trim();
+                yStr = parts[3].trim();
+                zStr = parts[4].trim();
+            }
+        }
+
+        if (cmd.contains("NoAI:1") || cmd.contains("NoAI:1b")) {
+            disableAi = true;
+        }
+
+        if (entityTypeStr.equalsIgnoreCase("void_herald") || entityTypeStr.equalsIgnoreCase("fracturedutils:void_herald")) {
+            entityTypeStr = "fractured_utils:void_herald";
+        }
+
+        // Resolve EntityType
+        EntityType<?> type = null;
+        ResourceLocation rl = ResourceLocation.tryParse(entityTypeStr);
+        if (rl != null) {
+            type = ForgeRegistries.ENTITY_TYPES.getValue(rl);
+        }
+        if (type == null) {
+            type = ModEntities.VOID_HERALD.get();
+        }
+
+        // Resolve ServerLevel
+        ServerLevel level = contextPlayer != null ? contextPlayer.serverLevel() : server.overworld();
+
+        // Resolve Coordinates
+        Vec3 basePos = contextPlayer != null ? contextPlayer.position() : new Vec3(0, 64, 0);
+        float yaw = contextPlayer != null ? contextPlayer.getYRot() : 0.0F;
+
+        double spawnX = parseCoordinate(xStr, basePos.x);
+        double spawnY = parseCoordinate(yStr, basePos.y);
+        double spawnZ = parseCoordinate(zStr, basePos.z);
+
+        try {
+            Entity entity = type.create(level);
+            if (entity != null) {
+                entity.moveTo(spawnX, spawnY, spawnZ, yaw, 0.0F);
+
+                if (actorTag != null && !actorTag.isBlank()) {
+                    entity.addTag(actorTag);
+                }
+                entity.addTag("puppet_actor");
+
+                if (!actorName.isBlank()) {
+                    entity.setCustomName(Component.literal(actorName));
+                    entity.setCustomNameVisible(true);
+                }
+
+                if (entity instanceof Mob mob) {
+                    mob.setPersistenceRequired();
+                    if (disableAi) {
+                        mob.setNoAi(true);
+                        mob.getCapability(PuppetCapabilityProvider.PUPPET_HANDLER).ifPresent(h -> {
+                            h.setSuppressAi(true);
+                            h.setSuppressNavigation(true);
+                            h.setSuppressTargeting(true);
+                        });
+                    }
+                }
+
+                if (cmd.contains("{") && cmd.contains("}")) {
+                    try {
+                        int nbtStart = cmd.indexOf('{');
+                        int nbtEnd = cmd.lastIndexOf('}');
+                        if (nbtEnd > nbtStart) {
+                            String nbtStr = cmd.substring(nbtStart, nbtEnd + 1);
+                            CompoundTag tag = TagParser.parseTag(nbtStr);
+                            tag.remove("Pos");
+                            entity.load(tag);
+                            if (actorTag != null && !actorTag.isBlank()) entity.addTag(actorTag);
+                            entity.addTag("puppet_actor");
+                            if (entity instanceof Mob mob) {
+                                mob.setPersistenceRequired();
+                                if (disableAi) {
+                                    mob.setNoAi(true);
+                                    mob.getCapability(PuppetCapabilityProvider.PUPPET_HANDLER).ifPresent(h -> {
+                                        h.setSuppressAi(true);
+                                        h.setSuppressNavigation(true);
+                                        h.setSuppressTargeting(true);
+                                    });
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        FracturedUtils.LOGGER.warn("[MusicSequenceManager] Could not parse extra NBT: {}", e.getMessage());
+                    }
+                }
+
+                boolean added = level.addFreshEntity(entity);
+                FracturedUtils.LOGGER.info("[MusicSequenceManager] Successfully spawned puppet actor '{}' ({}) with tag '{}' at ({}, {}, {}) [UUID: {}] in dimension {} (added: {})",
+                        actorName, ForgeRegistries.ENTITY_TYPES.getKey(type), actorTag,
+                        String.format(Locale.ROOT, "%.2f", spawnX), String.format(Locale.ROOT, "%.2f", spawnY), String.format(Locale.ROOT, "%.2f", spawnZ),
+                        entity.getStringUUID(), level.dimension().location(), added);
+
+                if (contextPlayer != null) {
+                    contextPlayer.sendSystemMessage(Component.literal("🎭 Spawned Puppet '" + actorName + "' [#" + actorTag + "] at ("
+                            + String.format(Locale.ROOT, "%.1f, %.1f, %.1f", spawnX, spawnY, spawnZ) + ")")
+                            .withStyle(ChatFormatting.LIGHT_PURPLE));
+                }
+            } else {
+                FracturedUtils.LOGGER.error("[MusicSequenceManager] Failed to create entity of type '{}'", entityTypeStr);
+            }
+        } catch (Exception e) {
+            FracturedUtils.LOGGER.error("[MusicSequenceManager] Direct entity spawning failed, falling back to command", e);
+            CommandSourceStack sourceStack = contextPlayer != null
+                    ? contextPlayer.createCommandSourceStack().withPermission(4)
+                    : server.createCommandSourceStack().withPermission(4);
+            try {
+                server.getCommands().performPrefixedCommand(sourceStack, cmd);
+                FracturedUtils.LOGGER.info("[MusicSequenceManager] Fallback command executed: '{}'", cmd);
+            } catch (Exception cmdEx) {
+                FracturedUtils.LOGGER.error("[MusicSequenceManager] Fallback command also failed", cmdEx);
+            }
+        }
+    }
+
+    private static double parseCoordinate(String coordStr, double baseVal) {
+        if (coordStr == null || coordStr.isBlank() || coordStr.equals("~")) {
+            return baseVal;
+        }
+        coordStr = coordStr.trim();
+        if (coordStr.startsWith("~")) {
+            String offsetStr = coordStr.substring(1).trim();
+            if (offsetStr.isEmpty()) return baseVal;
+            try {
+                return baseVal + Double.parseDouble(offsetStr);
+            } catch (NumberFormatException e) {
+                return baseVal;
+            }
+        }
+        try {
+            return Double.parseDouble(coordStr);
+        } catch (NumberFormatException e) {
+            return baseVal;
         }
     }
 

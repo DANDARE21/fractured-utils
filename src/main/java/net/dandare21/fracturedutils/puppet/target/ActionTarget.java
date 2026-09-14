@@ -95,6 +95,10 @@ public interface ActionTarget {
             if (level == null || level.getServer() == null || this.selector == null || this.selector.isBlank()) {
                 return Optional.empty();
             }
+            net.minecraft.server.level.ServerPlayer player = level.getServer().getPlayerList().getPlayerByName(this.selector.trim());
+            if (player != null && player.isAlive()) {
+                return Optional.of(player);
+            }
             List<Entity> matches = SelectorUtils.getTargetEntities(level.getServer(), this.selector);
             for (Entity entity : matches) {
                 if (entity instanceof LivingEntity living && living.isAlive()) {
@@ -103,6 +107,9 @@ public interface ActionTarget {
             }
             if (!matches.isEmpty() && matches.get(0) instanceof LivingEntity living) {
                 return Optional.of(living);
+            }
+            if (("@p".equalsIgnoreCase(this.selector.trim()) || "@a".equalsIgnoreCase(this.selector.trim())) && !level.players().isEmpty()) {
+                return Optional.of(level.players().get(0));
             }
             return Optional.empty();
         }

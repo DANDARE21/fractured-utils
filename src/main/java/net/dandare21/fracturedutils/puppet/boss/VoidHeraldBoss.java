@@ -90,6 +90,9 @@ public class VoidHeraldBoss extends Monster implements GeoEntity {
     public void onAddedToWorld() {
         super.onAddedToWorld();
         if (!this.level().isClientSide && !ServerConfig.isEnableDebugBoss()) {
+            if (!this.getTags().isEmpty() || this.hasCustomName() || this.isPersistenceRequired()) {
+                return;
+            }
             FracturedUtils.LOGGER.info("[VoidHeraldBoss] Debug boss entity at {} discarded because 'enableDebugBoss' is false in config.", this.blockPosition());
             this.discard();
         }
@@ -98,8 +101,12 @@ public class VoidHeraldBoss extends Monster implements GeoEntity {
     @Override
     public void tick() {
         if (!this.level().isClientSide && !ServerConfig.isEnableDebugBoss()) {
-            this.discard();
-            return;
+            if (!this.getTags().isEmpty() || this.hasCustomName() || this.isPersistenceRequired()) {
+                // Do not discard custom tagged, named, or scripted puppet bosses
+            } else {
+                this.discard();
+                return;
+            }
         }
         super.tick();
 
@@ -191,7 +198,7 @@ public class VoidHeraldBoss extends Monster implements GeoEntity {
                 if (this.specialAttackCooldown > 0) {
                     this.specialAttackCooldown--;
                 } else {
-                    if (!this.puppetHandler.isPuppetingActive()) {
+                    if (!this.puppetHandler.isPuppetingActive() && !this.puppetHandler.isActionsSuppressed() && !this.getTags().contains("puppet_actor") && !this.getTags().contains("puppet_track")) {
                         double distanceSq = this.distanceToSqr(target);
                         boolean canLeap = !this.puppetHandler.isNavigationSuppressed();
 

@@ -42,8 +42,12 @@ import net.dandare21.fracturedutils.network.packet.S2CSendMusicSequenceDataPacke
 import net.dandare21.fracturedutils.network.packet.C2SSaveMusicSequencePacket;
 import net.dandare21.fracturedutils.network.packet.C2SDeleteMusicSequencePacket;
 import net.dandare21.fracturedutils.network.packet.C2SStartMusicSequencePacket;
+import net.dandare21.fracturedutils.network.packet.C2SSpawnPuppetPacket;
 import net.dandare21.fracturedutils.network.packet.ClientboundPuppetAnimPacket;
 import net.dandare21.fracturedutils.network.packet.ClientboundAttackIndicatorPacket;
+import net.dandare21.fracturedutils.network.packet.S2CCameraOverridePacket;
+import net.dandare21.fracturedutils.screeneffect.packet.S2CPlayScreenEffectPacket;
+import net.dandare21.fracturedutils.screeneffect.packet.S2CStopScreenEffectPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -325,6 +329,30 @@ public class ModMessages {
                 .decoder(ClientboundAttackIndicatorPacket::new)
                 .encoder(ClientboundAttackIndicatorPacket::encode)
                 .consumerMainThread(ClientboundAttackIndicatorPacket::handle)
+                .add();
+
+        net.messageBuilder(C2SSpawnPuppetPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(C2SSpawnPuppetPacket::new)
+                .encoder(C2SSpawnPuppetPacket::encode)
+                .consumerMainThread(C2SSpawnPuppetPacket::handle)
+                .add();
+
+        net.messageBuilder(S2CCameraOverridePacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(S2CCameraOverridePacket::new)
+                .encoder(S2CCameraOverridePacket::encode)
+                .consumerMainThread(S2CCameraOverridePacket::handle)
+                .add();
+
+        net.messageBuilder(S2CPlayScreenEffectPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(S2CPlayScreenEffectPacket::new)
+                .encoder(S2CPlayScreenEffectPacket::encode)
+                .consumerMainThread(S2CPlayScreenEffectPacket::handle)
+                .add();
+
+        net.messageBuilder(S2CStopScreenEffectPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(S2CStopScreenEffectPacket::new)
+                .encoder(S2CStopScreenEffectPacket::encode)
+                .consumerMainThread(S2CStopScreenEffectPacket::handle)
                 .add();
     }
 

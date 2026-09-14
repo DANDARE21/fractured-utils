@@ -16,7 +16,7 @@ public class ServerConfig {
     private static final Path CONFIG_FILE = FMLPaths.CONFIGDIR.get().resolve("fracturedutils-server.json");
 
     private static boolean keepInventoryNoXp = false;
-    private static boolean enableDebugBoss = false;
+    private static boolean enableDebugBoss = true;
     private static int teamWipeScreenDurationSeconds = 3;
     private static int eventAudioPort = 8085;
     private static String eventAudioExternalUrl = "";

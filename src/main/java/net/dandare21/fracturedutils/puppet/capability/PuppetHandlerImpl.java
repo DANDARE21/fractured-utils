@@ -54,6 +54,11 @@ public class PuppetHandlerImpl implements IPuppetHandler {
         // Cancel any previous action cleanly
         stopActiveAction();
 
+        // Ensure mob can step and run physics
+        if (this.mob.isNoAi()) {
+            this.mob.setNoAi(false);
+        }
+
         this.puppetingActive = true;
         // Lock goals temporarily for the action duration (does NOT set persistent suppression flags)
         applyControlFlags();

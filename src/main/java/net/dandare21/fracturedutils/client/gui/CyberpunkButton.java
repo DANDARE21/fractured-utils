@@ -11,6 +11,16 @@ public class CyberpunkButton extends Button {
     private int accentColor;
     private final boolean isSelected;
 
+    private boolean isSolidPrimary = false;
+
+    public void setSolidPrimary(boolean solidPrimary) {
+        this.isSolidPrimary = solidPrimary;
+    }
+
+    public boolean isSolidPrimary() {
+        return isSolidPrimary;
+    }
+
     public void setAccentColor(int accentColor) {
         this.accentColor = accentColor;
     }
@@ -56,6 +66,10 @@ public class CyberpunkButton extends Button {
             borderColor = 0x44445566;
             fillColor = 0xEE0A0F14;
             textColor = 0xFF556677;
+        } else if (isSolidPrimary) {
+            borderColor = isHovered ? 0xFFFFFFFF : accentColor;
+            fillColor = isHovered ? 0xFF45F5FF : accentColor;
+            textColor = 0xFF040A0F;
         } else if (isSelected) {
             borderColor = 0xFFFFFFFF;
             fillColor = 0xEE008599;

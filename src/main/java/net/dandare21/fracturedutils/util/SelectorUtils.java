@@ -88,6 +88,13 @@ public class SelectorUtils {
             if (!result.isEmpty()) return result;
         } catch (IllegalArgumentException ignored) {}
 
+        // 1.5. Direct Player Name match
+        ServerPlayer playerMatch = server.getPlayerList().getPlayerByName(trimmed);
+        if (playerMatch != null) {
+            result.add(playerMatch);
+            return result;
+        }
+
         // 2. Official Vanilla EntitySelectorParser for @ selectors
         if (trimmed.startsWith("@")) {
             String normalizedSelector = normalizeSelector(trimmed);
@@ -324,4 +331,76 @@ public class SelectorUtils {
         return handlers;
     }
 
+    /**
+     * Cleans and extracts the bare custom tag string from various formats (e.g. "#tag", "tag:foo", "tag=foo", "@e[tag=foo,limit=1]").
+     */
+    public static String cleanTag(String raw) {
+        if (raw == null) return "";
+        String s = raw.trim();
+        if (s.startsWith("@e[") && s.contains("tag=")) {
+            int start = s.indexOf("tag=") + 4;
+            int end = s.indexOf(",", start);
+            if (end == -1) end = s.indexOf("]", start);
+            if (end != -1) return s.substring(start, end).trim();
+            return s.substring(start).trim();
+        }
+        if (s.startsWith("#")) s = s.substring(1).trim();
+        if (s.startsWith("tag:")) s = s.substring(4).trim();
+        if (s.startsWith("tag=")) s = s.substring(4).trim();
+        if (s.endsWith("]")) s = s.substring(0, s.length() - 1).trim();
+        if (s.startsWith("\"") && s.endsWith("\"") && s.length() >= 2) {
+            s = s.substring(1, s.length() - 1).trim();
+        }
+        return s;
+    }
+
+    /**
+     * Resolves alive entities matching a custom tag across all server levels.
+     * Guaranteed exact tag matching (entity.getTags().contains(cleanTag)) without proximity or nearest distance sorting.
+     */
+    public static List<Entity> getEntitiesByTag(MinecraftServer server, String tag) {
+        List<Entity> result = new ArrayList<>();
+        if (server == null || tag == null || tag.isBlank()) return result;
+
+        String clean = cleanTag(tag);
+        if (clean.isBlank()) return result;
+
+        for (ServerLevel level : server.getAllLevels()) {
+            for (Entity entity : level.getAllEntities()) {
+                if (entity.isAlive()) {
+                    for (String t : entity.getTags()) {
+                        if (t.equalsIgnoreCase(clean)) {
+                            result.add(entity);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Resolves IPuppetHandler capabilities attached to Mobs possessing a custom tag across all server levels.
+     * Guaranteed exact tag matching without proximity or nearest distance sorting.
+     */
+    public static List<net.dandare21.fracturedutils.puppet.capability.IPuppetHandler> getPuppetHandlersByTag(MinecraftServer server, String tag) {
+        List<net.dandare21.fracturedutils.puppet.capability.IPuppetHandler> handlers = new ArrayList<>();
+        if (server == null || tag == null || tag.isBlank()) return handlers;
+
+        List<Entity> entities = getEntitiesByTag(server, tag);
+        for (Entity entity : entities) {
+            if (entity instanceof Mob mob) {
+                mob.getCapability(net.dandare21.fracturedutils.puppet.capability.PuppetCapabilityProvider.PUPPET_HANDLER)
+                        .ifPresent(h -> {
+                            if (!handlers.contains(h)) {
+                                handlers.add(h);
+                            }
+                        });
+            }
+        }
+        return handlers;
+    }
+
 }
+

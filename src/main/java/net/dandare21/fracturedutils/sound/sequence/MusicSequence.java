@@ -13,6 +13,7 @@ public class MusicSequence {
     private int bpm;
     private long startMs;
     private long endMs;
+    private List<MusicSequenceChannel> channels;
     private List<MusicSequenceEntry> entries;
 
     public MusicSequence() {
@@ -24,18 +25,23 @@ public class MusicSequence {
         this.bpm = 120;
         this.startMs = 0L;
         this.endMs = 0L;
+        this.channels = new ArrayList<>();
         this.entries = new ArrayList<>();
     }
 
     public MusicSequence(String sequenceName, String songTrack, boolean looping, float volume, float pitch, List<MusicSequenceEntry> entries) {
-        this(sequenceName, songTrack, looping, volume, pitch, 120, 0L, 0L, entries);
+        this(sequenceName, songTrack, looping, volume, pitch, 120, 0L, 0L, null, entries);
     }
 
     public MusicSequence(String sequenceName, String songTrack, boolean looping, float volume, float pitch, int bpm, List<MusicSequenceEntry> entries) {
-        this(sequenceName, songTrack, looping, volume, pitch, bpm, 0L, 0L, entries);
+        this(sequenceName, songTrack, looping, volume, pitch, bpm, 0L, 0L, null, entries);
     }
 
     public MusicSequence(String sequenceName, String songTrack, boolean looping, float volume, float pitch, int bpm, long startMs, long endMs, List<MusicSequenceEntry> entries) {
+        this(sequenceName, songTrack, looping, volume, pitch, bpm, startMs, endMs, null, entries);
+    }
+
+    public MusicSequence(String sequenceName, String songTrack, boolean looping, float volume, float pitch, int bpm, long startMs, long endMs, List<MusicSequenceChannel> channels, List<MusicSequenceEntry> entries) {
         this.sequenceName = sequenceName != null ? sequenceName : "new_music_sequence";
         this.songTrack = songTrack != null ? songTrack : "";
         this.looping = looping;
@@ -44,6 +50,7 @@ public class MusicSequence {
         this.bpm = bpm > 0 ? bpm : 120;
         this.startMs = Math.max(0L, startMs);
         this.endMs = Math.max(0L, endMs);
+        this.channels = channels != null ? new ArrayList<>(channels) : new ArrayList<>();
         this.entries = entries != null ? entries : new ArrayList<>();
     }
 
@@ -119,6 +126,35 @@ public class MusicSequence {
         this.endMs = Math.max(0L, endMs);
     }
 
+    public List<MusicSequenceChannel> getChannels() {
+        if (channels == null) {
+            channels = new ArrayList<>();
+        }
+        if (channels.isEmpty() && entries != null && !entries.isEmpty()) {
+            java.util.Set<String> encounteredTypes = new java.util.LinkedHashSet<>();
+            for (MusicSequenceEntry entry : entries) {
+                String t = entry.getActionType();
+                if (t != null && !t.isBlank()) {
+                    encounteredTypes.add(t.toUpperCase(java.util.Locale.ROOT));
+                }
+            }
+            for (String t : encounteredTypes) {
+                MusicSequenceChannel ch = new MusicSequenceChannel(java.util.UUID.randomUUID().toString(), t, null, null, 0);
+                channels.add(ch);
+                for (MusicSequenceEntry entry : entries) {
+                    if (t.equalsIgnoreCase(entry.getActionType()) && (entry.getChannelId() == null || entry.getChannelId().isBlank())) {
+                        entry.setChannelId(ch.getId());
+                    }
+                }
+            }
+        }
+        return channels;
+    }
+
+    public void setChannels(List<MusicSequenceChannel> channels) {
+        this.channels = channels != null ? new ArrayList<>(channels) : new ArrayList<>();
+    }
+
     public List<MusicSequenceEntry> getEntries() {
         if (entries == null) {
             entries = new ArrayList<>();
@@ -137,12 +173,18 @@ public class MusicSequence {
     }
 
     public MusicSequence copy() {
+        List<MusicSequenceChannel> copiedChannels = new ArrayList<>();
+        if (this.channels != null) {
+            for (MusicSequenceChannel c : this.channels) {
+                copiedChannels.add(c.copy());
+            }
+        }
         List<MusicSequenceEntry> copiedEntries = new ArrayList<>();
         if (this.entries != null) {
             for (MusicSequenceEntry e : this.entries) {
                 copiedEntries.add(e.copy());
             }
         }
-        return new MusicSequence(this.sequenceName, this.songTrack, this.looping, this.volume, this.pitch, this.bpm, this.startMs, this.endMs, copiedEntries);
+        return new MusicSequence(this.sequenceName, this.songTrack, this.looping, this.volume, this.pitch, this.bpm, this.startMs, this.endMs, copiedChannels, copiedEntries);
     }
 }

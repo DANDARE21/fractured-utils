@@ -1,3 +1,7 @@
 {
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "gradle.offline": true,
+    "gradle.arguments": "--offline",
+    "java.import.gradle.offline.enabled": true,
+    "java.import.gradle.arguments": "--offline"
 }

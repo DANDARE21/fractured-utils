@@ -69,6 +69,8 @@ public class ClientEventHandler {
             return;
 
         net.dandare21.fracturedutils.client.gui.DialogHudOverlay.tick();
+        net.dandare21.fracturedutils.client.camera.ClientCameraHandler.clientTick();
+        net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler.clientTick();
         ClientCutsceneHandler.getInstance().onClientTick();
 
         Minecraft mc = Minecraft.getInstance();
@@ -161,6 +163,7 @@ public class ClientEventHandler {
         ClientCutsceneHandler.getInstance().renderOverlay(event);
 
         if (event.getOverlay().id().equals(VanillaGuiOverlay.HOTBAR.id())) {
+            net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler.onRenderGuiOverlay(event);
             Minecraft mc = Minecraft.getInstance();
             GuiGraphics guiGraphics = event.getGuiGraphics();
 
@@ -413,6 +416,7 @@ public class ClientEventHandler {
         if (net.dandare21.fracturedutils.client.camera.CustomCameraManager.isActive()) {
             net.dandare21.fracturedutils.client.camera.CameraUtils.applyCameraOverride(event.getCamera(), event);
         }
+        net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler.onComputeCameraAngles(event);
     }
 
     @SubscribeEvent
@@ -420,6 +424,7 @@ public class ClientEventHandler {
         if (net.dandare21.fracturedutils.client.camera.CustomCameraManager.isFovActive()) {
             event.setFOV(net.dandare21.fracturedutils.client.camera.CustomCameraManager.getCustomFov());
         }
+        net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler.onComputeFov(event);
     }
 
     @SubscribeEvent
@@ -434,6 +439,8 @@ public class ClientEventHandler {
     @SubscribeEvent
     public static void onClientLoggingOut(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
         net.dandare21.fracturedutils.client.gui.DialogHudOverlay.clearActiveDialog();
+        net.dandare21.fracturedutils.client.camera.ClientCameraHandler.clearCameraOverride();
+        net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler.clearAllEffects();
     }
 
     @SubscribeEvent

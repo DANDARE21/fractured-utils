@@ -56,6 +56,7 @@ The **Boss Puppet Framework v2.0** is an enterprise-grade AI orchestration and a
 | **Provider** | [`PuppetCapabilityProvider`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/capability/PuppetCapabilityProvider.java) | Exposes thread-safe `LazyOptional<IPuppetHandler>`. |
 | **Targeting** | [`ActionTarget`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/target/ActionTarget.java) | Polymorphic target union (`Vec3`, `UUID`, or command selector string) parsed via DFU Codecs. |
 | **Action Definition** | [`PuppetActionType<T>`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/fsm/PuppetActionType.java) | Global immutable action blueprint backed by Mojang `Codec<T>`. |
+| **Action Parameter** | [`ActionParameter<T>`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/fsm/ActionParameter.java) | Strongly typed parameter descriptor (booleans, numbers, strings, options) detected by the Sequencer. |
 | **Action FSM** | [`PuppetActionInstance<T>`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/fsm/PuppetActionInstance.java) | Running action finite state machine (`WINDUP`, `ACTIVE`, `RECOVERY`, `IDLE`). |
 | **Registry** | [`ModPuppetActions`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/registry/ModPuppetActions.java) | Global central registry mapping `ResourceLocation` to `PuppetActionType<?>`. |
 | **Anim Sync Packet** | [`ClientboundPuppetAnimPacket`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/network/packet/ClientboundPuppetAnimPacket.java) | S2C packet triggering GeckoLib animations on tracking clients. |
@@ -233,17 +234,20 @@ Its presence in the game is strictly governed by `enableDebugBoss`:
 | `/puppetboss disable` | Level 2 (OP) | Disables `enableDebugBoss` and automatically discards all active instances. |
 | `/puppetboss spawn` | Level 2 (OP) | Spawns a Void Herald at the executor's position (if enabled). |
 | `/puppetboss action <action_name>` | Level 2 (OP) | Triggers `leap_slam` or `abyssal_barrage` on nearby Void Herald boss. |
+| `/puppetboss indicator circle <radius> <duration> [color]` | Level 2 (OP) | Spawns a preview circular attack indicator at the executor's position. |
+| `/puppetboss indicator line <length> <width> <duration> [color]` | Level 2 (OP) | Spawns a preview directional line attack indicator facing the executor's yaw. |
 
 ---
 
-## 9. Circular Attack Indicator Utilities (`attackIndicatorCircle.png`)
+## 9. Ground Attack Indicator Utilities (Circles & Lines)
 
-Actions can display rendered ground decals using the dedicated attack indicator circle texture (`textures/misc/attack_indicator_circle.png`). Indicators automatically synchronize from the server to nearby tracking clients and render smoothly with depth and pulse animations.
+Actions and external mods can display rendered ground telegraph decals using dedicated circle (`textures/misc/attack_indicator_circle.png`) and line (`textures/misc/attack_indicator_line.png`) textures. Indicators automatically synchronize from the server to nearby tracking clients and render smoothly with depth and pulse animations.
 
 ### A. Calling from Any `PuppetActionInstance`
 
 Within any custom action subclassing `PuppetActionInstance`:
 
+#### 1. Circular Indicators
 ```java
 // Spawn indicator at position with radius and duration (in ticks):
 int indicatorId = showCircleIndicator(targetPos, radius, durationTicks);
@@ -258,19 +262,57 @@ updateCircleIndicator(indicatorId, updatedPos, radius);
 removeCircleIndicator(indicatorId, impactPos);
 ```
 
-### B. Calling via `AttackIndicatorUtils` Static Methods
+#### 2. Linear Indicators (Beams, Charges, Rectangular Telegraphs)
+```java
+// Spawn between two points (start to end) with width and duration:
+int lineId = showLineIndicator(startPos, endPos, width, durationTicks);
 
-From commands, event listeners, or mob tick loops:
+// Spawn from origin with facing yaw angle (degrees), length, and width:
+int lineId = showLineIndicator(startPos, yawDegrees, length, width, durationTicks, AttackIndicatorUtils.COLOR_RED);
+
+// Spawn directly forward from the executing mob:
+int lineId = showLineIndicatorForward(15.0, 2.5, 40, AttackIndicatorUtils.COLOR_ORANGE);
+
+// Update endpoints as the target moves or the caster turns:
+updateLineIndicator(lineId, startPos, endPos, width);
+updateLineIndicator(lineId, startPos, newYaw, length, width);
+
+// Remove early:
+removeLineIndicator(lineId, startPos);
+```
+
+### B. Calling via `AttackIndicatorUtils` Static Methods (For Any External Mod)
+
+From commands, event listeners, weapon abilities, or custom mob tick loops in any external mod:
 
 ```java
+// --- CIRCLES ---
 // Spawn
-int id = AttackIndicatorUtils.spawnCircle(serverLevel, targetPos, 7.0, 40, AttackIndicatorUtils.COLOR_RED);
-
+int circleId = AttackIndicatorUtils.spawnCircle(serverLevel, targetPos, 7.0, 40, AttackIndicatorUtils.COLOR_RED);
 // Update
-AttackIndicatorUtils.updateCircle(serverLevel, id, newPos, 7.0);
-
+AttackIndicatorUtils.updateCircle(serverLevel, circleId, newPos, 7.0);
 // Remove
-AttackIndicatorUtils.removeCircle(serverLevel, id, newPos);
+AttackIndicatorUtils.removeCircle(serverLevel, circleId, newPos);
+
+// --- LINES ---
+// Spawn between two Vec3 points:
+int lineId = AttackIndicatorUtils.spawnLine(serverLevel, startPos, targetPos, 2.0, 50, AttackIndicatorUtils.COLOR_CYAN);
+
+// Spawn from position, yaw (degrees), length, and width:
+int lineId = AttackIndicatorUtils.spawnLine(serverLevel, startPos, mob.getYRot(), 16.0, 3.0, 40, AttackIndicatorUtils.COLOR_VOID);
+
+// Spawn directly forward from an Entity:
+int lineId = AttackIndicatorUtils.spawnLine(entity, 12.0, 2.0, 30, AttackIndicatorUtils.COLOR_RED);
+
+// Spawn centered at a point:
+int lineId = AttackIndicatorUtils.spawnCenteredLine(serverLevel, centerPos, yaw, 20.0, 2.5, 40, AttackIndicatorUtils.COLOR_YELLOW);
+
+// Update:
+AttackIndicatorUtils.updateLine(serverLevel, lineId, newStart, newEnd, 2.0);
+AttackIndicatorUtils.updateLine(serverLevel, lineId, newStart, newYaw, 16.0, 3.0);
+
+// Remove:
+AttackIndicatorUtils.removeLine(serverLevel, lineId, startPos);
 ```
 
 ### Color Presets Available in `AttackIndicatorUtils`
@@ -279,5 +321,181 @@ AttackIndicatorUtils.removeCircle(serverLevel, id, newPos);
 - `COLOR_ORANGE` (`0xD4FF8800`) - Warning amber
 - `COLOR_CYAN` (`0xD400E5FF`) - Arcane cyan
 - `COLOR_YELLOW` (`0xD4FFDD00`) - Hazard yellow
+
+---
+
+## 10. Custom Timing Phases & Music Sequencer Integration
+
+Each `PuppetActionType<T>` can define its own lifecycle timing states, colors, default durations, and execution points for the **Music Sequencer** timeline and modal editor by overriding `getTimingPhases()` and `getExecutionLabel()`:
+
+```java
+public class MyCustomAction extends PuppetActionType<MyParams> {
+    public static final ResourceLocation ID = new ResourceLocation("mymod", "flame_strike");
+
+    public MyCustomAction() {
+        super(ID, MyParams.CODEC, Instance::new);
+    }
+
+    @Override
+    public List<ActionTimingPhase> getTimingPhases() {
+        return List.of(
+            new ActionTimingPhase("windup", "Charge", 600, 0xFFFFCC00, false),
+            new ActionTimingPhase("jump", "Aim", 400, 0xFF4A69BD, false),
+            new ActionTimingPhase("duration", "Strike", 1200, 0xFFFF3300, true),
+            new ActionTimingPhase("recovery", "Exhaustion", 800, 0xFF00E5FF, false)
+        );
+    }
+
+    @Override
+    public String getExecutionLabel() {
+        return "STRIKE";
+    }
+}
+```
+
+### Integration Features:
+1. **Dynamic Modal Labels & Inputs**: When selecting an action in [`EditMusicEntryModalScreen`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/client/gui/EditMusicEntryModalScreen.java), input fields dynamically relabel to match the action's states (e.g. *Indicator / Jump / Slam / Recovery* for Leap Slam vs. *Charge / Cast / Barrage / Cooldown* for Abyssal Barrage).
+2. **Interactive Editing**: All timing values remain fully editable by the user for every sequence entry.
+3. **Timeline Duration Bars**: On the timeline ([`MusicSequenceScreen`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/client/gui/MusicSequenceScreen.java)), multi-color segmented bars display each action's distinct phase names and colors, with keyframe impact diamonds and status badges using the action's execution label (e.g. `[SLAM ...]` vs `[BARRAGE ...]`).
+
+---
+
+## 11. Custom Action Parameters & Sequencer Panel Integration
+
+Puppet actions are not limited to timing phases; they can define discrete parameters of any type—including **booleans**, **floats**, **doubles**, **integers**, **strings**, and **options (enums)**. The **Music Sequencer** automatically detects these parameters in the puppet action editor modal, rendering dedicated cyberpunk widgets (toggles, numeric inputs, option cyclers) for interactive tweaking.
+
+### A. Supported Parameter Types (`ActionParameter<T>`)
+
+Construct parameters using the factory methods on [`ActionParameter`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/puppet/fsm/ActionParameter.java):
+
+| Type | Factory Method | Rendered Sequencer Widget |
+| :--- | :--- | :--- |
+| **Boolean** | `ActionParameter.ofBoolean(key, label, defaultBool, description)` | Styled Cyberpunk toggle button (`[✓] LABEL: YES` / `[ ] LABEL: NO`). Glowing green when active. |
+| **Float** | `ActionParameter.ofFloat(key, label, defaultFloat, description)` | Numeric EditBox with decimal validation, default hint, and hover tooltip. |
+| **Double** | `ActionParameter.ofDouble(key, label, defaultDouble, description)` | Numeric EditBox with decimal validation, default hint, and hover tooltip. |
+| **Integer** | `ActionParameter.ofInt(key, label, defaultInt, description)` | Integer EditBox with number validation, default hint, and hover tooltip. |
+| **String** | `ActionParameter.ofString(key, label, defaultString, description)` | Text EditBox with default hint and hover tooltip. |
+| **Options** | `ActionParameter.ofOptions(key, label, List.of(...), defaultVal, description)` | Cycle button that loops through allowed values on click. |
+
+---
+
+### B. Implementing Custom Parameters in Your Content Mod
+
+To implement an action with custom parameters (for example, a boss that spins with a **spin direction** boolean and a **spin speed** float):
+
+#### 1. Define the Parameter Record and Mojang Codec
+
+```java
+package com.mymod.puppet.action;
+
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.dandare21.fracturedutils.puppet.fsm.ActionParameter;
+import net.dandare21.fracturedutils.puppet.fsm.ActionTimingPhase;
+import net.dandare21.fracturedutils.puppet.fsm.PuppetActionInstance;
+import net.dandare21.fracturedutils.puppet.fsm.PuppetActionType;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Mob;
+
+import java.util.List;
+
+public class BossSpinAction extends PuppetActionType<BossSpinAction.BossSpinParams> {
+    public static final ResourceLocation ID = new ResourceLocation("content_mod", "boss_spin");
+
+    // 1. Strongly typed parameter record matching the Codec
+    public record BossSpinParams(
+            boolean spinDirection,
+            float spinSpeed,
+            int durationTicks
+    ) {
+        public static final Codec<BossSpinParams> CODEC = RecordCodecBuilder.create(instance ->
+                instance.group(
+                        Codec.BOOL.optionalFieldOf("spinDirection", true).forGetter(BossSpinParams::spinDirection),
+                        Codec.FLOAT.optionalFieldOf("spinSpeed", 2.5F).forGetter(BossSpinParams::spinSpeed),
+                        Codec.INT.optionalFieldOf("durationTicks", 40).forGetter(BossSpinParams::durationTicks)
+                ).apply(instance, BossSpinParams::new)
+        );
+    }
+
+    public BossSpinAction() {
+        super(ID, BossSpinParams.CODEC, Instance::new);
+    }
+
+    // 2. Declare parameters for the Sequencer to automatically detect
+    @Override
+    public List<ActionParameter<?>> getParameters() {
+        return List.of(
+                ActionParameter.ofBoolean("spinDirection", "Spin Clockwise", true, "When true rotates clockwise, otherwise counter-clockwise"),
+                ActionParameter.ofFloat("spinSpeed", "Spin Speed", 2.5F, "Angular velocity of the spin attack")
+        );
+    }
+
+    // 3. (Optional) Custom lifecycle timing phases for the timeline
+    @Override
+    public List<ActionTimingPhase> getTimingPhases() {
+        return List.of(
+                new ActionTimingPhase("windup", "Windup", 400, 0xFFFFCC00, false),
+                new ActionTimingPhase("jump", "Telegraph", 0, 0xFF4A69BD, false),
+                new ActionTimingPhase("duration", "Spin", 2000, 0xFFFF3366, true),
+                new ActionTimingPhase("recovery", "Dizzy", 600, 0xFF00E5FF, false)
+        );
+    }
+
+    @Override
+    public String getExecutionLabel() {
+        return "SPIN";
+    }
+
+    // 4. Action instance handling the attack logic
+    public static class Instance extends PuppetActionInstance<BossSpinParams> {
+        public Instance(Mob mob, BossSpinParams params) {
+            super(mob, params);
+        }
+
+        @Override
+        public void onStart() {
+            // Read typed parameters directly from the record:
+            boolean clockwise = params.spinDirection();
+            float speed = params.spinSpeed();
+            // ... trigger spin animation and rotational motion ...
+        }
+    }
+}
+```
+
+#### 2. Register the Action with `ModPuppetActions`
+
+During common/mod setup in your content mod:
+
+```java
+import net.dandare21.fracturedutils.puppet.registry.ModPuppetActions;
+
+public class ContentModPuppetActions {
+    public static final BossSpinAction BOSS_SPIN = ModPuppetActions.register(new BossSpinAction());
+
+    public static void init() {
+        // Called during FMLCommonSetupEvent
+    }
+}
+```
+
+---
+
+### C. Sequencer GUI & Serialization Behavior
+
+Once registered:
+
+1. **Automatic Detection**: When opening [`EditMusicEntryModalScreen`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/client/gui/EditMusicEntryModalScreen.java) on a Puppet track and selecting `⚡ BOSS SPIN` from the action dropdown, the **⚙ ACTION PARAMETERS** card instantly detects `Spin Clockwise` and `Spin Speed`.
+2. **Interactive Toggling & Editing**:
+   - Clicking `[✓] SPIN CLOCKWISE: YES` toggles between clockwise (`true`) and counter-clockwise (`false`) with immediate visual feedback.
+   - The `Spin Speed:` box allows live numeric adjustment, initialized with the declared default `2.5`.
+3. **Dynamic Custom Parameters**: Users can also click `➕ ADD PARAM` in the modal at any time to add arbitrary ad-hoc parameters or override custom action IDs.
+4. **Serialization**:
+   - Parameters are saved directly to `MusicSequenceEntry#puppetParams` as key-value pairs and serialized to the sequence JSON.
+   - Parameters are also appended to the command string (e.g. `puppet_action tag:boss action:content_mod:boss_spin target:@p windup:400 jump:0 duration:2000 recovery:600 spinDirection:true spinSpeed:2.5`).
+5. **Runtime Codec Execution**:
+   - [`MusicSequenceManager`](file:///d:/Projects/mc%20modding/Fractured%20Utils/src/main/java/net/dandare21/fracturedutils/sound/sequence/MusicSequenceManager.java) reads the entry parameters and maps them to proper NBT types (`ByteTag`/boolean, `FloatTag`, `DoubleTag`, `IntTag`, `StringTag`) using the action's `ActionParameter` definitions.
+   - The parameters are decoded by Mojang's DFU `Codec<T>` into your strongly-typed record `BossSpinParams` without any manual deserialization or type casting required.
+
 
 

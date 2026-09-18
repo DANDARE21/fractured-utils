@@ -49,6 +49,9 @@ public class ClientScreenEffectHandler {
     private static final ResourceLocation SOBEL_SHADER = new ResourceLocation("shaders/post/sobel.json");
     private static boolean sobelShaderLoaded = false;
 
+    private static final ResourceLocation IMPACT_DRAW_SHADER = new ResourceLocation(FracturedUtils.MOD_ID, "shaders/post/impact_draw.json");
+    private static boolean impactDrawShaderLoaded = false;
+
     static {
         registerDefaultRenderers();
     }
@@ -214,11 +217,14 @@ public class ClientScreenEffectHandler {
             }
         });
 
-        // 5. Impact Frame Renderer (Anime High-Contrast Monochromatic Keyframe)
+        // 5. Impact Frame Renderer (Anime High-Contrast Manga Draw / Monochromatic Keyframe)
         registerRenderer(ImpactFrameEffect.TYPE, new ScreenEffectRenderer<ImpactFrameEffect.ImpactFrameInstance>() {
             @Override
             public void onStart(ImpactFrameEffect.ImpactFrameInstance instance) {
-                if ("MANGA_OUTLINE".equalsIgnoreCase(instance.getStyle()) || "SOBEL".equalsIgnoreCase(instance.getStyle())) {
+                String style = instance.getStyle();
+                if ("DRAW".equalsIgnoreCase(style) || "MANGA_DRAW".equalsIgnoreCase(style) || style == null || style.isBlank()) {
+                    loadImpactDrawShader();
+                } else if ("MANGA_OUTLINE".equalsIgnoreCase(style) || "SOBEL".equalsIgnoreCase(style)) {
                     loadSobelShader();
                 } else if (instance.isInvertWorld()) {
                     loadInvertShader();
@@ -233,10 +239,62 @@ public class ClientScreenEffectHandler {
                 int interval = Math.max(20, instance.getFrameIntervalMs());
                 int frameIndex = (int) (elapsed / interval);
 
-                // Even frames = negative/inverted frame, Odd frames = positive monochrome frame
+                // Even frames = negative/inverted frame, Odd frames = positive frame
                 boolean isNegativeFrame = (frameIndex % 2 == 0);
+                String style = instance.getStyle();
 
-                if ("MANGA_OUTLINE".equalsIgnoreCase(instance.getStyle()) || "SOBEL".equalsIgnoreCase(instance.getStyle())) {
+                if ("DRAW".equalsIgnoreCase(style) || "MANGA_DRAW".equalsIgnoreCase(style) || style == null || style.isBlank()) {
+                    loadImpactDrawShader();
+
+                    int pColor = instance.getPrimaryColor();
+                    int sColor = instance.getSecondaryColor();
+
+                    if (instance.isInvertWorld() && isNegativeFrame) {
+                        int tmp = pColor;
+                        pColor = sColor;
+                        sColor = tmp;
+                    }
+
+                    float pR = ((pColor >> 16) & 0xFF) / 255.0f;
+                    float pG = ((pColor >> 8) & 0xFF) / 255.0f;
+                    float pB = (pColor & 0xFF) / 255.0f;
+
+                    float sR = ((sColor >> 16) & 0xFF) / 255.0f;
+                    float sG = ((sColor >> 8) & 0xFF) / 255.0f;
+                    float sB = (sColor & 0xFF) / 255.0f;
+
+                    // ColorDark receives shadow/outline color, ColorLight receives highlight/paper color
+                    updateImpactDrawUniforms(sR, sG, sB, pR, pG, pB);
+                    return;
+                }
+
+                if ("MANGA_FULL".equalsIgnoreCase(style)) {
+                    loadImpactDrawShader();
+
+                    int pColor = instance.getPrimaryColor();
+                    int sColor = instance.getSecondaryColor();
+
+                    if (instance.isInvertWorld() && isNegativeFrame) {
+                        int tmp = pColor;
+                        pColor = sColor;
+                        sColor = tmp;
+                    }
+
+                    float pR = ((pColor >> 16) & 0xFF) / 255.0f;
+                    float pG = ((pColor >> 8) & 0xFF) / 255.0f;
+                    float pB = (pColor & 0xFF) / 255.0f;
+
+                    float sR = ((sColor >> 16) & 0xFF) / 255.0f;
+                    float sG = ((sColor >> 8) & 0xFF) / 255.0f;
+                    float sB = (sColor & 0xFF) / 255.0f;
+
+                    updateImpactDrawUniforms(sR, sG, sB, pR, pG, pB);
+                    MangaDrawImpactRenderer.render(graphics, screenWidth, screenHeight, instance);
+                    return;
+                }
+
+                // Fallback / legacy modes
+                if ("MANGA_OUTLINE".equalsIgnoreCase(style) || "SOBEL".equalsIgnoreCase(style)) {
                     loadSobelShader();
                 } else if (instance.isInvertWorld()) {
                     if (isNegativeFrame) {
@@ -245,7 +303,6 @@ public class ClientScreenEffectHandler {
                     } else {
                         shutdownInvertShader();
                         loadColorConvolveShader();
-                        // Stark high-contrast anime monochrome matrix (R=G=B=Luminance*2)
                         float c = 2.0f;
                         updateColorConvolveMatrix(0.299f * c, 0.587f * c, 0.114f * c,
                                                   0.299f * c, 0.587f * c, 0.114f * c,
@@ -259,27 +316,22 @@ public class ClientScreenEffectHandler {
                                               0.299f * c, 0.587f * c, 0.114f * c);
                 }
 
-                // 1. Render Anime Radial Speed Lines (Bursting inward towards center)
                 long seed = instance.getStartTimeMs() ^ ((long) frameIndex * 99991L);
                 int baseLineColor = isNegativeFrame ? 0xDDFFFFFF : 0xEE000000;
                 int accentColor = instance.getPrimaryColor();
 
                 renderAnimeSpeedLines(graphics, screenWidth, screenHeight, seed, baseLineColor, accentColor, 1.0f);
 
-                // 2. Cinematic Letterbox Bars
-                if ("RADIAL_SHOCK".equalsIgnoreCase(instance.getStyle())) {
+                if ("RADIAL_SHOCK".equalsIgnoreCase(style)) {
                     int barH = Math.min(screenHeight / 5, 28 + (frameIndex % 3) * 4);
                     graphics.fill(0, 0, screenWidth, barH, 0xFF000000);
                     graphics.fill(0, screenHeight - barH, screenWidth, screenHeight, 0xFF000000);
-                } else {
-                    int barH = Math.min(screenHeight / 8, 20);
-                    graphics.fill(0, 0, screenWidth, barH, 0xDD000000);
-                    graphics.fill(0, screenHeight - barH, screenWidth, screenHeight, 0xDD000000);
                 }
             }
 
             @Override
             public void onEnd(ImpactFrameEffect.ImpactFrameInstance instance) {
+                shutdownImpactDrawShader();
                 shutdownInvertShader();
                 shutdownColorConvolveShader();
                 shutdownSobelShader();
@@ -363,6 +415,68 @@ public class ClientScreenEffectHandler {
             }
             sobelShaderLoaded = false;
         }
+    }
+
+    private static void loadImpactDrawShader() {
+        if (!impactDrawShaderLoaded) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.gameRenderer != null) {
+                try {
+                    mc.gameRenderer.loadEffect(IMPACT_DRAW_SHADER);
+                    impactDrawShaderLoaded = true;
+                } catch (Exception e) {
+                    FracturedUtils.LOGGER.warn("[ClientScreenEffectHandler] Could not load impact_draw shader, using fallback", e);
+                }
+            }
+        }
+    }
+
+    private static void shutdownImpactDrawShader() {
+        if (impactDrawShaderLoaded) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.gameRenderer != null) {
+                try {
+                    mc.gameRenderer.shutdownEffect();
+                } catch (Exception ignored) {}
+            }
+            impactDrawShaderLoaded = false;
+        }
+    }
+
+    private static void updateImpactDrawUniforms(float darkR, float darkG, float darkB, float lightR, float lightG, float lightB) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.gameRenderer == null || mc.gameRenderer.currentEffect() == null) return;
+        try {
+            net.minecraft.client.renderer.PostChain chain = mc.gameRenderer.currentEffect();
+            if (!passesFieldChecked) {
+                passesFieldChecked = true;
+                for (java.lang.reflect.Field f : net.minecraft.client.renderer.PostChain.class.getDeclaredFields()) {
+                    if (java.util.List.class.isAssignableFrom(f.getType())) {
+                        f.setAccessible(true);
+                        passesField = f;
+                        break;
+                    }
+                }
+            }
+
+            if (passesField != null) {
+                java.util.List<?> list = (java.util.List<?>) passesField.get(chain);
+                if (list != null) {
+                    for (Object passObj : list) {
+                        if (passObj instanceof net.minecraft.client.renderer.PostPass pass) {
+                            net.minecraft.client.renderer.EffectInstance effect = pass.getEffect();
+                            if (effect != null) {
+                                com.mojang.blaze3d.shaders.Uniform uDark = effect.getUniform("ColorDark");
+                                if (uDark != null) uDark.set(darkR, darkG, darkB, 1.0f);
+
+                                com.mojang.blaze3d.shaders.Uniform uLight = effect.getUniform("ColorLight");
+                                if (uLight != null) uLight.set(lightR, lightG, lightB, 1.0f);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     /**
@@ -515,6 +629,7 @@ public class ClientScreenEffectHandler {
         shutdownInvertShader();
         shutdownColorConvolveShader();
         shutdownSobelShader();
+        shutdownImpactDrawShader();
     }
 
     private static void endInstance(ScreenEffectInstance instance) {
@@ -581,17 +696,15 @@ public class ClientScreenEffectHandler {
     }
 
     /**
-     * Called from {@link net.minecraftforge.client.event.RenderGuiOverlayEvent.Post}.
+     * Renders screen effect overlays directly using the supplied GuiGraphics.
+     * Invoked before hotbar/hearts/boss bars so effects layer underneath HUD components.
      */
-    public static void onRenderGuiOverlay(RenderGuiOverlayEvent.Post event) {
-        if (ACTIVE_EFFECTS.isEmpty()) return;
-        if (event.getOverlay() == null || !event.getOverlay().id().equals(VanillaGuiOverlay.HOTBAR.id())) return;
+    public static void renderScreenEffects(GuiGraphics graphics, float partialTicks) {
+        if (ACTIVE_EFFECTS.isEmpty() || graphics == null) return;
 
         Minecraft mc = Minecraft.getInstance();
-        GuiGraphics graphics = event.getGuiGraphics();
         int width = mc.getWindow().getGuiScaledWidth();
         int height = mc.getWindow().getGuiScaledHeight();
-        float partialTicks = event.getPartialTick();
 
         for (ScreenEffectInstance instance : ACTIVE_EFFECTS) {
             @SuppressWarnings("unchecked")
@@ -600,5 +713,15 @@ public class ClientScreenEffectHandler {
                 renderer.onRenderOverlay(instance, graphics, partialTicks, width, height);
             }
         }
+    }
+
+    /**
+     * Called from {@link net.minecraftforge.client.event.RenderGuiOverlayEvent.Post}.
+     */
+    public static void onRenderGuiOverlay(RenderGuiOverlayEvent.Post event) {
+        if (ACTIVE_EFFECTS.isEmpty()) return;
+        if (event.getOverlay() == null || !event.getOverlay().id().equals(VanillaGuiOverlay.HOTBAR.id())) return;
+
+        renderScreenEffects(event.getGuiGraphics(), event.getPartialTick());
     }
 }

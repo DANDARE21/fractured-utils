@@ -130,6 +130,9 @@ public class ClientEventHandler {
 
     @SubscribeEvent
     public static void onRenderGuiOverlayPre(net.minecraftforge.client.event.RenderGuiOverlayEvent.Pre event) {
+        if (event.getOverlay().id().equals(VanillaGuiOverlay.HOTBAR.id())) {
+            net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler.renderScreenEffects(event.getGuiGraphics(), event.getPartialTick());
+        }
         Minecraft mc = Minecraft.getInstance();
         if (ClientDownedData.isDowned() || mc.screen instanceof net.dandare21.fracturedutils.client.gui.DownedSpectateScreen || mc.screen instanceof net.dandare21.fracturedutils.client.gui.TeamWipeScreen) {
             event.setCanceled(true);
@@ -163,7 +166,6 @@ public class ClientEventHandler {
         ClientCutsceneHandler.getInstance().renderOverlay(event);
 
         if (event.getOverlay().id().equals(VanillaGuiOverlay.HOTBAR.id())) {
-            net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler.onRenderGuiOverlay(event);
             Minecraft mc = Minecraft.getInstance();
             GuiGraphics guiGraphics = event.getGuiGraphics();
 

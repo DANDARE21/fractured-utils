@@ -262,6 +262,20 @@ public class CyberpunkDropdown<T> extends AbstractWidget {
         return false;
     }
 
+    public int getSelectedIndex() {
+        if (selectedEntry == null) return -1;
+        return entries.indexOf(selectedEntry);
+    }
+
+    public void selectByIndex(int index) {
+        if (index >= 0 && index < entries.size()) {
+            this.selectedEntry = entries.get(index);
+            if (onSelect != null) {
+                onSelect.accept(this.selectedEntry);
+            }
+        }
+    }
+
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
         if (isOpen) {
@@ -272,6 +286,21 @@ public class CyberpunkDropdown<T> extends AbstractWidget {
                 } else if (amount < 0) {
                     this.scrollOffset = Math.min(maxScroll, this.scrollOffset + 1);
                 }
+                return true;
+            }
+            if (isMouseOverMenu(mouseX, mouseY) || isMouseOverHeader(mouseX, mouseY)) {
+                return true;
+            }
+            return false;
+        } else if (isMouseOverHeader(mouseX, mouseY) && !entries.isEmpty()) {
+            int curIdx = getSelectedIndex();
+            if (curIdx == -1) curIdx = 0;
+            if (amount > 0) {
+                int next = Math.max(0, curIdx - 1);
+                selectByIndex(next);
+            } else if (amount < 0) {
+                int next = Math.min(entries.size() - 1, curIdx + 1);
+                selectByIndex(next);
             }
             return true;
         }

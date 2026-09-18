@@ -1,11 +1,14 @@
 package net.dandare21.fracturedutils.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.dandare21.fracturedutils.config.ServerConfig;
 import net.dandare21.fracturedutils.puppet.boss.VoidHeraldBoss;
 import net.dandare21.fracturedutils.puppet.registry.ModEntities;
 import net.dandare21.fracturedutils.puppet.target.ActionTarget;
+import net.dandare21.fracturedutils.puppet.util.AttackIndicatorUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -19,13 +22,15 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 
 /**
- * Command for debugging and controlling the Void Herald Boss presence and actions.
+ * Command for debugging and controlling the Void Herald Boss presence, actions, and attack indicators.
  * Usage:
  *   /puppetboss status
  *   /puppetboss enable
  *   /puppetboss disable
  *   /puppetboss spawn
  *   /puppetboss action <action_id>
+ *   /puppetboss indicator circle <radius> <duration> [color]
+ *   /puppetboss indicator line <length> <width> <duration> [color]
  */
 public class BossPuppetCommand {
 
@@ -45,6 +50,22 @@ public class BossPuppetCommand {
                                             return builder.buildFuture();
                                         })
                                         .executes(ctx -> triggerAction(ctx.getSource(), StringArgumentType.getString(ctx, "action_name")))))
+                        .then(Commands.literal("indicator")
+                                .then(Commands.literal("circle")
+                                        .then(Commands.argument("radius", DoubleArgumentType.doubleArg(0.5, 64.0))
+                                                .then(Commands.argument("duration_ticks", IntegerArgumentType.integer(1, 1200))
+                                                        .executes(ctx -> spawnCircleIndicator(ctx.getSource(), DoubleArgumentType.getDouble(ctx, "radius"), IntegerArgumentType.getInteger(ctx, "duration_ticks"), "void"))
+                                                        .then(Commands.argument("color", StringArgumentType.word())
+                                                                .suggests((ctx, builder) -> suggestColors(builder))
+                                                                .executes(ctx -> spawnCircleIndicator(ctx.getSource(), DoubleArgumentType.getDouble(ctx, "radius"), IntegerArgumentType.getInteger(ctx, "duration_ticks"), StringArgumentType.getString(ctx, "color")))))))
+                                .then(Commands.literal("line")
+                                        .then(Commands.argument("length", DoubleArgumentType.doubleArg(1.0, 128.0))
+                                                .then(Commands.argument("width", DoubleArgumentType.doubleArg(0.2, 32.0))
+                                                        .then(Commands.argument("duration_ticks", IntegerArgumentType.integer(1, 1200))
+                                                                .executes(ctx -> spawnLineIndicator(ctx.getSource(), DoubleArgumentType.getDouble(ctx, "length"), DoubleArgumentType.getDouble(ctx, "width"), IntegerArgumentType.getInteger(ctx, "duration_ticks"), "void"))
+                                                                .then(Commands.argument("color", StringArgumentType.word())
+                                                                        .suggests((ctx, builder) -> suggestColors(builder))
+                                                                        .executes(ctx -> spawnLineIndicator(ctx.getSource(), DoubleArgumentType.getDouble(ctx, "length"), DoubleArgumentType.getDouble(ctx, "width"), IntegerArgumentType.getInteger(ctx, "duration_ticks"), StringArgumentType.getString(ctx, "color")))))))))
         );
     }
 
@@ -136,6 +157,45 @@ public class BossPuppetCommand {
         boss.triggerOrchestratedAction(actionName, target);
         source.sendSuccess(() -> Component.literal("Triggered action '" + actionName + "' on Void Herald boss.")
                 .withStyle(ChatFormatting.LIGHT_PURPLE), true);
+        return 1;
+    }
+
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestColors(com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+        builder.suggest("void");
+        builder.suggest("red");
+        builder.suggest("orange");
+        builder.suggest("cyan");
+        builder.suggest("yellow");
+        return builder.buildFuture();
+    }
+
+    private static int parseColor(String name) {
+        return switch (name.toLowerCase()) {
+            case "red" -> AttackIndicatorUtils.COLOR_RED;
+            case "orange" -> AttackIndicatorUtils.COLOR_ORANGE;
+            case "cyan" -> AttackIndicatorUtils.COLOR_CYAN;
+            case "yellow" -> AttackIndicatorUtils.COLOR_YELLOW;
+            default -> AttackIndicatorUtils.COLOR_VOID;
+        };
+    }
+
+    private static int spawnCircleIndicator(CommandSourceStack source, double radius, int duration, String colorName) {
+        Vec3 pos = source.getPosition();
+        int color = parseColor(colorName);
+        int id = AttackIndicatorUtils.spawnCircle(source.getLevel(), pos, radius, duration, color);
+        source.sendSuccess(() -> Component.literal("Spawned circle attack indicator #" + id + " (radius=" + radius + ", duration=" + duration + "t, color=" + colorName + ")")
+                .withStyle(ChatFormatting.GREEN), false);
+        return 1;
+    }
+
+    private static int spawnLineIndicator(CommandSourceStack source, double length, double width, int duration, String colorName) {
+        Entity entity = source.getEntity();
+        float yaw = entity != null ? entity.getYRot() : 0.0F;
+        Vec3 pos = source.getPosition();
+        int color = parseColor(colorName);
+        int id = AttackIndicatorUtils.spawnLine(source.getLevel(), pos, yaw, length, width, duration, color);
+        source.sendSuccess(() -> Component.literal("Spawned line attack indicator #" + id + " (length=" + length + ", width=" + width + ", yaw=" + String.format("%.1f", yaw) + "°, duration=" + duration + "t, color=" + colorName + ")")
+                .withStyle(ChatFormatting.GREEN), false);
         return 1;
     }
 }

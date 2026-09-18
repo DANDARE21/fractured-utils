@@ -46,6 +46,9 @@ public class MusicSequenceEntry {
     private float screenEffectAngle = 0.0f;
     private String screenEffectStyle = "MONOCHROME_CUT";
 
+    // Custom Puppet Action Parameters
+    private java.util.Map<String, String> puppetParams = new java.util.LinkedHashMap<>();
+
     public MusicSequenceEntry() {
         this.timestampMs = 0L;
         this.actionType = "COMMAND";
@@ -164,6 +167,20 @@ public class MusicSequenceEntry {
 
     public int getTotalDurationMs() {
         return windupMs + jumpMs + durationMs + recoveryMs;
+    }
+
+    public int getExecutionTimeOffsetMs() {
+        return windupMs + jumpMs;
+    }
+
+    public int getPhaseDurationMs(int phaseIndex) {
+        return switch (phaseIndex) {
+            case 0 -> windupMs;
+            case 1 -> jumpMs;
+            case 2 -> durationMs;
+            case 3 -> recoveryMs;
+            default -> 0;
+        };
     }
 
     public String getSubAction() {
@@ -399,6 +416,35 @@ public class MusicSequenceEntry {
         this.screenEffectStyle = (screenEffectStyle != null && !screenEffectStyle.isBlank()) ? screenEffectStyle : "MONOCHROME_CUT";
     }
 
+    public java.util.Map<String, String> getPuppetParams() {
+        if (this.puppetParams == null) {
+            this.puppetParams = new java.util.LinkedHashMap<>();
+        }
+        return this.puppetParams;
+    }
+
+    public void setPuppetParams(java.util.Map<String, String> puppetParams) {
+        this.puppetParams = puppetParams != null ? new java.util.LinkedHashMap<>(puppetParams) : new java.util.LinkedHashMap<>();
+    }
+
+    public String getPuppetParam(String key, String fallback) {
+        if (this.puppetParams == null || key == null) return fallback;
+        return this.puppetParams.getOrDefault(key, fallback);
+    }
+
+    public void putPuppetParam(String key, String value) {
+        if (this.puppetParams == null) {
+            this.puppetParams = new java.util.LinkedHashMap<>();
+        }
+        if (key != null && !key.isBlank()) {
+            if (value != null) {
+                this.puppetParams.put(key, value);
+            } else {
+                this.puppetParams.remove(key);
+            }
+        }
+    }
+
     public MusicSequenceEntry copy() {
         MusicSequenceEntry entry = new MusicSequenceEntry(this.timestampMs, this.actionType, this.channelId, this.command, this.description);
         entry.setWindupMs(this.windupMs);
@@ -435,6 +481,9 @@ public class MusicSequenceEntry {
         entry.setScreenEffectContinuous(this.screenEffectContinuous);
         entry.setScreenEffectAngle(this.screenEffectAngle);
         entry.setScreenEffectStyle(this.screenEffectStyle);
+        if (this.puppetParams != null) {
+            entry.setPuppetParams(new java.util.LinkedHashMap<>(this.puppetParams));
+        }
         return entry;
     }
 }

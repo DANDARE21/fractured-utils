@@ -3,6 +3,8 @@ package net.dandare21.fracturedutils.puppet.action;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.dandare21.fracturedutils.FracturedUtils;
+import net.dandare21.fracturedutils.puppet.fsm.ActionParameter;
+import net.dandare21.fracturedutils.puppet.fsm.ActionTimingPhase;
 import net.dandare21.fracturedutils.puppet.fsm.Phase;
 import net.dandare21.fracturedutils.puppet.fsm.PuppetActionInstance;
 import net.dandare21.fracturedutils.puppet.fsm.PuppetActionType;
@@ -118,6 +120,29 @@ public class LeapSlamAction extends PuppetActionType<LeapSlamAction.LeapSlamPara
 
     public LeapSlamAction() {
         super(ID, LeapSlamParams.CODEC, Instance::new);
+    }
+
+    @Override
+    public List<ActionTimingPhase> getTimingPhases() {
+        return List.of(
+                new ActionTimingPhase("windup", "Indicator", 500, 0xFFFFCC00, false),
+                new ActionTimingPhase("jump", "Jump", 1500, 0xFF4A69BD, false),
+                new ActionTimingPhase("duration", "Slam", 800, 0xDDAA55FF, true),
+                new ActionTimingPhase("recovery", "Recovery", 600, 0xFF00E5FF, false)
+        );
+    }
+
+    @Override
+    public List<ActionParameter<?>> getParameters() {
+        return List.of(
+                ActionParameter.ofDouble("slamRadius", "Slam Radius", 6.0, "Radius of the ground slam explosion in blocks"),
+                ActionParameter.ofFloat("damage", "Damage", 20.0F, "Damage dealt at center of slam impact")
+        );
+    }
+
+    @Override
+    public String getExecutionLabel() {
+        return "SLAM";
     }
 
     public static class Instance extends PuppetActionInstance<LeapSlamParams> {

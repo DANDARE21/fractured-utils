@@ -3,6 +3,7 @@ package net.dandare21.fracturedutils.client.gui;
 import net.dandare21.fracturedutils.dialog.DialogFormatUtil;
 import net.dandare21.fracturedutils.dialog.DialogLine;
 import net.dandare21.fracturedutils.orchestrator.action.CommandAction;
+import net.dandare21.fracturedutils.puppet.fsm.ActionTimingPhase;
 import net.dandare21.fracturedutils.puppet.fsm.PuppetActionType;
 import net.dandare21.fracturedutils.puppet.registry.ModPuppetActions;
 import net.dandare21.fracturedutils.sound.DialogSoundRegistry;
@@ -21,12 +22,15 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.phys.HitResult;
+import net.dandare21.fracturedutils.puppet.fsm.ActionParameter;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.function.Consumer;
 
 public class EditMusicEntryModalScreen extends Screen {
@@ -78,7 +82,8 @@ public class EditMusicEntryModalScreen extends Screen {
     private int screenEffectSecondaryColor = 0xFF000000;
     private boolean screenEffectContinuous = true;
     private float screenEffectAngle = 0.0f;
-    private String screenEffectStyle = "MONOCHROME_CUT";
+    private String screenEffectStyle = "DRAW";
+    private boolean impactEditingSecondary = false;
     private CyberpunkColorPicker screenEffectColorPicker;
 
     // Camera state & inputs
@@ -161,6 +166,12 @@ public class EditMusicEntryModalScreen extends Screen {
     private int recoveryMs = 600;
     private String combatTarget = "@p";
 
+    // Puppet Action Custom Parameters
+    private final Map<String, String> currentPuppetParams = new LinkedHashMap<>();
+    private final List<Consumer<GuiGraphics>> paramLabelRenderers = new ArrayList<>();
+    private int actionParamsCardHeight = 60;
+    private int customParamCounter = 1;
+
     public EditMusicEntryModalScreen(Screen parentScreen, MusicSequenceEntry entry, Consumer<MusicSequenceEntry> onSave) {
         this(parentScreen, entry, null, onSave, null);
     }
@@ -215,10 +226,16 @@ public class EditMusicEntryModalScreen extends Screen {
         this.screenEffectDecay = entry.isScreenEffectDecay();
         this.screenEffectSmooth = entry.isScreenEffectSmooth();
         this.screenEffectPulse = entry.isScreenEffectPulse();
-        this.screenEffectSecondaryColor = entry.getScreenEffectSecondaryColor();
+        this.screenEffectSecondaryColor = entry.getScreenEffectSecondaryColor() != 0 ? entry.getScreenEffectSecondaryColor() : 0xFF000000;
         this.screenEffectContinuous = entry.isScreenEffectContinuous();
         this.screenEffectAngle = entry.getScreenEffectAngle();
         this.screenEffectStyle = entry.getScreenEffectStyle();
+        if (this.screenEffectStyle == null || this.screenEffectStyle.isBlank()) {
+            this.screenEffectStyle = "DRAW";
+        }
+        if (entry.getScreenEffectColor() == 0) {
+            entry.setScreenEffectColor(0xFFFFFFFF);
+        }
         if (entry.getDurationMs() <= 0 && entry.getTotalDurationMs() <= 0) {
             entry.setDurationMs(1000);
         }
@@ -314,7 +331,12 @@ public class EditMusicEntryModalScreen extends Screen {
         this.durationMs = entry.getDurationMs();
         this.recoveryMs = entry.getRecoveryMs();
 
-        // Parse action id, combat target, and embedded timings from command string
+        this.currentPuppetParams.clear();
+        if (entry.getPuppetParams() != null) {
+            this.currentPuppetParams.putAll(entry.getPuppetParams());
+        }
+
+        // Parse action id, combat target, embedded timings, and custom parameters from command string
         String cmd = entry.getCommand().trim();
         if (cmd.startsWith("puppet_action")) {
             if (cmd.contains("action:")) {
@@ -331,6 +353,15 @@ public class EditMusicEntryModalScreen extends Screen {
                         try { this.durationMs = Math.max(0, Integer.parseInt(part.substring(9).trim())); } catch (Exception ignored) {}
                     } else if (part.startsWith("recovery:")) {
                         try { this.recoveryMs = Math.max(0, Integer.parseInt(part.substring(9).trim())); } catch (Exception ignored) {}
+                    } else if (part.startsWith("tag:")) {
+                        // Actor tag handled separately
+                    } else if (part.contains(":")) {
+                        int c = part.indexOf(':');
+                        String k = part.substring(0, c).trim();
+                        String v = part.substring(c + 1).trim();
+                        if (!k.isEmpty() && !this.currentPuppetParams.containsKey(k)) {
+                            this.currentPuppetParams.put(k, v);
+                        }
                     }
                 }
             } else {
@@ -347,10 +378,28 @@ public class EditMusicEntryModalScreen extends Screen {
         }
 
         if (this.windupMs == 0 && this.jumpMs == 0 && this.durationMs == 0 && this.recoveryMs == 0) {
-            this.windupMs = 500;
-            this.jumpMs = 1500;
-            this.durationMs = 800;
-            this.recoveryMs = 600;
+            PuppetActionType<?> act = ModPuppetActions.resolve(this.selectedActionId);
+            List<ActionTimingPhase> phases = act.getTimingPhases();
+            this.windupMs = phases.size() > 0 ? phases.get(0).defaultMs() : 500;
+            this.jumpMs = phases.size() > 1 ? phases.get(1).defaultMs() : 0;
+            this.durationMs = phases.size() > 2 ? phases.get(2).defaultMs() : 800;
+            this.recoveryMs = phases.size() > 3 ? phases.get(3).defaultMs() : 600;
+        }
+
+        syncPuppetParamsWithAction(false);
+    }
+
+    private void syncPuppetParamsWithAction(boolean resetAll) {
+        if (resetAll) {
+            this.currentPuppetParams.clear();
+        }
+        PuppetActionType<?> act = ModPuppetActions.resolve(this.selectedActionId);
+        if (act != null) {
+            for (ActionParameter<?> p : act.getParameters()) {
+                if (!this.currentPuppetParams.containsKey(p.getKey())) {
+                    this.currentPuppetParams.put(p.getKey(), p.getDefaultValueString());
+                }
+            }
         }
     }
 
@@ -363,7 +412,7 @@ public class EditMusicEntryModalScreen extends Screen {
         if (isDialog) return 520;
         if (isCamera) return 490;
         if (isScreenEffect) return 490;
-        if (isPuppet) return 476;
+        if (isPuppet) return 520;
         return 430;
     }
 
@@ -371,7 +420,7 @@ public class EditMusicEntryModalScreen extends Screen {
         if (isDialog) return 450;
         if (isCamera) return 258;
         if (isScreenEffect) return 260;
-        if (isPuppet) return 320;
+        if (isPuppet) return 450;
         return 202;
     }
 
@@ -635,22 +684,24 @@ public class EditMusicEntryModalScreen extends Screen {
         int y1 = card1Y + 8;
         int y2 = card1Y + 36;
 
-        CyberpunkButton styleBtn = new CyberpunkButton(contentX + 10, y1, 130, 18,
-                Component.literal("STYLE: " + (screenEffectStyle != null ? screenEffectStyle : "MONOCHROME_CUT")),
+        CyberpunkButton styleBtn = new CyberpunkButton(contentX + 8, y1, 106, 18,
+                Component.literal("STYLE: " + (screenEffectStyle != null ? screenEffectStyle : "DRAW")),
                 b -> {
-                    if ("MONOCHROME_CUT".equalsIgnoreCase(screenEffectStyle)) {
+                    if ("DRAW".equalsIgnoreCase(screenEffectStyle)) {
+                        screenEffectStyle = "MONOCHROME_CUT";
+                    } else if ("MONOCHROME_CUT".equalsIgnoreCase(screenEffectStyle)) {
                         screenEffectStyle = "MANGA_OUTLINE";
                     } else if ("MANGA_OUTLINE".equalsIgnoreCase(screenEffectStyle)) {
                         screenEffectStyle = "RADIAL_SHOCK";
                     } else {
-                        screenEffectStyle = "MONOCHROME_CUT";
+                        screenEffectStyle = "DRAW";
                     }
                     b.setMessage(Component.literal("STYLE: " + screenEffectStyle));
                 },
-                0xFFFF2255, false, Component.literal("Cycle impact style: Monochrome Cut (B&W keyframe), Manga Outline (ink edges), or Radial Shock"));
+                0xFFFF2255, false, Component.literal("Cycle impact style: Draw (2-Color Manga Sketch), Monochrome Cut, Manga Outline, or Radial Shock"));
         this.addRenderableWidget(styleBtn);
 
-        CyberpunkButton invertBtn = new CyberpunkButton(contentX + 144, y1, 100, 18,
+        CyberpunkButton invertBtn = new CyberpunkButton(contentX + 118, y1, 74, 18,
                 Component.literal(screenEffectPulse ? "INVERT: YES" : "INVERT: NO"),
                 b -> {
                     screenEffectPulse = !screenEffectPulse;
@@ -659,20 +710,44 @@ public class EditMusicEntryModalScreen extends Screen {
                         cb.setAccentColor(screenEffectPulse ? 0xFF00FFCC : 0xFF8899AA);
                     }
                 },
-                screenEffectPulse ? 0xFF00FFCC : 0xFF8899AA, false, Component.literal("Toggle negative/inverted cut flashes in monochrome sequence"));
+                screenEffectPulse ? 0xFF00FFCC : 0xFF8899AA, false, Component.literal("Toggle negative/inverted cut flashes in sequence"));
         this.addRenderableWidget(invertBtn);
 
-        this.screenEffectFrequencyBox = new EditBox(this.font, contentX + 60, y2, 46, 18, Component.literal("Cut FPS"));
+        this.screenEffectFrequencyBox = new EditBox(this.font, contentX + 50, y2, 40, 18, Component.literal("Cut FPS"));
         float initialHz = entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 28.0f;
         this.screenEffectFrequencyBox.setValue(String.format(Locale.US, "%.0f", initialHz));
         this.addRenderableWidget(this.screenEffectFrequencyBox);
 
-        this.screenEffectColorBox = new EditBox(this.font, contentX + 160, y2, 60, 18, Component.literal("Hex"));
-        this.screenEffectColorBox.setValue(String.format("#%06X", entry.getScreenEffectColor() & 0x00FFFFFF));
+        int primaryColor = entry.getScreenEffectColor() != 0 ? entry.getScreenEffectColor() : 0xFFFFFFFF;
+        int secondaryColor = screenEffectSecondaryColor != 0 ? screenEffectSecondaryColor : 0xFF000000;
+        int activeColor = impactEditingSecondary ? secondaryColor : primaryColor;
+
+        this.screenEffectColorBox = new EditBox(this.font, contentX + 140, y2, 58, 18, Component.literal("Hex"));
+        this.screenEffectColorBox.setValue(String.format("#%06X", activeColor & 0x00FFFFFF));
         this.addRenderableWidget(this.screenEffectColorBox);
 
-        this.screenEffectColorPicker = new CyberpunkColorPicker(contentX + 254, card1Y + 6, entry.getScreenEffectColor(), c -> {
-            entry.setScreenEffectColor(c);
+        CyberpunkButton colorTargetBtn = new CyberpunkButton(contentX + 196, y1, 84, 18,
+                Component.literal(impactEditingSecondary ? "EDIT: INK" : "EDIT: PAPER"),
+                b -> {
+                    impactEditingSecondary = !impactEditingSecondary;
+                    b.setMessage(Component.literal(impactEditingSecondary ? "EDIT: INK" : "EDIT: PAPER"));
+                    if (b instanceof CyberpunkButton cb) {
+                        cb.setAccentColor(impactEditingSecondary ? 0xFFFF00CC : 0xFF00E5FF);
+                    }
+                    int cur = impactEditingSecondary ? screenEffectSecondaryColor : entry.getScreenEffectColor();
+                    if (screenEffectColorPicker != null) {
+                        screenEffectColorPicker.setColor(cur);
+                    }
+                },
+                impactEditingSecondary ? 0xFFFF00CC : 0xFF00E5FF, false, Component.literal("Toggle editing Paper / Light color vs Ink / Dark shadow color"));
+        this.addRenderableWidget(colorTargetBtn);
+
+        this.screenEffectColorPicker = new CyberpunkColorPicker(contentX + 284, card1Y + 6, activeColor, c -> {
+            if (impactEditingSecondary) {
+                screenEffectSecondaryColor = c;
+            } else {
+                entry.setScreenEffectColor(c);
+            }
         });
         this.screenEffectColorPicker.bindHexBox(this.screenEffectColorBox);
         this.addRenderableWidget(this.screenEffectColorPicker);
@@ -762,23 +837,17 @@ public class EditMusicEntryModalScreen extends Screen {
             float speed = parseFloat(screenEffectFrequencyBox, 28.0f);
             entry.setScreenEffectFrequency(speed);
             entry.setScreenEffectPulse(screenEffectPulse);
-            entry.setScreenEffectStyle(screenEffectStyle);
-            int clr = 0xFFFFFFFF;
-            if (screenEffectColorPicker != null) {
-                clr = screenEffectColorPicker.getColor();
-            } else if (screenEffectColorBox != null) {
-                String cStr = screenEffectColorBox.getValue().trim().replace("#", "");
-                try {
-                    clr = 0xFF000000 | (int) Long.parseLong(cStr, 16);
-                } catch (Exception ignored) {}
-            }
-            entry.setScreenEffectColor(clr);
-            entry.setScreenEffectSecondaryColor(screenEffectSecondaryColor);
-            entry.setCommand("screeneffect impact_frame " + duration + " " + screenEffectStyle);
+            String st = (screenEffectStyle != null && !screenEffectStyle.isBlank()) ? screenEffectStyle : "DRAW";
+            entry.setScreenEffectStyle(st);
+            int primary = entry.getScreenEffectColor() != 0 ? entry.getScreenEffectColor() : 0xFFFFFFFF;
+            int secondary = screenEffectSecondaryColor != 0 ? screenEffectSecondaryColor : 0xFF000000;
+            entry.setScreenEffectColor(primary);
+            entry.setScreenEffectSecondaryColor(secondary);
+            entry.setCommand("screeneffect impact_frame " + duration + " " + String.format("#%06X", primary & 0x00FFFFFF) + " " + String.format("#%06X", secondary & 0x00FFFFFF));
             if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
                 entry.setDescription(descriptionBox.getValue().trim());
             } else {
-                entry.setDescription("Impact Frame (" + screenEffectStyle + ", " + duration + "ms)");
+                entry.setDescription("Impact Frame: " + st + " (" + duration + "ms)");
             }
         } else {
             // SCREEN_SHAKE
@@ -1090,18 +1159,19 @@ public class EditMusicEntryModalScreen extends Screen {
         currentY += 28;
 
         // 2. Mode-Specific Content Area
+        paramLabelRenderers.clear();
         if (activePuppetMode == PuppetSubAction.SPAWN) {
             initSpawnControls(contentX, currentY, contentW);
-            currentY += 66;
+            currentY += 76;
         } else if (activePuppetMode == PuppetSubAction.DESPAWN) {
             initDespawnControls(contentX, currentY, contentW);
-            currentY += 66;
+            currentY += 76;
         } else if (activePuppetMode == PuppetSubAction.TOGGLE_AI) {
             initToggleAiControls(contentX, currentY, contentW);
-            currentY += 66;
+            currentY += 76;
         } else if (activePuppetMode == PuppetSubAction.EXECUTE_ACTION) {
-            initExecuteActionControls(contentX, currentY, contentW);
-            currentY += 92;
+            currentY = initExecuteActionControls(contentX, currentY, contentW);
+            currentY += 14;
         }
 
         // 3. Timestamp (Ms) Input Row
@@ -1148,16 +1218,17 @@ public class EditMusicEntryModalScreen extends Screen {
     private void initSpawnControls(int contentX, int currentY, int contentW) {
         // Parse previous coords or default
         String prevX = "~", prevY = "~", prevZ = "~";
-        String cmd = entry.getCommand().trim();
+        String cmd = entry.getCommand() != null ? entry.getCommand().trim() : "";
+        if (cmd.startsWith("/")) cmd = cmd.substring(1).trim();
         if (cmd.startsWith("summon")) {
             String[] parts = cmd.split("\\s+");
             if (parts.length >= 5) {
-                prevX = parts[2];
-                prevY = parts[3];
-                prevZ = parts[4];
+                prevX = parts[2].trim().replace(',', '.');
+                prevY = parts[3].trim().replace(',', '.');
+                prevZ = parts[4].trim().replace(',', '.');
             }
         }
-        if (prevX.equals("~") && prevY.equals("~") && prevZ.equals("~") && this.minecraft != null && this.minecraft.player != null) {
+        if (prevX.equals("~") && prevY.equals("~") && prevZ.equals("~") && (entry.getDescription() == null || !entry.getDescription().contains("~")) && this.minecraft != null && this.minecraft.player != null) {
             prevX = String.format(Locale.ROOT, "%.2f", this.minecraft.player.getX());
             prevY = String.format(Locale.ROOT, "%.2f", this.minecraft.player.getY());
             prevZ = String.format(Locale.ROOT, "%.2f", this.minecraft.player.getZ());
@@ -1271,7 +1342,7 @@ public class EditMusicEntryModalScreen extends Screen {
         }
     }
 
-    private void initExecuteActionControls(int contentX, int currentY, int contentW) {
+    private int initExecuteActionControls(int contentX, int currentY, int contentW) {
         // 1. Registered Actions Dropdown + Target Selector
         List<CyberpunkDropdown.DropdownEntry<String>> actionEntries = new ArrayList<>();
         for (PuppetActionType<?> action : ModPuppetActions.getAll()) {
@@ -1285,13 +1356,17 @@ public class EditMusicEntryModalScreen extends Screen {
         this.puppetActionDropdown = new CyberpunkDropdown<>(contentX, currentY + 12, dropdownW, 18, Component.literal("Puppet Action"));
         this.puppetActionDropdown.setOptions(actionEntries);
         this.puppetActionDropdown.selectByValue(selectedActionId);
+        int timingY = currentY + 36;
         this.puppetActionDropdown.setOnSelect(entry -> {
             this.selectedActionId = entry.getValue();
             if ("custom".equalsIgnoreCase(entry.getValue())) {
                 if (customActionIdBox != null) customActionIdBox.setVisible(true);
             } else {
                 if (customActionIdBox != null) customActionIdBox.setVisible(false);
+                updateTimingBoxesLayout(true, contentX, timingY, contentW);
             }
+            syncPuppetParamsWithAction(true);
+            this.init();
         });
         this.addRenderableWidget(this.puppetActionDropdown);
 
@@ -1303,12 +1378,11 @@ public class EditMusicEntryModalScreen extends Screen {
         this.targetSelectorBox.setHint(Component.literal("@p"));
         this.addRenderableWidget(this.targetSelectorBox);
 
-        // 2. Timings: Indication (ms), Jump (ms), Slam (ms), Recovery (ms)
-        int timingY = currentY + 36;
+        // 2. Timings: Dynamic per action type
         int colW = (contentW - 24) / 4;
 
-        // 1. Indication / Ground Charge Column (Amber)
-        this.windupBox = new EditBox(this.font, contentX + 46, timingY, colW - 46, 16, Component.literal("Indicator"));
+        // Phase 1 EditBox
+        this.windupBox = new EditBox(this.font, contentX + 46, timingY, colW - 46, 16, Component.literal("Phase 1"));
         this.windupBox.setMaxLength(6);
         this.windupBox.setValue(String.valueOf(windupMs));
         this.windupBox.setResponder(val -> {
@@ -1316,8 +1390,8 @@ public class EditMusicEntryModalScreen extends Screen {
         });
         this.addRenderableWidget(this.windupBox);
 
-        // 2. Jump Column (Indigo)
-        this.jumpBox = new EditBox(this.font, contentX + colW + 8 + 32, timingY, colW - 32, 16, Component.literal("Jump"));
+        // Phase 2 EditBox
+        this.jumpBox = new EditBox(this.font, contentX + colW + 8 + 32, timingY, colW - 32, 16, Component.literal("Phase 2"));
         this.jumpBox.setMaxLength(6);
         this.jumpBox.setValue(String.valueOf(jumpMs));
         this.jumpBox.setResponder(val -> {
@@ -1325,8 +1399,8 @@ public class EditMusicEntryModalScreen extends Screen {
         });
         this.addRenderableWidget(this.jumpBox);
 
-        // 3. Active Slam Column (Purple)
-        this.durationBox = new EditBox(this.font, contentX + (colW + 8) * 2 + 32, timingY, colW - 32, 16, Component.literal("Slam"));
+        // Phase 3 EditBox
+        this.durationBox = new EditBox(this.font, contentX + (colW + 8) * 2 + 32, timingY, colW - 32, 16, Component.literal("Phase 3"));
         this.durationBox.setMaxLength(6);
         this.durationBox.setValue(String.valueOf(durationMs));
         this.durationBox.setResponder(val -> {
@@ -1334,14 +1408,215 @@ public class EditMusicEntryModalScreen extends Screen {
         });
         this.addRenderableWidget(this.durationBox);
 
-        // 4. Recovery Column (Cyan)
-        this.recoveryBox = new EditBox(this.font, contentX + (colW + 8) * 3 + 48, timingY, colW - 48, 16, Component.literal("Recovery"));
+        // Phase 4 EditBox
+        this.recoveryBox = new EditBox(this.font, contentX + (colW + 8) * 3 + 48, timingY, colW - 48, 16, Component.literal("Phase 4"));
         this.recoveryBox.setMaxLength(6);
         this.recoveryBox.setValue(String.valueOf(recoveryMs));
         this.recoveryBox.setResponder(val -> {
             try { this.recoveryMs = Math.max(0, Integer.parseInt(val.trim())); } catch (Exception ignored) {}
         });
         this.addRenderableWidget(this.recoveryBox);
+
+        updateTimingBoxesLayout(false, contentX, timingY, contentW);
+
+        // 3. Action Parameters Panel
+        int paramsY = timingY + 48;
+        int headerY = paramsY + 6;
+
+        // [+ ADD PARAM] button in the panel header
+        CyberpunkButton addParamBtn = new CyberpunkButton(
+                contentX + contentW - 90, headerY - 2, 86, 16,
+                Component.literal("➕ ADD PARAM"),
+                b -> {
+                    String newKey = "param_" + (customParamCounter++);
+                    while (currentPuppetParams.containsKey(newKey)) {
+                        newKey = "param_" + (customParamCounter++);
+                    }
+                    currentPuppetParams.put(newKey, "1.0");
+                    this.init();
+                },
+                CYAN_MAIN, false, Component.literal("Add custom parameter to this puppet action")
+        );
+        this.addRenderableWidget(addParamBtn);
+
+        int startY = paramsY + 26;
+        PuppetActionType<?> act = ModPuppetActions.resolve(this.selectedActionId);
+        int numCols = 2;
+        int colGap = 8;
+        int pColW = (contentW - 16 - colGap) / numCols;
+        int rowH = 22;
+        int itemIndex = 0;
+
+        for (Map.Entry<String, String> pEntry : new ArrayList<>(currentPuppetParams.entrySet())) {
+            String pKey = pEntry.getKey();
+            String pVal = pEntry.getValue() != null ? pEntry.getValue() : "";
+            ActionParameter<?> declaredParam = (act != null) ? act.getParameter(pKey).orElse(null) : null;
+
+            int col = itemIndex % numCols;
+            int row = itemIndex / numCols;
+            int itemX = contentX + 8 + col * (pColW + colGap);
+            int itemY = startY + row * rowH;
+
+            if (declaredParam != null && declaredParam.getType() == ActionParameter.Type.BOOLEAN) {
+                boolean isTrue = "true".equalsIgnoreCase(pVal) || "1".equals(pVal);
+                String pLabel = declaredParam.getLabel().getString();
+                CyberpunkButton toggleBtn = new CyberpunkButton(
+                        itemX, itemY, pColW, 18,
+                        Component.literal((isTrue ? "[✓] " : "[ ] ") + pLabel.toUpperCase(Locale.ROOT) + ": " + (isTrue ? "YES" : "NO")),
+                        b -> {
+                            boolean next = !("true".equalsIgnoreCase(currentPuppetParams.getOrDefault(pKey, "false")) || "1".equals(currentPuppetParams.getOrDefault(pKey, "false")));
+                            currentPuppetParams.put(pKey, String.valueOf(next));
+                            b.setMessage(Component.literal((next ? "[✓] " : "[ ] ") + pLabel.toUpperCase(Locale.ROOT) + ": " + (next ? "YES" : "NO")));
+                            ((CyberpunkButton) b).setAccentColor(next ? 0xFF00FF88 : 0xFF667788);
+                        },
+                        isTrue ? 0xFF00FF88 : 0xFF667788, false, declaredParam.getDescription()
+                );
+                this.addRenderableWidget(toggleBtn);
+            } else if (declaredParam != null && declaredParam.getType() == ActionParameter.Type.OPTIONS) {
+                List<String> opts = declaredParam.getOptions();
+                String pLabel = declaredParam.getLabel().getString();
+                CyberpunkButton optBtn = new CyberpunkButton(
+                        itemX, itemY, pColW, 18,
+                        Component.literal(pLabel.toUpperCase(Locale.ROOT) + ": " + pVal),
+                        b -> {
+                            int nextIdx = (opts.indexOf(currentPuppetParams.getOrDefault(pKey, "")) + 1) % opts.size();
+                            String nextVal = opts.get(Math.max(0, nextIdx));
+                            currentPuppetParams.put(pKey, nextVal);
+                            b.setMessage(Component.literal(pLabel.toUpperCase(Locale.ROOT) + ": " + nextVal));
+                        },
+                        CYAN_MAIN, false, declaredParam.getDescription()
+                );
+                this.addRenderableWidget(optBtn);
+            } else if (declaredParam != null) {
+                // Numeric / String declared parameter
+                String pLabelStr = declaredParam.getLabel().getString() + ":";
+                int labelW = Math.min(pColW / 2, this.font.width(pLabelStr) + 4);
+                int boxX = itemX + labelW;
+                int boxW = pColW - labelW;
+
+                final int finalItemX = itemX;
+                final int finalItemY = itemY;
+                paramLabelRenderers.add(g -> g.drawString(this.font, pLabelStr, finalItemX, finalItemY + 5, 0xFFAABBCC, false));
+
+                EditBox pBox = new EditBox(this.font, boxX, itemY, boxW, 18, declaredParam.getLabel());
+                pBox.setValue(pVal);
+                pBox.setHint(Component.literal(declaredParam.getDefaultValueString()));
+                pBox.setTooltip(Tooltip.create(declaredParam.getDescription()));
+                pBox.setResponder(newVal -> currentPuppetParams.put(pKey, newVal.trim()));
+                this.addRenderableWidget(pBox);
+            } else {
+                // Custom / dynamic parameter (editable key + editable val + delete button)
+                int delW = 18;
+                int remainingW = pColW - delW - 4;
+                int keyW = remainingW / 2;
+                int valW = remainingW - keyW;
+
+                EditBox kBox = new EditBox(this.font, itemX, itemY, keyW, 18, Component.literal("Key"));
+                kBox.setValue(pKey);
+                kBox.setHint(Component.literal("key"));
+
+                EditBox vBox = new EditBox(this.font, itemX + keyW + 2, itemY, valW, 18, Component.literal("Val"));
+                vBox.setValue(pVal);
+                vBox.setHint(Component.literal("value"));
+
+                final String oldKey = pKey;
+                kBox.setResponder(newKey -> {
+                    String v = currentPuppetParams.getOrDefault(oldKey, "");
+                    currentPuppetParams.remove(oldKey);
+                    if (!newKey.trim().isEmpty()) {
+                        currentPuppetParams.put(newKey.trim(), v);
+                    }
+                });
+                vBox.setResponder(newVal -> {
+                    String k = kBox.getValue().trim();
+                    if (!k.isEmpty()) {
+                        currentPuppetParams.put(k, newVal.trim());
+                    }
+                });
+
+                CyberpunkButton delBtn = new CyberpunkButton(
+                        itemX + pColW - delW, itemY, delW, 18,
+                        Component.literal("✕"),
+                        b -> {
+                            currentPuppetParams.remove(oldKey);
+                            this.init();
+                        },
+                        RED_CANCEL, false, Component.literal("Remove custom parameter")
+                );
+
+                this.addRenderableWidget(kBox);
+                this.addRenderableWidget(vBox);
+                this.addRenderableWidget(delBtn);
+            }
+
+            itemIndex++;
+        }
+
+        int totalRows = Math.max(1, (itemIndex + numCols - 1) / numCols);
+        this.actionParamsCardHeight = 28 + totalRows * rowH + 6;
+
+        return paramsY + this.actionParamsCardHeight;
+    }
+
+    private int getPhaseMs(ActionTimingPhase phase) {
+        if (phase == null) return 0;
+        return switch (phase.id().toLowerCase(Locale.ROOT)) {
+            case "windup" -> windupMs;
+            case "jump" -> jumpMs;
+            case "duration" -> durationMs;
+            case "recovery" -> recoveryMs;
+            default -> 0;
+        };
+    }
+
+    private void updateTimingBoxesLayout(boolean resetValuesToDefaults, int contentX, int timingY, int contentW) {
+        PuppetActionType<?> act = ModPuppetActions.resolve(this.selectedActionId);
+        List<ActionTimingPhase> phases = act.getTimingPhases();
+        int phaseCount = Math.max(1, Math.min(4, phases.size()));
+        int colW = (contentW - (8 * (phaseCount - 1))) / phaseCount;
+
+        if (windupBox != null) windupBox.setVisible(false);
+        if (jumpBox != null) jumpBox.setVisible(false);
+        if (durationBox != null) durationBox.setVisible(false);
+        if (recoveryBox != null) recoveryBox.setVisible(false);
+
+        if (resetValuesToDefaults) {
+            this.windupMs = 0;
+            this.jumpMs = 0;
+            this.durationMs = 0;
+            this.recoveryMs = 0;
+        }
+
+        for (int i = 0; i < Math.min(4, phases.size()); i++) {
+            ActionTimingPhase phase = phases.get(i);
+            EditBox targetBox = switch (phase.id().toLowerCase(Locale.ROOT)) {
+                case "windup" -> windupBox;
+                case "jump" -> jumpBox;
+                case "duration" -> durationBox;
+                case "recovery" -> recoveryBox;
+                default -> (i == 0 ? windupBox : (i == 1 ? jumpBox : (i == 2 ? durationBox : recoveryBox)));
+            };
+
+            if (targetBox != null) {
+                targetBox.setVisible(true);
+                int colX = contentX + (colW + 8) * i;
+                int labelW = this.font.width(phase.label() + ":") + 4;
+                int bX = colX + labelW;
+                int bW = Math.max(28, colW - labelW);
+                targetBox.setX(bX);
+                targetBox.setWidth(bW);
+                targetBox.setHint(Component.literal(String.valueOf(phase.defaultMs())));
+                if (resetValuesToDefaults) {
+                    targetBox.setValue(String.valueOf(phase.defaultMs()));
+                    switch (phase.id().toLowerCase(Locale.ROOT)) {
+                        case "windup" -> this.windupMs = phase.defaultMs();
+                        case "jump" -> this.jumpMs = phase.defaultMs();
+                        case "duration" -> this.durationMs = phase.defaultMs();
+                        case "recovery" -> this.recoveryMs = phase.defaultMs();
+                    }
+                }
+            }
+        }
     }
 
     private void initStandardWidgets(int panelLeft, int panelTop, int panelWidth, int panelHeight) {
@@ -1923,9 +2198,9 @@ public class EditMusicEntryModalScreen extends Screen {
                 entry.setDurationMs(0);
                 entry.setRecoveryMs(0);
 
-                String x = spawnXBox != null ? spawnXBox.getValue().trim() : "~";
-                String y = spawnYBox != null ? spawnYBox.getValue().trim() : "~";
-                String z = spawnZBox != null ? spawnZBox.getValue().trim() : "~";
+                String x = spawnXBox != null ? spawnXBox.getValue().trim().replace(',', '.') : "~";
+                String y = spawnYBox != null ? spawnYBox.getValue().trim().replace(',', '.') : "~";
+                String z = spawnZBox != null ? spawnZBox.getValue().trim().replace(',', '.') : "~";
                 if (x.isEmpty()) x = "~";
                 if (y.isEmpty()) y = "~";
                 if (z.isEmpty()) z = "~";
@@ -1978,11 +2253,22 @@ public class EditMusicEntryModalScreen extends Screen {
                 entry.setJumpMs(jumpMs);
                 entry.setDurationMs(durationMs);
                 entry.setRecoveryMs(recoveryMs);
+                entry.setPuppetParams(new LinkedHashMap<>(currentPuppetParams));
 
                 String actionId = (selectedActionId != null && !selectedActionId.isBlank()) ? selectedActionId : "fractured_utils:leap_slam";
                 String tgt = (targetSelectorBox != null && !targetSelectorBox.getValue().trim().isEmpty()) ? targetSelectorBox.getValue().trim() : "@p";
-                entry.setCommand(String.format(Locale.ROOT, "puppet_action tag:%s action:%s target:%s windup:%d jump:%d duration:%d recovery:%d",
+
+                StringBuilder cmdBuilder = new StringBuilder();
+                cmdBuilder.append(String.format(Locale.ROOT, "puppet_action tag:%s action:%s target:%s windup:%d jump:%d duration:%d recovery:%d",
                         actorTag, actionId, tgt, windupMs, jumpMs, durationMs, recoveryMs));
+                for (Map.Entry<String, String> pEntry : currentPuppetParams.entrySet()) {
+                    String pKey = pEntry.getKey().trim();
+                    String pVal = pEntry.getValue() != null ? pEntry.getValue().trim() : "";
+                    if (!pKey.isEmpty() && !pVal.isEmpty()) {
+                        cmdBuilder.append(" ").append(pKey).append(":").append(pVal);
+                    }
+                }
+                entry.setCommand(cmdBuilder.toString());
 
                 if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
                     entry.setDescription(descriptionBox.getValue().trim());
@@ -2173,10 +2459,14 @@ public class EditMusicEntryModalScreen extends Screen {
             mouseX /= scale;
             mouseY /= scale;
         }
-        if (dialogLetterSoundDropdown != null && dialogLetterSoundDropdown.isOpen()) {
-            if (dialogLetterSoundDropdown.mouseScrolled(mouseX, mouseY, amount)) {
-                return true;
-            }
+        if (puppetActionDropdown != null && puppetActionDropdown.mouseScrolled(mouseX, mouseY, amount)) {
+            return true;
+        }
+        if (typeDropdown != null && typeDropdown.mouseScrolled(mouseX, mouseY, amount)) {
+            return true;
+        }
+        if (dialogLetterSoundDropdown != null && dialogLetterSoundDropdown.mouseScrolled(mouseX, mouseY, amount)) {
+            return true;
         }
         if (this.commandSuggestions != null && this.commandSuggestions.mouseScrolled(amount)) {
             return true;
@@ -2193,7 +2483,35 @@ public class EditMusicEntryModalScreen extends Screen {
             dragX /= scale;
             dragY /= scale;
         }
+        if (puppetActionDropdown != null && puppetActionDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
+            return true;
+        }
+        if (typeDropdown != null && typeDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
+            return true;
+        }
+        if (dialogLetterSoundDropdown != null && dialogLetterSoundDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
+            return true;
+        }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
+        if (puppetActionDropdown != null && puppetActionDropdown.mouseReleased(mouseX, mouseY, button)) {
+            return true;
+        }
+        if (typeDropdown != null && typeDropdown.mouseReleased(mouseX, mouseY, button)) {
+            return true;
+        }
+        if (dialogLetterSoundDropdown != null && dialogLetterSoundDropdown.mouseReleased(mouseX, mouseY, button)) {
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
@@ -2277,8 +2595,26 @@ public class EditMusicEntryModalScreen extends Screen {
             guiGraphics.drawString(this.font, "INTENSITY:", contentX + 10, card1Y + 40, TEXT_LABEL, false);
             guiGraphics.drawString(this.font, "Full RGB spectrum shader rotation without solid color overlay.", contentX + 128, card1Y + 40, TEXT_MUTED, false);
         } else if ("IMPACT_FRAME".equalsIgnoreCase(activeScreenEffectMode)) {
-            guiGraphics.drawString(this.font, "CUT FPS:", contentX + 10, card1Y + 40, TEXT_LABEL, false);
-            guiGraphics.drawString(this.font, "ACCENT:", contentX + 112, card1Y + 40, TEXT_LABEL, false);
+            guiGraphics.drawString(this.font, "CUT FPS:", contentX + 6, card1Y + 40, TEXT_LABEL, false);
+            String label = impactEditingSecondary ? "INK HEX:" : "PAPER HEX:";
+            guiGraphics.drawString(this.font, label, contentX + 92, card1Y + 40, TEXT_LABEL, false);
+
+            int pClr = entry.getScreenEffectColor() != 0 ? entry.getScreenEffectColor() : 0xFFFFFFFF;
+            int sClr = screenEffectSecondaryColor != 0 ? screenEffectSecondaryColor : 0xFF000000;
+
+            // Swatch 1 (Paper/Light)
+            guiGraphics.fill(contentX + 203, card1Y + 36, contentX + 237, card1Y + 54, 0xFF222222);
+            guiGraphics.fill(contentX + 204, card1Y + 37, contentX + 236, card1Y + 53, pClr);
+            if (!impactEditingSecondary) {
+                guiGraphics.renderOutline(contentX + 202, card1Y + 35, 36, 20, 0xFF00E5FF);
+            }
+
+            // Swatch 2 (Ink/Dark)
+            guiGraphics.fill(contentX + 241, card1Y + 36, contentX + 275, card1Y + 54, 0xFF222222);
+            guiGraphics.fill(contentX + 242, card1Y + 37, contentX + 274, card1Y + 53, sClr);
+            if (impactEditingSecondary) {
+                guiGraphics.renderOutline(contentX + 240, card1Y + 35, 36, 20, 0xFFFF00CC);
+            }
         } else {
             // SCREEN_SHAKE
             guiGraphics.drawString(this.font, "INTENSITY:", contentX + 6, card1Y + 12, TEXT_LABEL, false);
@@ -2426,22 +2762,47 @@ public class EditMusicEntryModalScreen extends Screen {
             guiGraphics.drawString(this.font, "Combat Target:", contentX + 270, actionY, 0xFFAABBCC, false);
 
             int timingY = actionY + 39;
-            int colW = (contentW - 24) / 4;
-            guiGraphics.drawString(this.font, "Indicator:", contentX, timingY + 4, COLOR_WINDUP, false);
-            guiGraphics.drawString(this.font, "Jump:", contentX + colW + 8, timingY + 4, COLOR_JUMP, false);
-            guiGraphics.drawString(this.font, "Slam:", contentX + (colW + 8) * 2, timingY + 4, COLOR_ACTIVE, false);
-            guiGraphics.drawString(this.font, "Recovery:", contentX + (colW + 8) * 3, timingY + 4, COLOR_RECOVERY, false);
+            PuppetActionType<?> actType = ModPuppetActions.resolve(this.selectedActionId);
+            List<ActionTimingPhase> phases = actType.getTimingPhases();
+            int phaseCount = Math.max(1, Math.min(4, phases.size()));
+            int colW = (contentW - (8 * (phaseCount - 1))) / phaseCount;
+            for (int i = 0; i < Math.min(4, phases.size()); i++) {
+                ActionTimingPhase phase = phases.get(i);
+                int colX = contentX + (colW + 8) * i;
+                guiGraphics.drawString(this.font, phase.label() + ":", colX, timingY + 4, phase.color(), false);
+            }
 
-            // Live 5-Part Segmented Duration Preview Bar
+            // Live Segmented Duration Preview Bar
             int barY = timingY + 24;
             int barH = 18;
             renderLiveDurationBar(guiGraphics, contentX, barY, contentW, barH);
+
+            // Action Parameters Card
+            int cardY = timingY + 48;
+            int cardH = this.actionParamsCardHeight;
+            drawInputFrame(guiGraphics, contentX, cardY, contentW, cardH, false, false);
+            guiGraphics.drawString(this.font, "⚙ ACTION PARAMETERS", contentX + 8, cardY + 7, CYAN_MAIN, false);
+
+            int paramCount = this.currentPuppetParams.size();
+            String badgeText = paramCount + (paramCount == 1 ? " PARAMETER" : " PARAMETERS");
+            drawPillBadge(guiGraphics, contentX + 132, cardY + 5, badgeText, 0xFFAA55FF, 0xFFAA55FF);
+
+            if (paramCount == 0) {
+                guiGraphics.drawString(this.font, "No custom parameters configured. Click [+ ADD PARAM] to add overrides.", contentX + 10, cardY + 26, TEXT_MUTED, false);
+            }
+
+            for (Consumer<GuiGraphics> r : paramLabelRenderers) {
+                r.accept(guiGraphics);
+            }
         }
 
         // 3. Timestamp & Description Labels
-        int tsLabelY = panelTop + (activePuppetMode == PuppetSubAction.EXECUTE_ACTION ? 210 : 184);
-        guiGraphics.drawString(this.font, "Timestamp (ms):", contentX, tsLabelY, 0xFFAABBCC, false);
-        guiGraphics.drawString(this.font, "Description / Note:", contentX, tsLabelY + 24, 0xFFAABBCC, false);
+        if (timestampBox != null) {
+            guiGraphics.drawString(this.font, "Timestamp (ms):", contentX, timestampBox.getY() - 10, 0xFFAABBCC, false);
+        }
+        if (descriptionBox != null) {
+            guiGraphics.drawString(this.font, "Description / Note:", contentX, descriptionBox.getY() - 10, 0xFFAABBCC, false);
+        }
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
@@ -2451,7 +2812,16 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private void renderLiveDurationBar(GuiGraphics guiGraphics, int x, int y, int width, int height) {
-        int totalMs = windupMs + jumpMs + durationMs + recoveryMs;
+        PuppetActionType<?> actType = ModPuppetActions.resolve(this.selectedActionId);
+        List<ActionTimingPhase> phases = actType.getTimingPhases();
+
+        int totalMs = 0;
+        for (ActionTimingPhase phase : phases) {
+            totalMs += getPhaseMs(phase);
+        }
+        if (totalMs <= 0 && phases.isEmpty()) {
+            totalMs = windupMs + jumpMs + durationMs + recoveryMs;
+        }
 
         // Container Background & Outline
         guiGraphics.fill(x, y, x + width, y + height, 0xEE060C12);
@@ -2466,69 +2836,38 @@ public class EditMusicEntryModalScreen extends Screen {
         }
 
         int usableW = width - 4;
-        int windupW = (int) Math.round(((double) windupMs / totalMs) * usableW);
-        int jumpW = (int) Math.round(((double) jumpMs / totalMs) * usableW);
-        int durationW = (int) Math.round(((double) durationMs / totalMs) * usableW);
-        int recoveryW = usableW - windupW - jumpW - durationW;
-
         int curX = x + 2;
-
-        // 1. Indication / Ground Charge Bar
-        if (windupW > 0) {
-            guiGraphics.fill(curX, y + 2, curX + windupW, y + height - 2, COLOR_WINDUP);
-            if (windupW >= 48) {
-                String label = "INDICATOR (" + windupMs + "ms)";
-                guiGraphics.drawCenteredString(this.font, label, curX + (windupW / 2), y + 5, 0xFF000000);
-            } else if (windupW >= 24) {
-                guiGraphics.drawCenteredString(this.font, windupMs + "ms", curX + (windupW / 2), y + 5, 0xFF000000);
-            }
-            curX += windupW;
-        }
-
-        // 2. Jump Bar (Airborne Ascent & Descent)
-        if (jumpW > 0) {
-            guiGraphics.fill(curX, y + 2, curX + jumpW, y + height - 2, COLOR_JUMP);
-            if (jumpW >= 40) {
-                String label = "JUMP (" + jumpMs + "ms)";
-                guiGraphics.drawCenteredString(this.font, label, curX + (jumpW / 2), y + 5, 0xFFFFFFFF);
-            } else if (jumpW >= 20) {
-                guiGraphics.drawCenteredString(this.font, jumpMs + "ms", curX + (jumpW / 2), y + 5, 0xFFFFFFFF);
-            }
-            curX += jumpW;
-        }
-
-        // 3. Execution Point (Touchdown Slam Impact)
         int execX = curX;
 
-        // 4. Active Slam Attack Duration Bar
-        if (durationW > 0) {
-            guiGraphics.fill(curX, y + 2, curX + durationW, y + height - 2, COLOR_ACTIVE);
-            if (durationW >= 44) {
-                String label = "ATTACK (" + durationMs + "ms)";
-                guiGraphics.drawCenteredString(this.font, label, curX + (durationW / 2), y + 5, 0xFFFFFFFF);
-            } else if (durationW >= 20) {
-                guiGraphics.drawCenteredString(this.font, durationMs + "ms", curX + (durationW / 2), y + 5, 0xFFFFFFFF);
+        for (int i = 0; i < phases.size(); i++) {
+            ActionTimingPhase phase = phases.get(i);
+            int pMs = getPhaseMs(phase);
+            int pW = (int) Math.round(((double) pMs / totalMs) * usableW);
+            if (i == phases.size() - 1) {
+                pW = Math.max(0, (x + width - 2) - curX);
             }
-            curX += durationW;
-        }
+            int clr = phase.color();
+            String pLabel = phase.label().toUpperCase(Locale.ROOT);
+            if (phase.isExecutionPoint()) {
+                execX = curX;
+            }
 
-        int impactX = curX;
-        if (durationW > 0 && recoveryW > 0) {
-            guiGraphics.fill(impactX - 1, y + 1, impactX + 1, y + height - 1, 0xFFFF3355);
-        }
+            if (pW > 0) {
+                guiGraphics.fill(curX, y + 2, curX + pW, y + height - 2, clr);
 
-        // 5. Recovery Bar (Stun / Recovery state)
-        if (recoveryW > 0) {
-            guiGraphics.fill(curX, y + 2, curX + recoveryW, y + height - 2, COLOR_RECOVERY);
-            if (recoveryW >= 48) {
-                String label = "RECOVERY (" + recoveryMs + "ms)";
-                guiGraphics.drawCenteredString(this.font, label, curX + (recoveryW / 2), y + 5, 0xFF000000);
-            } else if (recoveryW >= 24) {
-                guiGraphics.drawCenteredString(this.font, recoveryMs + "ms", curX + (recoveryW / 2), y + 5, 0xFF000000);
+                int textClr = isLightColor(clr) ? 0xFF000000 : 0xFFFFFFFF;
+                String fullLabel = pLabel + " (" + pMs + "ms)";
+                if (pW >= this.font.width(fullLabel) + 6) {
+                    guiGraphics.drawCenteredString(this.font, fullLabel, curX + (pW / 2), y + 5, textClr);
+                } else if (pW >= this.font.width(pMs + "ms") + 4) {
+                    guiGraphics.drawCenteredString(this.font, pMs + "ms", curX + (pW / 2), y + 5, textClr);
+                }
+
+                curX += pW;
             }
         }
 
-        // 6. Attack Execution Square (Touchdown ground impact)
+        // Attack Execution Square
         int centerY = y + (height / 2);
         guiGraphics.fill(execX - 1, y - 2, execX + 1, y + height + 2, 0xFFFFFFFF);
         guiGraphics.fill(execX - 4, centerY - 4, execX + 4, centerY + 4, 0xFF000000);
@@ -2540,11 +2879,25 @@ public class EditMusicEntryModalScreen extends Screen {
         if (this.timestampBox != null) {
             try { startMs = Math.max(0L, Long.parseLong(this.timestampBox.getValue().trim())); } catch (Exception ignored) {}
         }
-        long slamMs = startMs + windupMs + jumpMs;
-        String timingDetail = String.format(Locale.ROOT, "Start: %dms  |  💥 SLAM: %dms  |  Total: %dms", startMs, slamMs, totalMs);
+        long execOffset = 0;
+        for (ActionTimingPhase phase : phases) {
+            if (phase.isExecutionPoint()) break;
+            execOffset += getPhaseMs(phase);
+        }
+        long execTotalTime = startMs + execOffset;
+        String execLabel = actType.getExecutionLabel();
+        String timingDetail = String.format(Locale.ROOT, "Start: %dms  |  💥 %s: %dms  |  Total: %dms", startMs, execLabel, execTotalTime, totalMs);
         int textW = this.font.width(timingDetail);
         guiGraphics.fill(x, y - 12, x + textW + 8, y - 1, 0xEE060C12);
         guiGraphics.drawString(this.font, timingDetail, x + 4, y - 10, CYAN_MAIN, false);
+    }
+
+    private static boolean isLightColor(int color) {
+        int r = (color >> 16) & 0xFF;
+        int g = (color >> 8) & 0xFF;
+        int b = color & 0xFF;
+        double luma = 0.299 * r + 0.587 * g + 0.114 * b;
+        return luma > 150;
     }
 
     private void renderStandardScreen(GuiGraphics guiGraphics, int panelLeft, int panelTop, int panelWidth, int panelHeight,

@@ -18,6 +18,9 @@ import net.dandare21.fracturedutils.network.packet.C2SDeleteMusicSequencePacket;
 import net.dandare21.fracturedutils.network.packet.C2SSaveMusicSequencePacket;
 import net.dandare21.fracturedutils.network.packet.C2SSpawnPuppetPacket;
 import net.dandare21.fracturedutils.network.packet.C2SStartMusicSequencePacket;
+import net.dandare21.fracturedutils.puppet.fsm.ActionTimingPhase;
+import net.dandare21.fracturedutils.puppet.fsm.PuppetActionType;
+import net.dandare21.fracturedutils.puppet.registry.ModPuppetActions;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -1127,11 +1130,18 @@ public class MusicSequenceScreen extends Screen {
                             } else {
                                 String aTag = channel.getActorTag().isBlank() ? channel.getName().toLowerCase(Locale.ROOT).replace(" ", "_") : channel.getActorTag();
                                 newEntry.setSubAction("EXECUTE_ACTION");
-                                newEntry.setCommand(String.format(Locale.ROOT, "puppet_action tag:%s action:fractured_utils:leap_slam target:@p windup:500 jump:1500 duration:800 recovery:600", aTag));
-                                newEntry.setWindupMs(500);
-                                newEntry.setJumpMs(1500);
-                                newEntry.setDurationMs(800);
-                                newEntry.setRecoveryMs(600);
+                                PuppetActionType<?> defAct = ModPuppetActions.LEAP_SLAM;
+                                List<ActionTimingPhase> phases = defAct.getTimingPhases();
+                                int wMs = phases.size() > 0 ? phases.get(0).defaultMs() : 500;
+                                int jMs = phases.size() > 1 ? phases.get(1).defaultMs() : 1500;
+                                int dMs = phases.size() > 2 ? phases.get(2).defaultMs() : 800;
+                                int rMs = phases.size() > 3 ? phases.get(3).defaultMs() : 600;
+                                newEntry.setWindupMs(wMs);
+                                newEntry.setJumpMs(jMs);
+                                newEntry.setDurationMs(dMs);
+                                newEntry.setRecoveryMs(rMs);
+                                newEntry.setCommand(String.format(Locale.ROOT, "puppet_action tag:%s action:%s target:@p windup:%d jump:%d duration:%d recovery:%d",
+                                        aTag, defAct.getId(), wMs, jMs, dMs, rMs));
                                 newEntry.setDescription("Leap Slam");
                             }
                         } else if (channel.getType().equalsIgnoreCase("DIALOG")) {
@@ -1533,11 +1543,13 @@ public class MusicSequenceScreen extends Screen {
             long ms = sel.getTimestampMs() % 1000;
             int chIdx = getChannelIndex(sel);
             String chName = (chIdx < channels.size()) ? channels.get(chIdx).getName() : sel.getActionType();
-            long slamTotalMs = sel.getTimestampMs() + sel.getWindupMs() + sel.getJumpMs();
-            long sSec = slamTotalMs / 1000;
-            long sMs = slamTotalMs % 1000;
+            PuppetActionType<?> actType = ModPuppetActions.resolve(sel.getCommand());
+            String execLabel = actType.getExecutionLabel();
+            long execTotalMs = sel.getTimestampMs() + sel.getWindupMs() + sel.getJumpMs();
+            long sSec = execTotalMs / 1000;
+            long sMs = execTotalMs % 1000;
             String selStr = (sel.getWindupMs() + sel.getJumpMs() > 0)
-                    ? String.format("CH%d (%s) @ %02d:%02d.%03d [SLAM %02d:%02d.%03d]", chIdx + 1, chName, sec / 60, sec % 60, ms, sSec / 60, sSec % 60, sMs)
+                    ? String.format("CH%d (%s) @ %02d:%02d.%03d [%s %02d:%02d.%03d]", chIdx + 1, chName, sec / 60, sec % 60, ms, execLabel, sSec / 60, sSec % 60, sMs)
                     : String.format("CH%d (%s) @ %02d:%02d.%03d", chIdx + 1, chName, sec / 60, sec % 60, ms);
             if (this.font.width(selStr) > 230) {
                 selStr = this.font.plainSubstrByWidth(selStr, 224) + "..";
@@ -2033,153 +2045,135 @@ public class MusicSequenceScreen extends Screen {
                             guiGraphics.drawString(this.font, durBadge, bx + bw + 4, barY + 3, 0xFFAABBCC, false);
                         }
                     } else {
-                        // Render multi-color segmented duration bar
-                        double windupW = (entry.getWindupMs() / 1000.0) * pixelsPerSecond;
-                        double jumpW = (entry.getJumpMs() / 1000.0) * pixelsPerSecond;
-                        double durationW = (entry.getDurationMs() / 1000.0) * pixelsPerSecond;
-                        double recoveryW = (entry.getRecoveryMs() / 1000.0) * pixelsPerSecond;
-                        double totalW = Math.max(8.0, windupW + jumpW + durationW + recoveryW);
+                        // Render multi-color segmented duration bar for puppet actions
+                        PuppetActionType<?> actType = ModPuppetActions.resolve(entry.getCommand());
+                        List<ActionTimingPhase> phases = actType.getTimingPhases();
 
-                    if (entryX + totalW >= timelineTrackLeft && entryX <= timelineLeft + timelineWidth) {
-                        int bx = (int) entryX;
-                        int bw = (int) totalW;
-                        int barY = entryTrackY + 4;
-                        int barHeight = channelHeight - 8;
-
-                        boolean isHovered = (scaledMouseX >= bx - 4 && scaledMouseX <= bx + bw + 4 &&
-                                scaledMouseY >= entryTrackY && scaledMouseY <= entryTrackY + channelHeight);
-
-                        // Selection Aura
-                        if (isSelected) {
-                            long now = System.currentTimeMillis();
-                            int auraColor = (now / 300) % 2 == 0 ? 0xFFFFFFFF : CYAN_MAIN;
-                            guiGraphics.fill(bx - 3, barY - 2, bx + bw + 3, barY + barHeight + 2, auraColor);
+                        int totalMs = 0;
+                        for (ActionTimingPhase phase : phases) {
+                            totalMs += switch (phase.id().toLowerCase(Locale.ROOT)) {
+                                case "windup" -> entry.getWindupMs();
+                                case "jump" -> entry.getJumpMs();
+                                case "duration" -> entry.getDurationMs();
+                                case "recovery" -> entry.getRecoveryMs();
+                                default -> 0;
+                            };
                         }
+                        if (totalMs <= 0 && phases.isEmpty()) {
+                            totalMs = entry.getWindupMs() + entry.getJumpMs() + entry.getDurationMs() + entry.getRecoveryMs();
+                        }
+                        double totalW = Math.max(8.0, (totalMs / 1000.0) * pixelsPerSecond);
 
-                        // Background
-                        guiGraphics.fill(bx, barY, bx + bw, barY + barHeight, 0xEE060C12);
+                        if (entryX + totalW >= timelineTrackLeft && entryX <= timelineLeft + timelineWidth) {
+                            int bx = (int) entryX;
+                            int bw = (int) totalW;
+                            int barY = entryTrackY + 4;
+                            int barHeight = channelHeight - 8;
 
-                        int ww = (int) Math.round(windupW);
-                        int jw = (int) Math.round(jumpW);
-                        int dw = (int) Math.round(durationW);
+                            boolean isHovered = (scaledMouseX >= bx - 4 && scaledMouseX <= bx + bw + 4 &&
+                                    scaledMouseY >= entryTrackY && scaledMouseY <= entryTrackY + channelHeight);
 
-                        int curX = bx;
-
-                        // 1. Indication / Ground Telegraph Bar (where the attack is indicated)
-                        if (ww > 0) {
-                            int wEnd = curX + ww;
-                            guiGraphics.fill(curX, barY + 1, wEnd, barY + barHeight - 1, 0xDDFF9900);
-
-                            // Left start notch for indication
-                            guiGraphics.fill(curX, barY, curX + 2, barY + barHeight, 0xFFFFCC00);
-
-                            if (wEnd - curX >= 48) {
-                                String txt = "INDICATOR (" + entry.getWindupMs() + "ms)";
-                                guiGraphics.drawCenteredString(this.font, txt, curX + (wEnd - curX) / 2, barY + 3, 0xFF000000);
-                            } else if (wEnd - curX >= 22) {
-                                guiGraphics.drawCenteredString(this.font, entry.getWindupMs() + "ms", curX + (wEnd - curX) / 2, barY + 3, 0xFF000000);
+                            // Selection Aura
+                            if (isSelected) {
+                                long now = System.currentTimeMillis();
+                                int auraColor = (now / 300) % 2 == 0 ? 0xFFFFFFFF : CYAN_MAIN;
+                                guiGraphics.fill(bx - 3, barY - 2, bx + bw + 3, barY + barHeight + 2, auraColor);
                             }
-                            curX = wEnd;
-                        }
 
-                        // 2. Jump Bar (Ascent & Descent through the air)
-                        if (jw > 0) {
-                            int jEnd = curX + jw;
-                            guiGraphics.fill(curX, barY + 1, jEnd, barY + barHeight - 1, 0xDD4A69BD);
+                            // Background
+                            guiGraphics.fill(bx, barY, bx + bw, barY + barHeight, 0xEE060C12);
 
-                            // Divider line between indicator and jump
-                            guiGraphics.fill(curX, barY, curX + 1, barY + barHeight, 0xFF6C88C9);
+                            int curX = bx;
+                            int execX = curX;
 
-                            if (jEnd - curX >= 40) {
-                                String txt = "JUMP (" + entry.getJumpMs() + "ms)";
-                                guiGraphics.drawCenteredString(this.font, txt, curX + (jEnd - curX) / 2, barY + 3, 0xFFFFFFFF);
-                            } else if (jEnd - curX >= 20) {
-                                guiGraphics.drawCenteredString(this.font, entry.getJumpMs() + "ms", curX + (jEnd - curX) / 2, barY + 3, 0xFFFFFFFF);
+                            for (int p = 0; p < phases.size(); p++) {
+                                ActionTimingPhase phase = phases.get(p);
+                                int ms = switch (phase.id().toLowerCase(Locale.ROOT)) {
+                                    case "windup" -> entry.getWindupMs();
+                                    case "jump" -> entry.getJumpMs();
+                                    case "duration" -> entry.getDurationMs();
+                                    case "recovery" -> entry.getRecoveryMs();
+                                    default -> 0;
+                                };
+                                int pw = (int) Math.round((ms / 1000.0) * pixelsPerSecond);
+                                int clr = phase.color();
+                                String pLabel = phase.label().toUpperCase(Locale.ROOT);
+                                boolean isExec = phase.isExecutionPoint();
+
+                                if (isExec) {
+                                    execX = curX;
+                                }
+
+                                if (pw > 0) {
+                                    int pEnd = (p == phases.size() - 1) ? (bx + bw) : (curX + pw);
+                                    guiGraphics.fill(curX, barY + 1, pEnd, barY + barHeight - 1, clr);
+
+                                    // Left notch on first phase
+                                    if (p == 0) {
+                                        guiGraphics.fill(curX, barY, curX + 2, barY + barHeight, clr | 0x00333333);
+                                    } else {
+                                        // Divider line
+                                        guiGraphics.fill(curX, barY, curX + 1, barY + barHeight, 0x55FFFFFF);
+                                    }
+
+                                    int textClr = isLightColor(clr) ? 0xFF000000 : 0xFFFFFFFF;
+                                    String fullTxt = pLabel + " (" + ms + "ms)";
+                                    int wAvail = pEnd - curX;
+                                    if (wAvail >= this.font.width(fullTxt) + 6) {
+                                        guiGraphics.drawCenteredString(this.font, fullTxt, curX + (wAvail / 2), barY + 3, textClr);
+                                    } else if (wAvail >= this.font.width(ms + "ms") + 4) {
+                                        guiGraphics.drawCenteredString(this.font, ms + "ms", curX + (wAvail / 2), barY + 3, textClr);
+                                    }
+
+                                    curX = pEnd;
+                                }
                             }
-                            curX = jEnd;
-                        }
 
-                        // 3. The Attack Execution Point (Exactly when entity slams the ground!)
-                        int execX = curX;
+                            // Bar Outer Border
+                            int borderColor = isHovered ? 0xFFFFFFFF : (isSelected ? 0xFFFFFFFF : CARD_BORDER);
+                            guiGraphics.fill(bx, barY, bx + bw, barY + 1, borderColor);
+                            guiGraphics.fill(bx, barY + barHeight - 1, bx + bw, barY + barHeight, borderColor);
+                            guiGraphics.fill(bx + bw - 1, barY, bx + bw, barY + barHeight, borderColor);
 
-                        // 4. Active Slam Attack Duration Bar (Ground tremor / impact fissure duration)
-                        if (dw > 0) {
-                            int dEnd = Math.min(bx + bw, curX + dw);
-                            guiGraphics.fill(curX, barY + 1, dEnd, barY + barHeight - 1, 0xDDAA55FF);
-                            if (dEnd - curX >= 44) {
-                                String txt = "ATTACK (" + entry.getDurationMs() + "ms)";
-                                guiGraphics.drawCenteredString(this.font, txt, curX + (dEnd - curX) / 2, barY + 3, 0xFFFFFFFF);
-                            } else if (dEnd - curX >= 20) {
-                                guiGraphics.drawCenteredString(this.font, entry.getDurationMs() + "ms", curX + (dEnd - curX) / 2, barY + 3, 0xFFFFFFFF);
+                            // KEYFRAME SQUARE RIGHT WHEN ATTACK IS EXECUTED
+                            int barCenterY = barY + (barHeight / 2);
+                            guiGraphics.fill(execX - 1, barY - 3, execX + 1, barY + barHeight + 3, 0xFFFFFFFF);
+                            guiGraphics.fill(execX - 5, barCenterY - 5, execX + 5, barCenterY + 5, 0xFF000000);
+                            int sqBorder = isSelected ? 0xFFFFFFFF : 0xFFFFD700;
+                            guiGraphics.fill(execX - 4, barCenterY - 4, execX + 4, barCenterY + 4, sqBorder);
+                            guiGraphics.fill(execX - 3, barCenterY - 3, execX + 3, barCenterY + 3, 0xFFFF0055);
+                            guiGraphics.fill(execX - 1, barCenterY - 1, execX + 1, barCenterY + 1, 0xFFFFFFFF);
+
+                            // Impact timestamp badge
+                            if (entry.getWindupMs() > 0 || entry.getJumpMs() > 0) {
+                                long impactTimeMs = entry.getTimestampMs() + entry.getWindupMs() + entry.getJumpMs();
+                                long sSec = impactTimeMs / 1000;
+                                long sRem = impactTimeMs % 1000;
+                                String impactTxt = String.format("%02d:%02d.%03d", sSec / 60, sSec % 60, sRem);
+                                int impactTxtW = this.font.width(impactTxt);
+                                int badgeX = execX - (impactTxtW / 2);
+                                if (badgeX >= timelineTrackLeft && badgeX + impactTxtW <= timelineLeft + timelineWidth) {
+                                    guiGraphics.fill(badgeX - 2, barY - 11, badgeX + impactTxtW + 2, barY - 1, 0xEE060C12);
+                                    guiGraphics.drawString(this.font, impactTxt, badgeX, barY - 10, isSelected ? 0xFFFF0055 : 0xFFFFCC00, false);
+                                }
                             }
-                            curX = dEnd;
-                        }
 
-                        // 5. Attack End / Transition Marker to Recovery
-                        int impactX = curX;
-                        if (dw > 0 && entry.getRecoveryMs() > 0) {
-                            guiGraphics.fill(impactX - 1, barY - 1, impactX + 1, barY + barHeight + 1, 0xFFFF3355);
-                        }
-
-                        // 6. Recovery Bar (Stun / recovery state)
-                        if (curX < bx + bw) {
-                            guiGraphics.fill(curX, barY + 1, bx + bw, barY + barHeight - 1, 0xDD00E5FF);
-                            if (bx + bw - curX >= 48) {
-                                String txt = "RECOVERY (" + entry.getRecoveryMs() + "ms)";
-                                guiGraphics.drawCenteredString(this.font, txt, curX + (bx + bw - curX) / 2, barY + 3, 0xFF000000);
-                            } else if (bx + bw - curX >= 20) {
-                                guiGraphics.drawCenteredString(this.font, entry.getRecoveryMs() + "ms", curX + (bx + bw - curX) / 2, barY + 3, 0xFF000000);
+                            // Start notch at bx if windup > 0
+                            if (entry.getWindupMs() > 0) {
+                                guiGraphics.fill(bx - 1, barY - 2, bx + 1, barY + barHeight + 2, 0xFFFFCC00);
                             }
-                        }
 
-                        // Bar Outer Border
-                        int borderColor = isHovered ? 0xFFFFFFFF : (isSelected ? 0xFFFFFFFF : CARD_BORDER);
-                        guiGraphics.fill(bx, barY, bx + bw, barY + 1, borderColor);
-                        guiGraphics.fill(bx, barY + barHeight - 1, bx + bw, barY + barHeight, borderColor);
-                        guiGraphics.fill(bx + bw - 1, barY, bx + bw, barY + barHeight, borderColor);
-
-                        // 7. KEYFRAME SQUARE RIGHT WHEN ATTACK IS EXECUTED (TOUCHDOWN SLAM)
-                        int barCenterY = barY + (barHeight / 2);
-                        // Vertical guideline tick
-                        guiGraphics.fill(execX - 1, barY - 3, execX + 1, barY + barHeight + 3, 0xFFFFFFFF);
-                        // Black drop-shadow border
-                        guiGraphics.fill(execX - 5, barCenterY - 5, execX + 5, barCenterY + 5, 0xFF000000);
-                        // Vibrant Execution Square (White border + Neon Red/Magenta core + White dot)
-                        int sqBorder = isSelected ? 0xFFFFFFFF : 0xFFFFD700;
-                        guiGraphics.fill(execX - 4, barCenterY - 4, execX + 4, barCenterY + 4, sqBorder);
-                        guiGraphics.fill(execX - 3, barCenterY - 3, execX + 3, barCenterY + 3, 0xFFFF0055);
-                        guiGraphics.fill(execX - 1, barCenterY - 1, execX + 1, barCenterY + 1, 0xFFFFFFFF);
-
-                        // Slam impact timestamp badge
-                        if (ww > 0 || jw > 0) {
-                            long slamTimeMs = entry.getTimestampMs() + entry.getWindupMs() + entry.getJumpMs();
-                            long sSec = slamTimeMs / 1000;
-                            long sRem = slamTimeMs % 1000;
-                            String slamTxt = String.format("%02d:%02d.%03d", sSec / 60, sSec % 60, sRem);
-                            int slamTxtW = this.font.width(slamTxt);
-                            int badgeX = execX - (slamTxtW / 2);
-                            if (badgeX >= timelineTrackLeft && badgeX + slamTxtW <= timelineLeft + timelineWidth) {
-                                guiGraphics.fill(badgeX - 2, barY - 11, badgeX + slamTxtW + 2, barY - 1, 0xEE060C12);
-                                guiGraphics.drawString(this.font, slamTxt, badgeX, barY - 10, isSelected ? 0xFFFF0055 : 0xFFFFCC00, false);
+                            // Label Badge after bar
+                            String actionName = entry.getSubAction().isEmpty() ? entry.getActionType() : entry.getSubAction();
+                            if (entry.getDescription() != null && !entry.getDescription().isBlank()) {
+                                actionName = entry.getDescription();
                             }
+                            String label = actionName + " (" + totalMs + "ms)";
+                            if (this.font.width(label) > 140) {
+                                label = this.font.plainSubstrByWidth(label, 134) + "..";
+                            }
+                            guiGraphics.drawString(this.font, label, bx + bw + 6, barY + 3, isSelected ? 0xFFFFFFFF : chColor, false);
                         }
-
-                        // Start notch at bx if windup > 0
-                        if (ww > 0) {
-                            guiGraphics.fill(bx - 1, barY - 2, bx + 1, barY + barHeight + 2, 0xFFFFCC00);
-                        }
-
-                        // Label Badge after bar
-                        String actionName = entry.getSubAction().isEmpty() ? entry.getActionType() : entry.getSubAction();
-                        if (entry.getDescription() != null && !entry.getDescription().isBlank()) {
-                            actionName = entry.getDescription();
-                        }
-                        String label = actionName + " (" + totalDurationMs + "ms)";
-                        if (this.font.width(label) > 140) {
-                            label = this.font.plainSubstrByWidth(label, 134) + "..";
-                        }
-                        guiGraphics.drawString(this.font, label, bx + bw + 6, barY + 3, isSelected ? 0xFFFFFFFF : chColor, false);
-                    }
                     }
                 } else {
                     // Instant single keyframe node
@@ -3253,5 +3247,13 @@ public class MusicSequenceScreen extends Screen {
         }
         guiGraphics.drawString(this.font, title, cardX + 22, cardY + 8, sel ? 0xFFFFFFFF : color, false);
         guiGraphics.drawString(this.font, desc, cardX + 22, cardY + 21, sel ? 0xFFAABBCC : 0xFF778899, false);
+    }
+
+    private static boolean isLightColor(int color) {
+        int r = (color >> 16) & 0xFF;
+        int g = (color >> 8) & 0xFF;
+        int b = color & 0xFF;
+        double luma = 0.299 * r + 0.587 * g + 0.114 * b;
+        return luma > 150;
     }
 }

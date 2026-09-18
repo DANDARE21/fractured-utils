@@ -37,6 +37,7 @@ public class ServerEventHandler {
         net.dandare21.fracturedutils.command.EventMusicCommand.register(event.getDispatcher());
         net.dandare21.fracturedutils.command.MusicSequenceCommand.register(event.getDispatcher());
         net.dandare21.fracturedutils.command.BossPuppetCommand.register(event.getDispatcher());
+        net.dandare21.fracturedutils.command.ScreenEffectCommand.register(event.getDispatcher());
     }
 
     @SubscribeEvent

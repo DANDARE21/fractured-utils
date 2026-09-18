@@ -3,6 +3,8 @@ package net.dandare21.fracturedutils.puppet.action;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.dandare21.fracturedutils.FracturedUtils;
+import net.dandare21.fracturedutils.puppet.fsm.ActionParameter;
+import net.dandare21.fracturedutils.puppet.fsm.ActionTimingPhase;
 import net.dandare21.fracturedutils.puppet.fsm.Phase;
 import net.dandare21.fracturedutils.puppet.fsm.PuppetActionInstance;
 import net.dandare21.fracturedutils.puppet.fsm.PuppetActionType;
@@ -14,6 +16,8 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.projectile.WitherSkull;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.List;
 
 /**
  * Abyssal Barrage Action (mymod:abyssal_barrage / fractured_utils:abyssal_barrage).
@@ -39,6 +43,29 @@ public class AbyssalBarrageAction extends PuppetActionType<AbyssalBarrageAction.
 
     public AbyssalBarrageAction() {
         super(ID, AbyssalBarrageParams.CODEC, Instance::new);
+    }
+
+    @Override
+    public List<ActionTimingPhase> getTimingPhases() {
+        return List.of(
+                new ActionTimingPhase("windup", "Charge", 400, 0xFFFFCC00, false),
+                new ActionTimingPhase("jump", "Cast", 0, 0xFF4A69BD, false),
+                new ActionTimingPhase("duration", "Barrage", 5000, 0xFFAA33FF, true),
+                new ActionTimingPhase("recovery", "Cooldown", 1000, 0xFF00E5FF, false)
+        );
+    }
+
+    @Override
+    public List<ActionParameter<?>> getParameters() {
+        return List.of(
+                ActionParameter.ofInt("waveInterval", "Wave Interval", 20, "Ticks between skull barrage waves"),
+                ActionParameter.ofDouble("projectileSpeed", "Projectile Speed", 0.75, "Speed of fired abyssal wither skulls")
+        );
+    }
+
+    @Override
+    public String getExecutionLabel() {
+        return "BARRAGE";
     }
 
     public static class Instance extends PuppetActionInstance<AbyssalBarrageParams> {

@@ -21,10 +21,10 @@ public class ImpactFrameEffect {
         private int secondaryColor = 0xFF000000;  // Secondary negative/cut color (default pitch black)
         private int frameIntervalMs = 35;         // Milliseconds per cut frame (alternating speed)
         private boolean invertWorld = true;       // Inverts world colors during impact
-        private String style = "MONOCHROME_CUT";  // MONOCHROME_CUT, COLOR_FLASH, RADIAL_SHOCK
+        private String style = "DRAW";            // DRAW (Manga sketch with pixel rays/stars), MONOCHROME_CUT, COLOR_FLASH, RADIAL_SHOCK
 
         public ImpactFrameInstance(int durationMs) {
-            this(durationMs, 0xFFFFFFFF, 0xFF000000, 35, true, "MONOCHROME_CUT");
+            this(durationMs, 0xFFFFFFFF, 0xFF000000, 35, true, "DRAW");
         }
 
         public ImpactFrameInstance(int durationMs, int primaryColor, int secondaryColor, int frameIntervalMs, boolean invertWorld, String style) {
@@ -33,7 +33,7 @@ public class ImpactFrameEffect {
             this.secondaryColor = secondaryColor;
             this.frameIntervalMs = Math.max(10, frameIntervalMs);
             this.invertWorld = invertWorld;
-            this.style = (style != null && !style.isBlank()) ? style : "MONOCHROME_CUT";
+            this.style = (style != null && !style.isBlank()) ? style : "DRAW";
         }
 
         public int getPrimaryColor() { return primaryColor; }

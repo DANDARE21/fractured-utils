@@ -103,18 +103,25 @@ public final class ScreenEffects {
     }
 
     /**
-     * Creates an anime-style high contrast monochrome impact frame effect.
+     * Creates an anime-style high contrast manga "draw" impact frame effect in black & white.
      *
-     * @param durationMs Duration in milliseconds (typically 100 - 250ms).
+     * @param durationMs Duration in milliseconds (typically 100 - 300ms).
      */
     public static ImpactFrameEffect.ImpactFrameInstance impactFrame(int durationMs) {
-        return new ImpactFrameEffect.ImpactFrameInstance(durationMs, 0xFFFFFFFF, 0xFF000000, 35, true, "MONOCHROME_CUT");
+        return new ImpactFrameEffect.ImpactFrameInstance(durationMs, 0xFFFFFFFF, 0xFF000000, 35, true, "DRAW");
     }
 
     /**
-     * Creates an impact frame effect with custom primary and secondary flash colors.
+     * Creates an impact frame effect with custom primary and secondary colors in "draw" style.
      */
     public static ImpactFrameEffect.ImpactFrameInstance impactFrame(int durationMs, int primaryColor, int secondaryColor, int frameIntervalMs) {
-        return new ImpactFrameEffect.ImpactFrameInstance(durationMs, primaryColor, secondaryColor, frameIntervalMs, true, "COLOR_FLASH");
+        return new ImpactFrameEffect.ImpactFrameInstance(durationMs, primaryColor, secondaryColor, frameIntervalMs, true, "DRAW");
+    }
+
+    /**
+     * Creates an impact frame effect with custom colors, interval, inversion, and style.
+     */
+    public static ImpactFrameEffect.ImpactFrameInstance impactFrame(int durationMs, int primaryColor, int secondaryColor, int frameIntervalMs, boolean invertWorld, String style) {
+        return new ImpactFrameEffect.ImpactFrameInstance(durationMs, primaryColor, secondaryColor, frameIntervalMs, invertWorld, style);
     }
 }

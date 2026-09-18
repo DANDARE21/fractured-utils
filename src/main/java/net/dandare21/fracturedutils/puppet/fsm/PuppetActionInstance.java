@@ -163,4 +163,77 @@ public abstract class PuppetActionInstance<T> {
             net.dandare21.fracturedutils.puppet.util.AttackIndicatorUtils.removeCircle(serverLevel, id, pos);
         }
     }
+
+    /**
+     * Displays a linear attack indicator decal on the ground from startPos to endPos using textures/misc/attack_indicator_line.png.
+     */
+    public int showLineIndicator(net.minecraft.world.phys.Vec3 startPos, net.minecraft.world.phys.Vec3 endPos, double width, int durationTicks) {
+        return showLineIndicator(startPos, endPos, width, durationTicks, net.dandare21.fracturedutils.puppet.util.AttackIndicatorUtils.COLOR_VOID);
+    }
+
+    /**
+     * Displays a colored linear attack indicator decal on the ground from startPos to endPos.
+     */
+    public int showLineIndicator(net.minecraft.world.phys.Vec3 startPos, net.minecraft.world.phys.Vec3 endPos, double width, int durationTicks, int argbColor) {
+        if (this.mob != null && this.mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            return net.dandare21.fracturedutils.puppet.util.AttackIndicatorUtils.spawnLine(
+                    serverLevel, startPos, endPos, width, durationTicks, argbColor
+            );
+        }
+        return -1;
+    }
+
+    /**
+     * Displays a linear attack indicator decal on the ground starting at startPos with a given yaw and length.
+     */
+    public int showLineIndicator(net.minecraft.world.phys.Vec3 startPos, float yawDegrees, double length, double width, int durationTicks) {
+        return showLineIndicator(startPos, yawDegrees, length, width, durationTicks, net.dandare21.fracturedutils.puppet.util.AttackIndicatorUtils.COLOR_VOID);
+    }
+
+    /**
+     * Displays a colored linear attack indicator decal on the ground starting at startPos with a given yaw and length.
+     */
+    public int showLineIndicator(net.minecraft.world.phys.Vec3 startPos, float yawDegrees, double length, double width, int durationTicks, int argbColor) {
+        if (this.mob != null && this.mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            return net.dandare21.fracturedutils.puppet.util.AttackIndicatorUtils.spawnLine(
+                    serverLevel, startPos, yawDegrees, length, width, durationTicks, argbColor
+            );
+        }
+        return -1;
+    }
+
+    /**
+     * Spawns a line indicator directly forward from the acting mob.
+     */
+    public int showLineIndicatorForward(double length, double width, int durationTicks, int argbColor) {
+        if (this.mob != null) {
+            return showLineIndicator(this.mob.position(), this.mob.getYRot(), length, width, durationTicks, argbColor);
+        }
+        return -1;
+    }
+
+    /**
+     * Updates an existing linear attack indicator's endpoints and width.
+     */
+    public void updateLineIndicator(int id, net.minecraft.world.phys.Vec3 startPos, net.minecraft.world.phys.Vec3 endPos, double width) {
+        if (id > 0 && this.mob != null && this.mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            net.dandare21.fracturedutils.puppet.util.AttackIndicatorUtils.updateLine(serverLevel, id, startPos, endPos, width);
+        }
+    }
+
+    /**
+     * Updates an existing linear attack indicator's position, yaw, length, and width.
+     */
+    public void updateLineIndicator(int id, net.minecraft.world.phys.Vec3 startPos, float yawDegrees, double length, double width) {
+        if (id > 0 && this.mob != null && this.mob.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            net.dandare21.fracturedutils.puppet.util.AttackIndicatorUtils.updateLine(serverLevel, id, startPos, yawDegrees, length, width);
+        }
+    }
+
+    /**
+     * Removes an active linear attack indicator early.
+     */
+    public void removeLineIndicator(int id, net.minecraft.world.phys.Vec3 pos) {
+        removeCircleIndicator(id, pos);
+    }
 }

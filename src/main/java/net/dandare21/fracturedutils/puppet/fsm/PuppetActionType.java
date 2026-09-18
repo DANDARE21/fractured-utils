@@ -41,7 +41,9 @@ public class PuppetActionType<T> {
     }
 
     public PuppetActionInstance<T> createInstance(Mob mob, T params) {
-        return factory.create(mob, params);
+        PuppetActionInstance<T> instance = factory.create(mob, params);
+        instance.setActionType(this);
+        return instance;
     }
 
     /**

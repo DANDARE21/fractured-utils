@@ -20,6 +20,7 @@ public class MusicSequenceChannel {
     public static final int COLOR_CAMERA = 0xFFFF0055;
     public static final int COLOR_CHECKPOINT = 0xFFFF9900;
     public static final int COLOR_PUPPET = 0xFFAA55FF;
+    public static final int COLOR_PUPPET_SUB = 0xFFBB77FF;
 
     private String id;
     private String type;
@@ -31,6 +32,7 @@ public class MusicSequenceChannel {
     private String actorTag;
     private String actorEntityType;
     private boolean actorRegisteredOnly;
+    private String parentChannelId = "";
 
     public MusicSequenceChannel() {
         this(UUID.randomUUID().toString(), TYPE_COMMAND, "Command Channel", "", COLOR_COMMAND);
@@ -169,12 +171,25 @@ public class MusicSequenceChannel {
         this.color = color;
     }
 
+    public String getParentChannelId() {
+        return parentChannelId != null ? parentChannelId : "";
+    }
+
+    public void setParentChannelId(String parentChannelId) {
+        this.parentChannelId = parentChannelId != null ? parentChannelId : "";
+    }
+
+    public boolean isSubChannel() {
+        return parentChannelId != null && !parentChannelId.isBlank();
+    }
+
     public MusicSequenceChannel copy() {
         MusicSequenceChannel c = new MusicSequenceChannel(this.id, this.type, this.name, this.puppetActor, this.color);
         c.setActorName(this.actorName);
         c.setActorTag(this.actorTag);
         c.setActorEntityType(this.actorEntityType);
         c.setActorRegisteredOnly(this.actorRegisteredOnly);
+        c.setParentChannelId(this.parentChannelId);
         return c;
     }
 }

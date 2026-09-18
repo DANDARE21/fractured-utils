@@ -8,13 +8,18 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
 /**
  * Implementation of IPuppetHandler attached to mobs.
- * Manages action execution FSM, direct GoalSelector control flag locking, and state cleanup.
+ * Manages concurrent action execution FSMs, direct GoalSelector control flag locking, and state cleanup.
  */
 public class PuppetHandlerImpl implements IPuppetHandler {
     private final Mob mob;
-    private PuppetActionInstance<?> activeAction = null;
+    private final List<PuppetActionInstance<?>> activeActions = new CopyOnWriteArrayList<>();
     private boolean puppetingActive = false;
     private boolean aiSuppressed = false;
 
@@ -51,20 +56,20 @@ public class PuppetHandlerImpl implements IPuppetHandler {
     public <T> void dispatch(PuppetActionType<T> type, T params) {
         if (this.mob == null || this.mob.level().isClientSide) return;
 
-        // Cancel any previous action cleanly
-        stopActiveAction();
-
         // Ensure mob can step and run physics
         if (this.mob.isNoAi()) {
             this.mob.setNoAi(false);
         }
 
         this.puppetingActive = true;
+
+        PuppetActionInstance<T> instance = type.createInstance(this.mob, params);
+        this.activeActions.add(instance);
+
         // Lock goals temporarily for the action duration (does NOT set persistent suppression flags)
         applyControlFlags();
 
-        this.activeAction = type.createInstance(this.mob, params);
-        this.activeAction.start();
+        instance.start();
     }
 
     @Override
@@ -81,14 +86,29 @@ public class PuppetHandlerImpl implements IPuppetHandler {
             applyControlFlags();
         }
 
-        // Active Action Lifecycle Update
-        if (this.activeAction != null) {
-            if (!this.activeAction.isFinished()) {
-                this.activeAction.tick();
+        // Active Actions Lifecycle Update (supports concurrent running actions)
+        if (!this.activeActions.isEmpty()) {
+            List<PuppetActionInstance<?>> finished = new ArrayList<>();
+            for (PuppetActionInstance<?> action : this.activeActions) {
+                if (!action.isFinished()) {
+                    action.tick();
+                }
+                if (action.isFinished()) {
+                    finished.add(action);
+                }
             }
 
-            if (this.activeAction.isFinished()) {
-                stopActiveAction();
+            if (!finished.isEmpty()) {
+                for (PuppetActionInstance<?> action : finished) {
+                    this.activeActions.remove(action);
+                    if (!action.isFinished()) {
+                        action.stop();
+                    }
+                }
+                if (this.activeActions.isEmpty() && !this.hasMoveTarget() && !this.hasLookTarget()) {
+                    this.puppetingActive = false;
+                }
+                applyControlFlags();
             }
         }
 
@@ -102,7 +122,7 @@ public class PuppetHandlerImpl implements IPuppetHandler {
                     this.mob.getNavigation().moveTo(this.moveTargetX, this.moveTargetY, this.moveTargetZ, this.moveSpeed);
                 }
             }
-        } else if (freezeMove && this.activeAction == null) {
+        } else if (freezeMove && this.activeActions.isEmpty()) {
             // Strictly enforce complete movement halt when navigation is suppressed and no action/forced move is running
             if (this.mob.getNavigation() != null && !this.mob.getNavigation().isDone()) {
                 this.mob.getNavigation().stop();
@@ -138,31 +158,76 @@ public class PuppetHandlerImpl implements IPuppetHandler {
 
     @Override
     public void stopActiveAction() {
-        if (this.activeAction != null) {
-            PuppetActionInstance<?> action = this.activeAction;
-            this.activeAction = null;
+        for (PuppetActionInstance<?> action : this.activeActions) {
             if (!action.isFinished()) {
                 action.stop();
             }
         }
-        this.puppetingActive = false;
+        this.activeActions.clear();
+        if (!hasMoveTarget() && !hasLookTarget()) {
+            this.puppetingActive = false;
+        }
         // Do NOT call restoreAi()! Suppression state persists until explicitly turned off.
         applyControlFlags();
     }
 
     @Override
+    public void stopAction(PuppetActionInstance<?> action) {
+        if (action != null && this.activeActions.remove(action)) {
+            if (!action.isFinished()) {
+                action.stop();
+            }
+            if (this.activeActions.isEmpty() && !hasMoveTarget() && !hasLookTarget()) {
+                this.puppetingActive = false;
+            }
+            applyControlFlags();
+        }
+    }
+
+    @Override
+    public void stopActions(PuppetActionType<?> type) {
+        if (type == null) return;
+        List<PuppetActionInstance<?>> toStop = new ArrayList<>();
+        for (PuppetActionInstance<?> action : this.activeActions) {
+            if (action.getActionType() == type || (action.getActionType() != null && action.getActionType().getId().equals(type.getId()))) {
+                toStop.add(action);
+            }
+        }
+        for (PuppetActionInstance<?> action : toStop) {
+            stopAction(action);
+        }
+    }
+
+    @Override
     public boolean isPuppetingActive() {
-        return this.puppetingActive;
+        return this.puppetingActive || !this.activeActions.isEmpty();
+    }
+
+    @Override
+    public boolean hasActiveActions() {
+        return !this.activeActions.isEmpty();
     }
 
     @Override
     public PuppetActionInstance<?> getActiveAction() {
-        return this.activeAction;
+        return this.activeActions.isEmpty() ? null : this.activeActions.get(this.activeActions.size() - 1);
+    }
+
+    @Override
+    public List<PuppetActionInstance<?>> getActiveActions() {
+        return Collections.unmodifiableList(this.activeActions);
     }
 
     @Override
     public Phase getCurrentPhase() {
-        return this.activeAction != null ? this.activeAction.getCurrentPhase() : Phase.IDLE;
+        Phase highest = Phase.IDLE;
+        for (PuppetActionInstance<?> action : this.activeActions) {
+            Phase p = action.getCurrentPhase();
+            if (p == Phase.ACTIVE) return Phase.ACTIVE;
+            if (p == Phase.WINDUP) highest = Phase.WINDUP;
+            else if (p == Phase.RECOVERY && highest == Phase.IDLE) highest = Phase.RECOVERY;
+        }
+        return highest;
     }
 
     @Override
@@ -243,7 +308,7 @@ public class PuppetHandlerImpl implements IPuppetHandler {
         if (this.mob == null) return;
 
         boolean freezeMove = this.suppressedMove || this.aiSuppressed || (this.puppetingActive && !this.hasMoveTarget);
-        boolean freezeLook = this.suppressedLook || this.aiSuppressed || (this.puppetingActive && this.activeAction != null && !this.hasLookTarget());
+        boolean freezeLook = this.suppressedLook || this.aiSuppressed || (this.puppetingActive && !this.activeActions.isEmpty() && !this.hasLookTarget());
         boolean freezeJump = this.suppressedJump || this.aiSuppressed || this.puppetingActive;
         boolean freezeTarget = this.suppressedTarget || this.aiSuppressed;
 

@@ -686,6 +686,27 @@ public class MusicSequenceManager {
             }
         }
 
+        // If sub-channel has blank actor tag or entity info, fall back to its parent channel
+        if (channel != null && channel.isSubChannel()) {
+            for (MusicSequenceChannel ch : activeSeq.getSequence().getChannels()) {
+                if (ch.getId().equalsIgnoreCase(channel.getParentChannelId())) {
+                    if (channel.getActorTag().isBlank() && !ch.getActorTag().isBlank()) {
+                        channel.setActorTag(ch.getActorTag());
+                    }
+                    if (channel.getPuppetActor().isBlank() && !ch.getPuppetActor().isBlank()) {
+                        channel.setPuppetActor(ch.getPuppetActor());
+                    }
+                    if (channel.getActorName().isBlank() && !ch.getActorName().isBlank()) {
+                        channel.setActorName(ch.getActorName());
+                    }
+                    if (channel.getActorEntityType().isBlank() && !ch.getActorEntityType().isBlank()) {
+                        channel.setActorEntityType(ch.getActorEntityType());
+                    }
+                    break;
+                }
+            }
+        }
+
         String sub = entry.getSubAction();
         String cmd = entry.getCommand() != null ? entry.getCommand().trim() : "";
         if (sub == null || sub.isBlank()) {

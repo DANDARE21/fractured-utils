@@ -67,7 +67,8 @@ public class MusicSequenceScreen extends Screen {
 
     public enum PuppetTargetMode {
         REGISTER_NEW,
-        EXISTING_ACTOR
+        EXISTING_ACTOR,
+        SUB_CHANNEL
     }
 
     private ModalType activeModal = ModalType.NONE;
@@ -84,6 +85,8 @@ public class MusicSequenceScreen extends Screen {
     private String modalSelectedEntityType = "fractured_utils:void_herald";
     private CyberpunkDropdown<String> modalEntityCatalogDropdown;
     private CyberpunkDropdown<String> modalExistingMobsDropdown;
+    private CyberpunkDropdown<String> modalParentPuppetDropdown;
+    private String modalSelectedParentChannelId = "";
     private boolean modalTagError = false;
     private boolean modalUserCustomizedName = false;
     private String modalStatusMessage = null;
@@ -670,11 +673,81 @@ public class MusicSequenceScreen extends Screen {
     public void deleteChannel(int index) {
         List<MusicSequenceChannel> channels = currentSequence.getChannels();
         if (index >= 0 && index < channels.size()) {
-            MusicSequenceChannel removed = channels.remove(index);
-            currentSequence.getEntries().removeIf(e -> removed.getId().equalsIgnoreCase(e.getChannelId()));
+            MusicSequenceChannel removed = channels.get(index);
+            Set<String> idsToRemove = new HashSet<>();
+            idsToRemove.add(removed.getId());
+
+            // If deleting a parent channel, also delete all its child sub-channels
+            if (!removed.isSubChannel()) {
+                for (MusicSequenceChannel c : channels) {
+                    if (c.isSubChannel() && removed.getId().equalsIgnoreCase(c.getParentChannelId())) {
+                        idsToRemove.add(c.getId());
+                    }
+                }
+            }
+
+            channels.removeIf(c -> idsToRemove.contains(c.getId()));
+            currentSequence.getEntries().removeIf(e -> idsToRemove.contains(e.getChannelId()));
             saveCurrentSequenceToWorkingMap();
             this.init();
         }
+    }
+
+    public void addSubChannel(MusicSequenceChannel targetChannel) {
+        if (targetChannel == null) return;
+        saveCurrentSequenceToWorkingMap();
+
+        // 1. Identify the root parent channel
+        MusicSequenceChannel rootParent = targetChannel;
+        if (targetChannel.isSubChannel()) {
+            for (MusicSequenceChannel c : currentSequence.getChannels()) {
+                if (c.getId().equalsIgnoreCase(targetChannel.getParentChannelId())) {
+                    rootParent = c;
+                    break;
+                }
+            }
+        }
+
+        // 2. Count existing sub-channels for this root parent
+        int existingCount = 0;
+        int lastIndex = currentSequence.getChannels().indexOf(rootParent);
+        for (int i = 0; i < currentSequence.getChannels().size(); i++) {
+            MusicSequenceChannel c = currentSequence.getChannels().get(i);
+            if (c.isSubChannel() && c.getParentChannelId().equalsIgnoreCase(rootParent.getId())) {
+                existingCount++;
+                if (i > lastIndex) {
+                    lastIndex = i;
+                }
+            }
+        }
+
+        int nextTrackNum = existingCount + 2; // Track 1 is parent, Track 2 is first sub, etc.
+        String actorName = !rootParent.getActorName().isBlank() ? rootParent.getActorName() : rootParent.getName();
+        if (actorName.startsWith("Puppet: ")) {
+            actorName = actorName.substring(8);
+        }
+        String subName = "↳ " + actorName + " (Track " + nextTrackNum + ")";
+
+        MusicSequenceChannel newSub = new MusicSequenceChannel(
+                UUID.randomUUID().toString(),
+                MusicSequenceChannel.TYPE_PUPPET,
+                subName,
+                rootParent.getPuppetActor(),
+                MusicSequenceChannel.COLOR_PUPPET_SUB
+        );
+        newSub.setParentChannelId(rootParent.getId());
+        newSub.setActorName(rootParent.getActorName());
+        newSub.setActorTag(rootParent.getActorTag());
+        newSub.setActorEntityType(rootParent.getActorEntityType());
+        newSub.setActorRegisteredOnly(rootParent.isActorRegisteredOnly());
+
+        // Insert directly after the last sub-channel of this entity group (or after the parent)
+        int insertIdx = Math.min(currentSequence.getChannels().size(), lastIndex + 1);
+        currentSequence.getChannels().add(insertIdx, newSub);
+
+        saveCurrentSequenceToWorkingMap();
+        playButtonSound();
+        this.init();
     }
 
     public void openAddChannelModal() {
@@ -686,6 +759,7 @@ public class MusicSequenceScreen extends Screen {
         this.modalSelectedType = MusicSequenceChannel.TYPE_COMMAND;
         this.puppetTargetMode = PuppetTargetMode.REGISTER_NEW;
         this.modalSelectedEntityType = "fractured_utils:void_herald";
+        this.modalSelectedParentChannelId = "";
         this.modalTagError = false;
         this.modalUserCustomizedName = false;
         this.modalStatusMessage = null;
@@ -829,6 +903,8 @@ public class MusicSequenceScreen extends Screen {
                     if (modalEntityCatalogDropdown.mouseScrolled(smX, smY, delta)) return true;
                 } else if (puppetTargetMode == PuppetTargetMode.EXISTING_ACTOR && modalExistingMobsDropdown != null && modalExistingMobsDropdown.isOpen()) {
                     if (modalExistingMobsDropdown.mouseScrolled(smX, smY, delta)) return true;
+                } else if (puppetTargetMode == PuppetTargetMode.SUB_CHANNEL && modalParentPuppetDropdown != null && modalParentPuppetDropdown.isOpen()) {
+                    if (modalParentPuppetDropdown.mouseScrolled(smX, smY, delta)) return true;
                 }
             }
             return true;
@@ -946,14 +1022,23 @@ public class MusicSequenceScreen extends Screen {
 
         // 1. Check Click on Left Track Header Column (Premiere Preset Space)
         if (mouseX >= trackHeaderLeft && mouseX < timelineTrackLeft) {
-            // Check delete button [✕] for each channel row
+            // Check delete button [✕] and [+SUB] button for each channel row
             for (int c = 0; c < channels.size(); c++) {
                 int trackY = trackAreaY + (c * channelHeight) - (int) channelScrollY;
                 if (trackY >= trackAreaY && trackY + channelHeight <= timelineTop + totalHeight) {
+                    MusicSequenceChannel ch = channels.get(c);
+                    // Check delete button [✕]
                     if (mouseX >= timelineTrackLeft - 22 && mouseX <= timelineTrackLeft - 6 && mouseY >= trackY + 5 && mouseY <= trackY + 23) {
                         this.modalDeleteChannelIndex = c;
                         this.activeModal = ModalType.CONFIRM_DELETE_CHANNEL;
                         return true;
+                    }
+                    // Check [+SUB] button on puppet channels (main or sub-channel)
+                    if (MusicSequenceChannel.TYPE_PUPPET.equalsIgnoreCase(ch.getType())) {
+                        if (mouseX >= timelineTrackLeft - 50 && mouseX <= timelineTrackLeft - 25 && mouseY >= trackY + 5 && mouseY <= trackY + 23) {
+                            addSubChannel(ch);
+                            return true;
+                        }
                     }
                 }
             }
@@ -1113,7 +1198,7 @@ public class MusicSequenceScreen extends Screen {
                                     break;
                                 }
                             }
-                            if (!hasSpawn) {
+                            if (!hasSpawn && !channel.isSubChannel()) {
                                 newEntry.setSubAction("SPAWN");
                                 String aTag = channel.getActorTag().isBlank() ? channel.getName().toLowerCase(Locale.ROOT).replace(" ", "_") : channel.getActorTag();
                                 String eType = channel.getEntityTypeId().isBlank() ? "fractured_utils:void_herald" : channel.getEntityTypeId();
@@ -1623,33 +1708,78 @@ public class MusicSequenceScreen extends Screen {
             MusicSequenceChannel ch = channels.get(c);
             int trackY = trackAreaY + (c * channelHeight) - (int) channelScrollY;
 
-            int rowBg = (c % 2 == 0) ? 0xEE0A1828 : 0xEE071220;
-            guiGraphics.fill(trackHeaderLeft, trackY, timelineTrackLeft, trackY + channelHeight, rowBg);
-            guiGraphics.fill(trackHeaderLeft, trackY + channelHeight - 1, timelineTrackLeft, trackY + channelHeight, 0x4400E5FF);
+            boolean isSub = ch.isSubChannel();
+            boolean isPuppet = MusicSequenceChannel.TYPE_PUPPET.equalsIgnoreCase(ch.getType());
 
-            // Left 4px accent stripe with channel color
-            guiGraphics.fill(trackHeaderLeft, trackY, trackHeaderLeft + 4, trackY + channelHeight, ch.getColor());
+            int rowBg;
+            if (isSub) {
+                rowBg = (c % 2 == 0) ? 0xEE0D101C : 0xEE090C16;
+            } else {
+                rowBg = (c % 2 == 0) ? 0xEE0A1828 : 0xEE071220;
+            }
+            guiGraphics.fill(trackHeaderLeft, trackY, timelineTrackLeft, trackY + channelHeight, rowBg);
+            guiGraphics.fill(trackHeaderLeft, trackY + channelHeight - 1, timelineTrackLeft, trackY + channelHeight, isSub ? 0x44BB77FF : 0x4400E5FF);
+
+            // Left accent stripe / tree connector
+            int stripeColor = isSub ? MusicSequenceChannel.COLOR_PUPPET_SUB : ch.getColor();
+            if (isSub) {
+                // Indented stripe with tree branch hook ↳
+                guiGraphics.fill(trackHeaderLeft + 7, trackY, trackHeaderLeft + 10, trackY + channelHeight, stripeColor);
+                guiGraphics.fill(trackHeaderLeft + 7, trackY + 11, trackHeaderLeft + 14, trackY + 13, stripeColor);
+            } else {
+                // Left 4px accent stripe with channel color
+                guiGraphics.fill(trackHeaderLeft, trackY, trackHeaderLeft + 4, trackY + channelHeight, stripeColor);
+            }
 
             // Channel Title
-            String title = "CH " + (c + 1) + ": " + ch.getName();
-            if (this.font.width(title) > TRACK_HEADER_WIDTH - 28) {
-                title = this.font.plainSubstrByWidth(title, TRACK_HEADER_WIDTH - 34) + "..";
+            String title = (isSub && !ch.getName().startsWith("↳")) ? ("↳ " + ch.getName()) : ("CH " + (c + 1) + ": " + ch.getName());
+            int titleX = isSub ? (trackHeaderLeft + 16) : (trackHeaderLeft + 8);
+            int maxTitleW = isPuppet ? (TRACK_HEADER_WIDTH - (isSub ? 64 : 58)) : (TRACK_HEADER_WIDTH - 28);
+            if (this.font.width(title) > maxTitleW) {
+                title = this.font.plainSubstrByWidth(title, maxTitleW - 6) + "..";
             }
-            guiGraphics.drawString(this.font, title, trackHeaderLeft + 8, trackY + 5, ch.getColor(), false);
+            guiGraphics.drawString(this.font, title, titleX, trackY + 5, stripeColor, false);
 
             // Channel Sub-label (Actor / Type)
             String sub = ch.getType();
-            if (ch.getType().equalsIgnoreCase("PUPPET")) {
-                if (ch.getActorTag() != null && !ch.getActorTag().isBlank()) {
-                    sub = "🎭 #" + ch.getActorTag();
-                } else if (!ch.getPuppetActor().isBlank()) {
-                    sub = "🎭 " + ch.getPuppetActor();
+            if (isPuppet) {
+                if (isSub) {
+                    sub = "🔗 #" + ch.getActorTag();
+                } else {
+                    int subCount = 0;
+                    for (MusicSequenceChannel other : channels) {
+                        if (other.isSubChannel() && ch.getId().equalsIgnoreCase(other.getParentChannelId())) {
+                            subCount++;
+                        }
+                    }
+                    if (subCount > 0) {
+                        sub = "🎭 #" + ch.getActorTag() + " (+" + subCount + " subs)";
+                    } else if (ch.getActorTag() != null && !ch.getActorTag().isBlank()) {
+                        sub = "🎭 #" + ch.getActorTag();
+                    } else if (!ch.getPuppetActor().isBlank()) {
+                        sub = "🎭 " + ch.getPuppetActor();
+                    }
                 }
             }
-            if (this.font.width(sub) > TRACK_HEADER_WIDTH - 28) {
-                sub = this.font.plainSubstrByWidth(sub, TRACK_HEADER_WIDTH - 34) + "..";
+            int subX = isSub ? (trackHeaderLeft + 16) : (trackHeaderLeft + 8);
+            int maxSubW = isPuppet ? (TRACK_HEADER_WIDTH - (isSub ? 64 : 58)) : (TRACK_HEADER_WIDTH - 28);
+            if (this.font.width(sub) > maxSubW) {
+                sub = this.font.plainSubstrByWidth(sub, maxSubW - 6) + "..";
             }
-            guiGraphics.drawString(this.font, sub, trackHeaderLeft + 8, trackY + 16, 0xFF8899AA, false);
+            guiGraphics.drawString(this.font, sub, subX, trackY + 16, isSub ? 0xFFAABBCC : 0xFF8899AA, false);
+
+            // [+SUB] Button for Puppet Channels (both root and sub-channels)
+            if (isPuppet) {
+                int subBtnLeft = timelineTrackLeft - 50;
+                int subBtnRight = timelineTrackLeft - 25;
+                boolean isHoverSub = (scaledMouseX >= subBtnLeft && scaledMouseX <= subBtnRight && scaledMouseY >= trackY + 5 && scaledMouseY <= trackY + 23);
+                guiGraphics.fill(subBtnLeft, trackY + 5, subBtnRight, trackY + 21, isHoverSub ? 0xDD9944FF : 0x336622AA);
+                guiGraphics.fill(subBtnLeft, trackY + 5, subBtnRight, trackY + 6, 0x88BB77FF);
+                guiGraphics.fill(subBtnLeft, trackY + 20, subBtnRight, trackY + 21, 0x88BB77FF);
+                guiGraphics.fill(subBtnLeft, trackY + 5, subBtnLeft + 1, trackY + 21, 0x88BB77FF);
+                guiGraphics.fill(subBtnRight - 1, trackY + 5, subBtnRight, trackY + 21, 0x88BB77FF);
+                guiGraphics.drawCenteredString(this.font, "+SUB", subBtnLeft + 12, trackY + 9, isHoverSub ? 0xFFFFFFFF : 0xFFDD99FF);
+            }
 
             // Delete Channel Button [✕]
             boolean isHoverDel = (scaledMouseX >= timelineTrackLeft - 22 && scaledMouseX <= timelineTrackLeft - 6 && scaledMouseY >= trackY + 5 && scaledMouseY <= trackY + 23);
@@ -2231,6 +2361,24 @@ public class MusicSequenceScreen extends Screen {
             if (this.trackDropdown != null) {
                 this.trackDropdown.renderOverlay(guiGraphics, scaledMouseX, scaledMouseY);
             }
+
+            // [+SUB] Tooltip on Track Header
+            if (scaledMouseX >= trackHeaderLeft && scaledMouseX < timelineTrackLeft) {
+                for (int c = 0; c < channels.size(); c++) {
+                    int trackY = trackAreaY + (c * channelHeight) - (int) channelScrollY;
+                    if (trackY >= trackAreaY && trackY + channelHeight <= timelineTop + totalHeight) {
+                        MusicSequenceChannel ch = channels.get(c);
+                        if (MusicSequenceChannel.TYPE_PUPPET.equalsIgnoreCase(ch.getType())) {
+                            int subBtnLeft = timelineTrackLeft - 50;
+                            int subBtnRight = timelineTrackLeft - 25;
+                            if (scaledMouseX >= subBtnLeft && scaledMouseX <= subBtnRight && scaledMouseY >= trackY + 5 && scaledMouseY <= trackY + 23) {
+                                guiGraphics.renderTooltip(this.font, Component.literal("Add Sub-Channel for this puppet entity (allows simultaneous actions)"), scaledMouseX, scaledMouseY);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         if (activeModal != ModalType.NONE) {
@@ -2387,6 +2535,7 @@ public class MusicSequenceScreen extends Screen {
             this.modalActorTagBox = null;
             this.modalEntityCatalogDropdown = null;
             this.modalExistingMobsDropdown = null;
+            this.modalParentPuppetDropdown = null;
         } else if (modalAddChannelStep == AddChannelStep.PUPPET_CONFIG) {
             int panelWidth = 460;
             int panelHeight = 315;
@@ -2403,9 +2552,15 @@ public class MusicSequenceScreen extends Screen {
             if (puppetTargetMode == PuppetTargetMode.REGISTER_NEW) {
                 populateEntityCatalogDropdown(left + 16, top + 115, panelWidth - 32, 20);
                 this.modalExistingMobsDropdown = null;
-            } else {
+                this.modalParentPuppetDropdown = null;
+            } else if (puppetTargetMode == PuppetTargetMode.EXISTING_ACTOR) {
                 populateExistingMobsDropdown(left + 16, top + 115, panelWidth - 32 - 110, 20);
                 this.modalEntityCatalogDropdown = null;
+                this.modalParentPuppetDropdown = null;
+            } else {
+                populateParentPuppetDropdown(left + 16, top + 115, panelWidth - 32, 20);
+                this.modalEntityCatalogDropdown = null;
+                this.modalExistingMobsDropdown = null;
             }
 
             // 3. Entity Name EditBox
@@ -2535,6 +2690,80 @@ public class MusicSequenceScreen extends Screen {
         });
     }
 
+    private void populateParentPuppetDropdown(int x, int y, int width, int height) {
+        this.modalParentPuppetDropdown = new CyberpunkDropdown<>(x, y, width, height, Component.literal("Select Parent Puppet Entity"));
+        this.modalParentPuppetDropdown.setAccentColor(MusicSequenceChannel.COLOR_PUPPET_SUB);
+        this.modalParentPuppetDropdown.setMaxVisibleItems(5);
+        this.modalParentPuppetDropdown.setItemHeight(22);
+
+        List<CyberpunkDropdown.DropdownEntry<String>> options = new ArrayList<>();
+        List<MusicSequenceChannel> channels = currentSequence.getChannels();
+        for (int i = 0; i < channels.size(); i++) {
+            MusicSequenceChannel ch = channels.get(i);
+            if (MusicSequenceChannel.TYPE_PUPPET.equalsIgnoreCase(ch.getType()) && !ch.isSubChannel()) {
+                String label = "CH " + (i + 1) + ": " + ch.getName();
+                String desc = "#" + ch.getActorTag() + " (" + (!ch.getActorEntityType().isBlank() ? ch.getActorEntityType() : "Boss/Mob") + ")";
+                options.add(new CyberpunkDropdown.DropdownEntry<>(ch.getId(), Component.literal(label), Component.literal(desc), ch.getColor()));
+            }
+        }
+
+        if (options.isEmpty()) {
+            options.add(new CyberpunkDropdown.DropdownEntry<>("", Component.literal("No parent puppet channel found"), Component.literal("Add a root puppet channel first")));
+        }
+
+        this.modalParentPuppetDropdown.setOptions(options);
+
+        if (modalSelectedParentChannelId.isBlank() && !options.isEmpty()) {
+            modalSelectedParentChannelId = options.get(0).getValue();
+        }
+        this.modalParentPuppetDropdown.selectByValue(modalSelectedParentChannelId);
+
+        applySelectedParentPuppet(modalSelectedParentChannelId);
+
+        this.modalParentPuppetDropdown.setOnSelect(entry -> {
+            this.modalSelectedParentChannelId = entry.getValue();
+            applySelectedParentPuppet(this.modalSelectedParentChannelId);
+        });
+    }
+
+    private void applySelectedParentPuppet(String parentId) {
+        if (parentId == null || parentId.isBlank()) return;
+        MusicSequenceChannel parent = null;
+        for (MusicSequenceChannel ch : currentSequence.getChannels()) {
+            if (ch.getId().equalsIgnoreCase(parentId)) {
+                parent = ch;
+                break;
+            }
+        }
+        if (parent == null) return;
+
+        int existingSubCount = 0;
+        for (MusicSequenceChannel ch : currentSequence.getChannels()) {
+            if (ch.isSubChannel() && parent.getId().equalsIgnoreCase(ch.getParentChannelId())) {
+                existingSubCount++;
+            }
+        }
+
+        String actorName = !parent.getActorName().isBlank() ? parent.getActorName() : parent.getName();
+        if (actorName.startsWith("Puppet: ")) {
+            actorName = actorName.substring(8);
+        }
+        String defaultSubName = "↳ " + actorName + " (Track " + (existingSubCount + 2) + ")";
+
+        if (this.modalChannelNameBox != null && (!modalUserCustomizedName || this.modalChannelNameBox.getValue().isBlank())) {
+            this.modalChannelNameBox.setValue(defaultSubName);
+        }
+        if (this.modalActorNameBox != null) {
+            this.modalActorNameBox.setValue(parent.getActorName());
+        }
+        if (this.modalActorTagBox != null) {
+            this.modalActorTagBox.setValue(parent.getActorTag());
+        }
+        this.modalSelectedEntityType = parent.getActorEntityType();
+        this.modalTagError = false;
+        setModalStatusMessage("✓ Linking to entity #" + parent.getActorTag());
+    }
+
     private void applyExistingEntity(Entity target) {
         if (target == null) return;
         String name = target.getDisplayName().getString();
@@ -2569,6 +2798,65 @@ public class MusicSequenceScreen extends Screen {
 
     private void commitAddChannel() {
         if (modalAddChannelStep == AddChannelStep.PUPPET_CONFIG) {
+            if (puppetTargetMode == PuppetTargetMode.SUB_CHANNEL) {
+                MusicSequenceChannel parent = null;
+                for (MusicSequenceChannel ch : currentSequence.getChannels()) {
+                    if (ch.getId().equalsIgnoreCase(modalSelectedParentChannelId)) {
+                        parent = ch;
+                        break;
+                    }
+                }
+                if (parent == null) {
+                    setModalStatusMessage("❌ Please select a parent puppet channel to link!");
+                    if (this.minecraft != null && this.minecraft.getSoundManager() != null) {
+                        this.minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.VILLAGER_NO, 1.0f));
+                    }
+                    return;
+                }
+
+                int existingSubCount = 0;
+                int lastIdx = currentSequence.getChannels().indexOf(parent);
+                for (int i = 0; i < currentSequence.getChannels().size(); i++) {
+                    MusicSequenceChannel c = currentSequence.getChannels().get(i);
+                    if (c.isSubChannel() && c.getParentChannelId().equalsIgnoreCase(parent.getId())) {
+                        existingSubCount++;
+                        if (i > lastIdx) lastIdx = i;
+                    }
+                }
+
+                String aName = !parent.getActorName().isBlank() ? parent.getActorName() : parent.getName();
+                if (aName.startsWith("Puppet: ")) aName = aName.substring(8);
+                String defaultSubName = "↳ " + aName + " (Track " + (existingSubCount + 2) + ")";
+
+                String chName = (modalChannelNameBox != null) ? modalChannelNameBox.getValue().trim() : "";
+                if (chName.isEmpty()) {
+                    chName = defaultSubName;
+                } else if (!chName.startsWith("↳")) {
+                    chName = "↳ " + chName;
+                }
+
+                MusicSequenceChannel subChannel = new MusicSequenceChannel(
+                        UUID.randomUUID().toString(),
+                        MusicSequenceChannel.TYPE_PUPPET,
+                        chName,
+                        parent.getPuppetActor(),
+                        MusicSequenceChannel.COLOR_PUPPET_SUB
+                );
+                subChannel.setParentChannelId(parent.getId());
+                subChannel.setActorName(parent.getActorName());
+                subChannel.setActorTag(parent.getActorTag());
+                subChannel.setActorEntityType(parent.getActorEntityType());
+                subChannel.setActorRegisteredOnly(parent.isActorRegisteredOnly());
+
+                int insertIdx = Math.min(currentSequence.getChannels().size(), lastIdx + 1);
+                currentSequence.getChannels().add(insertIdx, subChannel);
+
+                saveCurrentSequenceToWorkingMap();
+                this.activeModal = ModalType.NONE;
+                this.init();
+                return;
+            }
+
             String tag = (modalActorTagBox != null) ? modalActorTagBox.getValue().trim() : "";
             if (tag.isEmpty()) {
                 modalTagError = true;
@@ -2899,12 +3187,25 @@ public class MusicSequenceScreen extends Screen {
                         modalExistingMobsDropdown.mouseClicked(smX, smY, button);
                         return;
                     }
+                } else if (puppetTargetMode == PuppetTargetMode.SUB_CHANNEL && modalParentPuppetDropdown != null) {
+                    if (modalParentPuppetDropdown.isOpen()) {
+                        if (modalParentPuppetDropdown.isMouseOverMenu(smX, smY)) {
+                            modalParentPuppetDropdown.mouseClicked(smX, smY, button);
+                            return;
+                        }
+                        modalParentPuppetDropdown.setOpen(false);
+                        return;
+                    }
+                    if (modalParentPuppetDropdown.isMouseOverHeader(smX, smY)) {
+                        modalParentPuppetDropdown.mouseClicked(smX, smY, button);
+                        return;
+                    }
                 }
 
-                // Mode Tabs
-                int tabW = (panelWidth - 36) / 2;
+                // Mode Tabs (3 tabs)
+                int tabW = (panelWidth - 40) / 3;
                 int tabY = top + 77;
-                // [➕ REGISTER NEW ACTOR]
+                // [➕ REGISTER NEW]
                 if (isMouseOver(smX, smY, left + 16, tabY, tabW, 20)) {
                     if (puppetTargetMode != PuppetTargetMode.REGISTER_NEW) {
                         playButtonSound();
@@ -2914,11 +3215,21 @@ public class MusicSequenceScreen extends Screen {
                     }
                     return;
                 }
-                // [🔍 SELECT EXISTING ACTOR]
-                if (isMouseOver(smX, smY, left + 20 + tabW, tabY, tabW, 20)) {
+                // [🔍 IN-WORLD MOB]
+                if (isMouseOver(smX, smY, left + 18 + tabW, tabY, tabW, 20)) {
                     if (puppetTargetMode != PuppetTargetMode.EXISTING_ACTOR) {
                         playButtonSound();
                         puppetTargetMode = PuppetTargetMode.EXISTING_ACTOR;
+                        modalTagError = false;
+                        updateModalWidgetsPosition();
+                    }
+                    return;
+                }
+                // [🔗 SUB-CHANNEL]
+                if (isMouseOver(smX, smY, left + 20 + (tabW * 2), tabY, tabW, 20)) {
+                    if (puppetTargetMode != PuppetTargetMode.SUB_CHANNEL) {
+                        playButtonSound();
+                        puppetTargetMode = PuppetTargetMode.SUB_CHANNEL;
                         modalTagError = false;
                         updateModalWidgetsPosition();
                     }
@@ -3081,9 +3392,23 @@ public class MusicSequenceScreen extends Screen {
             MusicSequenceChannel ch = chs.get(modalDeleteChannelIndex);
             String name = "CH " + (modalDeleteChannelIndex + 1) + ": " + ch.getName() + " [" + ch.getType() + "]";
             guiGraphics.drawCenteredString(this.font, Component.literal(name), left + (panelWidth / 2), top + 54, ch.getColor());
-        }
 
-        guiGraphics.drawCenteredString(this.font, Component.literal("⚠ All keyframes on this channel will be removed!"), left + (panelWidth / 2), top + 76, 0xFFFF3355);
+            int subCount = 0;
+            if (!ch.isSubChannel()) {
+                for (MusicSequenceChannel c : chs) {
+                    if (c.isSubChannel() && ch.getId().equalsIgnoreCase(c.getParentChannelId())) {
+                        subCount++;
+                    }
+                }
+            }
+
+            if (subCount > 0) {
+                guiGraphics.drawCenteredString(this.font, Component.literal("⚠ Deleting this puppet also removes " + subCount + " linked sub-channel(s)!"), left + (panelWidth / 2), top + 74, 0xFFFF3355);
+                guiGraphics.drawCenteredString(this.font, Component.literal("All keyframes on this channel and sub-channels will be removed!"), left + (panelWidth / 2), top + 88, 0xFFFFAA33);
+            } else {
+                guiGraphics.drawCenteredString(this.font, Component.literal("⚠ All keyframes on this channel will be removed!"), left + (panelWidth / 2), top + 76, 0xFFFF3355);
+            }
+        }
 
         int btnY = top + 115;
         boolean delHov = isMouseOver(mouseX, mouseY, left + 24, btnY, 140, 24);
@@ -3160,31 +3485,40 @@ public class MusicSequenceScreen extends Screen {
                 modalChannelNameBox.render(guiGraphics, mouseX, mouseY, partialTick);
             }
 
-            // Row 2: Target Mode Selector Tabs
+            // Row 2: Target Mode Selector Tabs (3 tabs)
             guiGraphics.drawString(this.font, "Actor Target Mode:", left + 16, top + 65, 0xFFAABBCC, false);
-            int tabW = (panelWidth - 36) / 2;
+            int tabW = (panelWidth - 40) / 3;
             int tabY = top + 77;
             boolean regActive = (puppetTargetMode == PuppetTargetMode.REGISTER_NEW);
             boolean regHov = isMouseOver(mouseX, mouseY, left + 16, tabY, tabW, 20);
-            drawModalButton(guiGraphics, left + 16, tabY, tabW, 20, "➕ REGISTER NEW ACTOR", regActive ? 0xFFAA55FF : 0xFF8899AA, regHov || regActive);
+            drawModalButton(guiGraphics, left + 16, tabY, tabW, 20, "➕ REGISTER NEW", regActive ? 0xFFAA55FF : 0xFF8899AA, regHov || regActive);
 
             boolean existActive = (puppetTargetMode == PuppetTargetMode.EXISTING_ACTOR);
-            boolean existHov = isMouseOver(mouseX, mouseY, left + 20 + tabW, tabY, tabW, 20);
-            drawModalButton(guiGraphics, left + 20 + tabW, tabY, tabW, 20, "🔍 SELECT EXISTING ACTOR", existActive ? 0xFFAA55FF : 0xFF8899AA, existHov || existActive);
+            boolean existHov = isMouseOver(mouseX, mouseY, left + 18 + tabW, tabY, tabW, 20);
+            drawModalButton(guiGraphics, left + 18 + tabW, tabY, tabW, 20, "🔍 IN-WORLD MOB", existActive ? 0xFFAA55FF : 0xFF8899AA, existHov || existActive);
 
-            // Row 3: Entity Type / Mob Selection
+            boolean subActive = (puppetTargetMode == PuppetTargetMode.SUB_CHANNEL);
+            boolean subHov = isMouseOver(mouseX, mouseY, left + 20 + (tabW * 2), tabY, tabW, 20);
+            drawModalButton(guiGraphics, left + 20 + (tabW * 2), tabY, tabW, 20, "🔗 SUB-CHANNEL", subActive ? 0xFFBB77FF : 0xFF8899AA, subHov || subActive);
+
+            // Row 3: Entity Type / Mob / Parent Selection
             if (puppetTargetMode == PuppetTargetMode.REGISTER_NEW) {
                 guiGraphics.drawString(this.font, "Select Entity Type to Register (No World Spawn):", left + 16, top + 103, 0xFFAABBCC, false);
                 if (modalEntityCatalogDropdown != null) {
                     modalEntityCatalogDropdown.render(guiGraphics, mouseX, mouseY, partialTick);
                 }
-            } else {
+            } else if (puppetTargetMode == PuppetTargetMode.EXISTING_ACTOR) {
                 guiGraphics.drawString(this.font, "Choose Detected In-World Mob or Aim Crosshair:", left + 16, top + 103, 0xFFAABBCC, false);
                 if (modalExistingMobsDropdown != null) {
                     modalExistingMobsDropdown.render(guiGraphics, mouseX, mouseY, partialTick);
                 }
                 boolean tgtHov = isMouseOver(mouseX, mouseY, left + panelWidth - 16 - 105, top + 115, 105, 20);
                 drawModalButton(guiGraphics, left + panelWidth - 16 - 105, top + 115, 105, 20, "🎯 TARGET MOB", CYAN_MAIN, tgtHov);
+            } else {
+                guiGraphics.drawString(this.font, "Choose Existing Puppet Entity to Link As Sub-Channel:", left + 16, top + 103, 0xFFAABBCC, false);
+                if (modalParentPuppetDropdown != null) {
+                    modalParentPuppetDropdown.render(guiGraphics, mouseX, mouseY, partialTick);
+                }
             }
 
             // Row 4: Entity Name
@@ -3211,9 +3545,12 @@ public class MusicSequenceScreen extends Screen {
                 if (puppetTargetMode == PuppetTargetMode.REGISTER_NEW) {
                     guiGraphics.drawString(this.font, "ℹ Registered on channel only. Actions route to @e[tag=" + tagPreview + ",limit=1]", left + 16, top + 215, 0xFF8899AA, false);
                     guiGraphics.drawString(this.font, "ℹ Spawn this entity in your world/arena with this matching tag.", left + 16, top + 228, 0xFF778899, false);
-                } else {
+                } else if (puppetTargetMode == PuppetTargetMode.EXISTING_ACTOR) {
                     guiGraphics.drawString(this.font, "ℹ Actions on this channel route to @e[tag=" + tagPreview + ",limit=1]", left + 16, top + 215, 0xFF8899AA, false);
                     guiGraphics.drawString(this.font, "ℹ Ensure the target mob in-world has this tag applied.", left + 16, top + 228, 0xFF778899, false);
+                } else {
+                    guiGraphics.drawString(this.font, "ℹ Sub-channel for simultaneous actions. Linked to @e[tag=" + tagPreview + ",limit=1]", left + 16, top + 215, 0xFFBB77FF, false);
+                    guiGraphics.drawString(this.font, "ℹ Shares the same in-world entity as the parent puppet channel.", left + 16, top + 228, 0xFF8899AA, false);
                 }
             }
 
@@ -3222,14 +3559,18 @@ public class MusicSequenceScreen extends Screen {
             boolean bHov = isMouseOver(mouseX, mouseY, left + 16, btnY, 120, 24);
             drawModalButton(guiGraphics, left + 16, btnY, 120, 24, "← BACK TO TYPES", 0xFF8899AA, bHov);
 
+            String addBtnLabel = (puppetTargetMode == PuppetTargetMode.SUB_CHANNEL) ? "+ ADD SUB-CHANNEL" : "+ ADD PUPPET CHANNEL";
+            int addBtnColor = (puppetTargetMode == PuppetTargetMode.SUB_CHANNEL) ? 0xFFBB77FF : 0xFFAA55FF;
             boolean addPHov = isMouseOver(mouseX, mouseY, left + panelWidth - 16 - 165, btnY, 165, 24);
-            drawModalButton(guiGraphics, left + panelWidth - 16 - 165, btnY, 165, 24, "+ ADD PUPPET CHANNEL", 0xFFAA55FF, addPHov);
+            drawModalButton(guiGraphics, left + panelWidth - 16 - 165, btnY, 165, 24, addBtnLabel, addBtnColor, addPHov);
 
             // Dropdown Overlay rendered on top of all modal controls
             if (puppetTargetMode == PuppetTargetMode.REGISTER_NEW && modalEntityCatalogDropdown != null) {
                 modalEntityCatalogDropdown.renderOverlay(guiGraphics, mouseX, mouseY);
             } else if (puppetTargetMode == PuppetTargetMode.EXISTING_ACTOR && modalExistingMobsDropdown != null) {
                 modalExistingMobsDropdown.renderOverlay(guiGraphics, mouseX, mouseY);
+            } else if (puppetTargetMode == PuppetTargetMode.SUB_CHANNEL && modalParentPuppetDropdown != null) {
+                modalParentPuppetDropdown.renderOverlay(guiGraphics, mouseX, mouseY);
             }
         }
     }

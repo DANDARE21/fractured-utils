@@ -13,6 +13,7 @@ import net.minecraft.world.entity.Mob;
 public abstract class PuppetActionInstance<T> {
     protected final Mob mob;
     protected final T params;
+    private PuppetActionType<?> actionType;
     private Phase currentPhase = Phase.IDLE;
     private int ticksInPhase = 0;
     private boolean finished = false;
@@ -20,6 +21,14 @@ public abstract class PuppetActionInstance<T> {
     public PuppetActionInstance(Mob mob, T params) {
         this.mob = mob;
         this.params = params;
+    }
+
+    public PuppetActionType<?> getActionType() {
+        return actionType;
+    }
+
+    public void setActionType(PuppetActionType<?> actionType) {
+        this.actionType = actionType;
     }
 
     public Mob getMob() {
@@ -119,6 +128,20 @@ public abstract class PuppetActionInstance<T> {
      * Broadcasts a GeckoLib animation trigger packet to all clients tracking this mob and self.
      */
     public void broadcastAnim(String controllerName, String animName) {
+        if ("idle".equalsIgnoreCase(animName) && this.mob != null) {
+            var cap = this.mob.getCapability(net.dandare21.fracturedutils.puppet.capability.PuppetCapabilityProvider.PUPPET_HANDLER);
+            if (cap.isPresent()) {
+                net.dandare21.fracturedutils.puppet.capability.IPuppetHandler handler = cap.resolve().orElse(null);
+                if (handler != null) {
+                    for (PuppetActionInstance<?> other : handler.getActiveActions()) {
+                        if (other != this && !other.isFinished() &&
+                                (other.getCurrentPhase() == Phase.ACTIVE || other.getCurrentPhase() == Phase.WINDUP)) {
+                            return; // Do not cut off other concurrent action's animation with idle
+                        }
+                    }
+                }
+            }
+        }
         if (this.mob != null && !this.mob.level().isClientSide) {
             ModMessages.sendToTrackingEntityAndSelf(
                     new ClientboundPuppetAnimPacket(this.mob.getId(), controllerName, animName),

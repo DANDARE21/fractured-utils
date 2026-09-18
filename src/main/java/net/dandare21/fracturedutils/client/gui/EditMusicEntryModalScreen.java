@@ -2727,17 +2727,19 @@ public class EditMusicEntryModalScreen extends Screen {
     private void renderPuppetScreen(GuiGraphics guiGraphics, int panelLeft, int panelTop, int panelWidth, int panelHeight,
                                     int mouseX, int mouseY, float partialTick) {
         // 1. Header & Actor Info Banner
-        guiGraphics.drawString(this.font, "PUPPET ACTOR ACTION EDITOR", panelLeft + 16, panelTop + 10, CYAN_MAIN, false);
+        boolean isSub = channel != null && channel.isSubChannel();
+        int titleColor = isSub ? MusicSequenceChannel.COLOR_PUPPET_SUB : CYAN_MAIN;
+        guiGraphics.drawString(this.font, isSub ? "PUPPET ACTOR ACTION EDITOR (SUB-CHANNEL)" : "PUPPET ACTOR ACTION EDITOR", panelLeft + 16, panelTop + 10, titleColor, false);
 
         String actorTag = (channel != null && !channel.getActorTag().isBlank()) ? channel.getActorTag() : (channel != null ? channel.getName() : "actor");
         String actorName = (channel != null) ? channel.getName() : "Puppet Actor";
         String entityType = (channel != null && !channel.getEntityTypeId().isBlank()) ? channel.getEntityTypeId() : "fracturedutils:void_herald";
 
-        String actorBanner = "🎭 " + actorName + "  |  #" + actorTag + "  |  " + entityType;
+        String actorBanner = (isSub ? "↳ 🎭 " : "🎭 ") + actorName + "  |  #" + actorTag + "  |  " + entityType + (isSub ? " [Linked Sub-Track]" : "");
         if (this.font.width(actorBanner) > panelWidth - 40) {
             actorBanner = this.font.plainSubstrByWidth(actorBanner, panelWidth - 46) + "..";
         }
-        guiGraphics.drawString(this.font, actorBanner, panelLeft + 16, panelTop + 24, 0xFFAA55FF, false);
+        guiGraphics.drawString(this.font, actorBanner, panelLeft + 16, panelTop + 24, isSub ? MusicSequenceChannel.COLOR_PUPPET_SUB : 0xFFAA55FF, false);
 
         int contentX = panelLeft + 16;
         int contentW = panelWidth - 32;

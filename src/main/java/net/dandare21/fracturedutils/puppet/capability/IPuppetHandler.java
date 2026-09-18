@@ -6,9 +6,11 @@ import net.dandare21.fracturedutils.puppet.fsm.PuppetActionType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 
+import java.util.List;
+
 /**
  * Capability interface attached to any Mob to allow puppet orchestration,
- * AI goal flag suppression, and action dispatching.
+ * AI goal flag suppression, and action dispatching. Supports concurrent actions.
  */
 public interface IPuppetHandler {
 
@@ -16,31 +18,52 @@ public interface IPuppetHandler {
 
     /**
      * Dispatches and begins execution of a registered action type with the specified parameters.
+     * Multiple concurrent actions can run simultaneously without cancelling each other.
      */
     <T> void dispatch(PuppetActionType<T> type, T params);
 
     /**
-     * Ticks the active puppet action instance and monitors lifecycle completion.
+     * Ticks all active puppet action instances and monitors lifecycle completion.
      */
     void tick();
 
     /**
-     * Stops any currently running action and restores AI control flags.
+     * Stops all currently running actions and cleans up temporary action locks.
      */
     void stopActiveAction();
 
     /**
-     * Whether puppeteering is currently active.
+     * Stops a specific running action instance.
+     */
+    void stopAction(PuppetActionInstance<?> action);
+
+    /**
+     * Stops all active actions of a specific type.
+     */
+    void stopActions(PuppetActionType<?> type);
+
+    /**
+     * Whether puppeteering is currently active (running actions or active forced move/look).
      */
     boolean isPuppetingActive();
 
     /**
-     * @return The currently active action instance, or null if idle.
+     * @return True if there is at least one currently active action running.
+     */
+    boolean hasActiveActions();
+
+    /**
+     * @return The most recently dispatched active action instance, or null if idle.
      */
     PuppetActionInstance<?> getActiveAction();
 
     /**
-     * @return The active phase of the running action, or IDLE.
+     * @return Unmodifiable list of all currently active action instances.
+     */
+    List<PuppetActionInstance<?>> getActiveActions();
+
+    /**
+     * @return The active phase of the running actions (prioritizes ACTIVE > WINDUP > RECOVERY > IDLE).
      */
     Phase getCurrentPhase();
 

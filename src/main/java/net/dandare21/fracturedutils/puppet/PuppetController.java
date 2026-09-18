@@ -5,13 +5,16 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Controller component stored inside a puppet entity. Manages AI aspect suppression flags,
- * registered actions, and active action lifetimes.
+ * registered actions, and active concurrent action lifetimes.
  */
 public class PuppetController {
     private final Mob mob;
@@ -28,17 +31,96 @@ public class PuppetController {
         IDLE, WINDUP, ACTIVE
     }
 
-    // Active Action Lifecycle State
-    private ActionPhase currentPhase = ActionPhase.IDLE;
-    private PuppetAction activeAction = null;
-    private CompoundTag activeParams = null;
+    /**
+     * Represents a single actively executing action instance.
+     */
+    public static class ActiveActionExecution {
+        private final ResourceLocation actionId;
+        private final PuppetAction action;
+        private final CompoundTag params;
+        private ActionPhase currentPhase = ActionPhase.IDLE;
+        private int windupTicksRemaining;
+        private final int totalWindupTicks;
+        private int durationTicksRemaining;
+        private final int totalDurationTicks;
+        private Runnable onActionCompleteCallback;
+        private boolean finished = false;
 
-    private int windupTicksRemaining = 0;
-    private int totalWindupTicks = 0;
-    private int durationTicksRemaining = 0;
-    private int totalDurationTicks = 0;
+        public ActiveActionExecution(ResourceLocation actionId, PuppetAction action, CompoundTag params, int windupTicks, int durationTicks, Runnable onComplete) {
+            this.actionId = actionId;
+            this.action = action;
+            this.params = params != null ? params.copy() : new CompoundTag();
+            this.onActionCompleteCallback = onComplete;
+            int wTicks = Math.max(0, windupTicks);
+            int dTicks = Math.max(0, durationTicks);
+            this.totalWindupTicks = wTicks;
+            this.windupTicksRemaining = wTicks;
+            this.totalDurationTicks = dTicks;
+            this.durationTicksRemaining = dTicks;
+        }
 
-    private Runnable onActionCompleteCallback = null;
+        public void start(Mob mob) {
+            if (this.totalWindupTicks > 0) {
+                this.currentPhase = ActionPhase.WINDUP;
+            } else {
+                this.action.execute(mob, this.params);
+                if (this.totalDurationTicks > 0) {
+                    this.currentPhase = ActionPhase.ACTIVE;
+                } else {
+                    complete(mob);
+                }
+            }
+        }
+
+        public void tick(Mob mob) {
+            if (this.finished) return;
+            if (this.currentPhase == ActionPhase.WINDUP) {
+                int currentWindupTick = this.totalWindupTicks - this.windupTicksRemaining + 1;
+                this.action.onWindupTick(mob, this.params, currentWindupTick, this.totalWindupTicks);
+                this.windupTicksRemaining--;
+                if (this.windupTicksRemaining <= 0) {
+                    this.action.execute(mob, this.params);
+                    if (this.totalDurationTicks > 0) {
+                        this.currentPhase = ActionPhase.ACTIVE;
+                    } else {
+                        complete(mob);
+                    }
+                }
+            } else if (this.currentPhase == ActionPhase.ACTIVE) {
+                int currentActiveTick = this.totalDurationTicks - this.durationTicksRemaining + 1;
+                this.action.onActiveTick(mob, this.params, currentActiveTick, this.totalDurationTicks);
+                this.durationTicksRemaining--;
+                if (this.durationTicksRemaining <= 0) {
+                    complete(mob);
+                }
+            }
+        }
+
+        public void complete(Mob mob) {
+            if (this.finished) return;
+            this.finished = true;
+            this.currentPhase = ActionPhase.IDLE;
+            this.action.onComplete(mob, this.params);
+            if (this.onActionCompleteCallback != null) {
+                Runnable cb = this.onActionCompleteCallback;
+                this.onActionCompleteCallback = null;
+                cb.run();
+            }
+        }
+
+        public boolean isFinished() { return this.finished; }
+        public ActionPhase getCurrentPhase() { return this.currentPhase; }
+        public ResourceLocation getActionId() { return this.actionId; }
+        public PuppetAction getAction() { return this.action; }
+        public CompoundTag getParams() { return this.params; }
+        public int getWindupTicksRemaining() { return this.windupTicksRemaining; }
+        public int getTotalWindupTicks() { return this.totalWindupTicks; }
+        public int getDurationTicksRemaining() { return this.durationTicksRemaining; }
+        public int getTotalDurationTicks() { return this.totalDurationTicks; }
+    }
+
+    // Active Concurrent Action Executions
+    private final List<ActiveActionExecution> activeExecutions = new CopyOnWriteArrayList<>();
     private long lastTickTime = -1;
 
     // Sustained Primitive Direct Controls State
@@ -77,28 +159,15 @@ public class PuppetController {
         PuppetAction action = this.actions.get(actionId);
         if (action != null) {
             this.mob.setNoAi(false);
-            this.setPuppetingActive(true);
-            this.activeAction = action;
-            this.activeParams = params != null ? params : new CompoundTag();
-            this.onActionCompleteCallback = onComplete;
+            this.puppetingActive = true;
 
-            int wTicks = Math.max(0, windupTicks);
-            int dTicks = Math.max(0, durationTicks);
-
-            this.totalWindupTicks = wTicks;
-            this.windupTicksRemaining = wTicks;
-
-            this.totalDurationTicks = dTicks;
-            this.durationTicksRemaining = dTicks;
-
-            if (wTicks > 0) {
-                this.currentPhase = ActionPhase.WINDUP;
-            } else {
-                this.activeAction.execute(this.mob, this.activeParams);
-                if (dTicks > 0) {
-                    this.currentPhase = ActionPhase.ACTIVE;
-                } else {
-                    this.stopAction();
+            ActiveActionExecution exec = new ActiveActionExecution(actionId, action, params, windupTicks, durationTicks, onComplete);
+            this.activeExecutions.add(exec);
+            exec.start(this.mob);
+            if (exec.isFinished()) {
+                this.activeExecutions.remove(exec);
+                if (this.activeExecutions.isEmpty() && !this.hasActionTarget()) {
+                    this.puppetingActive = false;
                 }
             }
         }
@@ -125,33 +194,23 @@ public class PuppetController {
             this.lastTickTime = currentTime;
         }
 
-        if (!this.puppetingActive) return;
+        if (!this.puppetingActive && this.activeExecutions.isEmpty() && !this.hasActionTarget()) return;
 
-        // 1. Multi-Phase Action Lifecycle Update
-        if (isNewTick && this.activeAction != null) {
-            if (this.currentPhase == ActionPhase.WINDUP) {
-                int currentWindupTick = this.totalWindupTicks - this.windupTicksRemaining + 1;
-                this.activeAction.onWindupTick(this.mob, this.activeParams, currentWindupTick, this.totalWindupTicks);
-
-                this.windupTicksRemaining--;
-                if (this.windupTicksRemaining <= 0) {
-                    // Transition to ACTIVE phase
-                    this.activeAction.execute(this.mob, this.activeParams);
-                    if (this.totalDurationTicks > 0) {
-                        this.currentPhase = ActionPhase.ACTIVE;
-                    } else {
-                        this.stopAction();
-                        return;
-                    }
+        // 1. Concurrent Action Lifecycle Update
+        if (isNewTick && !this.activeExecutions.isEmpty()) {
+            List<ActiveActionExecution> completed = new ArrayList<>();
+            for (ActiveActionExecution exec : this.activeExecutions) {
+                if (!exec.isFinished()) {
+                    exec.tick(this.mob);
                 }
-            } else if (this.currentPhase == ActionPhase.ACTIVE) {
-                int currentActiveTick = this.totalDurationTicks - this.durationTicksRemaining + 1;
-                this.activeAction.onActiveTick(this.mob, this.activeParams, currentActiveTick, this.totalDurationTicks);
-
-                this.durationTicksRemaining--;
-                if (this.durationTicksRemaining <= 0) {
-                    this.stopAction();
-                    return;
+                if (exec.isFinished()) {
+                    completed.add(exec);
+                }
+            }
+            if (!completed.isEmpty()) {
+                this.activeExecutions.removeAll(completed);
+                if (this.activeExecutions.isEmpty() && !this.hasActionTarget()) {
+                    this.puppetingActive = false;
                 }
             }
         }
@@ -191,28 +250,30 @@ public class PuppetController {
     }
 
     public void stopAction() {
-        this.puppetingActive = false;
-        this.currentPhase = ActionPhase.IDLE;
-
-        if (this.activeAction != null) {
-            PuppetAction actionToComplete = this.activeAction;
-            CompoundTag paramsToComplete = this.activeParams;
-            this.activeAction = null;
-            this.activeParams = null;
-            actionToComplete.onComplete(this.mob, paramsToComplete != null ? paramsToComplete : new CompoundTag());
+        for (ActiveActionExecution exec : this.activeExecutions) {
+            exec.complete(this.mob);
         }
-
-        this.windupTicksRemaining = 0;
-        this.totalWindupTicks = 0;
-        this.durationTicksRemaining = 0;
-        this.totalDurationTicks = 0;
+        this.activeExecutions.clear();
+        this.puppetingActive = false;
 
         this.clearMoveTarget();
         this.clearLookTarget();
-        if (this.onActionCompleteCallback != null) {
-            Runnable callback = this.onActionCompleteCallback;
-            this.onActionCompleteCallback = null;
-            callback.run();
+    }
+
+    public void stopAction(ResourceLocation actionId) {
+        if (actionId == null) return;
+        List<ActiveActionExecution> toStop = new ArrayList<>();
+        for (ActiveActionExecution exec : this.activeExecutions) {
+            if (exec.getActionId().equals(actionId)) {
+                toStop.add(exec);
+            }
+        }
+        for (ActiveActionExecution exec : toStop) {
+            exec.complete(this.mob);
+            this.activeExecutions.remove(exec);
+        }
+        if (this.activeExecutions.isEmpty() && !this.hasActionTarget()) {
+            this.puppetingActive = false;
         }
     }
 
@@ -267,23 +328,10 @@ public class PuppetController {
     }
 
     public void clearActiveAction() {
-        this.currentPhase = ActionPhase.IDLE;
-        if (this.activeAction != null) {
-            PuppetAction actionToComplete = this.activeAction;
-            CompoundTag paramsToComplete = this.activeParams;
-            this.activeAction = null;
-            this.activeParams = null;
-            actionToComplete.onComplete(this.mob, paramsToComplete != null ? paramsToComplete : new CompoundTag());
+        for (ActiveActionExecution exec : this.activeExecutions) {
+            exec.complete(this.mob);
         }
-        this.windupTicksRemaining = 0;
-        this.totalWindupTicks = 0;
-        this.durationTicksRemaining = 0;
-        this.totalDurationTicks = 0;
-        if (this.onActionCompleteCallback != null) {
-            Runnable callback = this.onActionCompleteCallback;
-            this.onActionCompleteCallback = null;
-            callback.run();
-        }
+        this.activeExecutions.clear();
     }
 
     public void resetSuppressionFlags() {
@@ -332,13 +380,33 @@ public class PuppetController {
 
     public Mob getMob() { return this.mob; }
     public Map<ResourceLocation, PuppetAction> getActions() { return Collections.unmodifiableMap(this.actions); }
-    public boolean isPuppetingActive() { return this.puppetingActive; }
-    public ActionPhase getCurrentPhase() { return this.currentPhase; }
-    public int getWindupTicksRemaining() { return this.windupTicksRemaining; }
-    public int getTotalWindupTicks() { return this.totalWindupTicks; }
-    public int getDurationTicksRemaining() { return this.durationTicksRemaining; }
-    public int getTotalDurationTicks() { return this.totalDurationTicks; }
-    public CompoundTag getActiveParams() { return this.activeParams; }
+    public boolean isPuppetingActive() { return this.puppetingActive || !this.activeExecutions.isEmpty(); }
+    public boolean hasActiveActions() { return !this.activeExecutions.isEmpty(); }
+    public List<ActiveActionExecution> getActiveExecutions() { return Collections.unmodifiableList(this.activeExecutions); }
+    public ActionPhase getCurrentPhase() {
+        ActionPhase highest = ActionPhase.IDLE;
+        for (ActiveActionExecution exec : this.activeExecutions) {
+            ActionPhase p = exec.getCurrentPhase();
+            if (p == ActionPhase.ACTIVE) return ActionPhase.ACTIVE;
+            if (p == ActionPhase.WINDUP) highest = ActionPhase.WINDUP;
+        }
+        return highest;
+    }
+    public int getWindupTicksRemaining() {
+        return this.activeExecutions.isEmpty() ? 0 : this.activeExecutions.get(this.activeExecutions.size() - 1).getWindupTicksRemaining();
+    }
+    public int getTotalWindupTicks() {
+        return this.activeExecutions.isEmpty() ? 0 : this.activeExecutions.get(this.activeExecutions.size() - 1).getTotalWindupTicks();
+    }
+    public int getDurationTicksRemaining() {
+        return this.activeExecutions.isEmpty() ? 0 : this.activeExecutions.get(this.activeExecutions.size() - 1).getDurationTicksRemaining();
+    }
+    public int getTotalDurationTicks() {
+        return this.activeExecutions.isEmpty() ? 0 : this.activeExecutions.get(this.activeExecutions.size() - 1).getTotalDurationTicks();
+    }
+    public CompoundTag getActiveParams() {
+        return this.activeExecutions.isEmpty() ? new CompoundTag() : this.activeExecutions.get(this.activeExecutions.size() - 1).getParams();
+    }
     public boolean isAiSuppressed() { return this.suppressAi || this.mob.isNoAi(); }
     public boolean isNavigationSuppressed() { return this.suppressNavigation; }
     public boolean isTargetingSuppressed() { return this.suppressTargeting; }

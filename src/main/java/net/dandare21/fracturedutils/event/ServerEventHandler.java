@@ -12,6 +12,7 @@ import net.dandare21.fracturedutils.waitingroom.WaitingRoomManager;
 import net.dandare21.fracturedutils.config.ServerConfig;
 import net.minecraft.network.protocol.game.ClientboundSetExperiencePacket;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
@@ -39,6 +40,7 @@ public class ServerEventHandler {
         net.dandare21.fracturedutils.command.BossPuppetCommand.register(event.getDispatcher());
         net.dandare21.fracturedutils.command.ScreenEffectCommand.register(event.getDispatcher());
         net.dandare21.fracturedutils.command.BossHealthBarCommand.register(event.getDispatcher());
+        net.dandare21.fracturedutils.command.HealthThresholdCommand.register(event.getDispatcher());
     }
 
     @SubscribeEvent
@@ -79,7 +81,31 @@ public class ServerEventHandler {
                 if (player.getHealth() - event.getAmount() <= 0.0f) {
                     event.setCanceled(true);
                     mgr.setPlayerDowned(player);
+                    return;
                 }
+            }
+        }
+
+        LivingEntity living = event.getEntity();
+        if (net.dandare21.fracturedutils.threshold.HealthThresholdManager.hasThresholds(living)) {
+            var activeOpt = net.dandare21.fracturedutils.threshold.HealthThresholdManager.getActiveThreshold(living);
+            if (activeOpt.isPresent() && living.getHealth() <= activeOpt.get().getMinHealthResolved(living)) {
+                event.setCanceled(true);
+                return;
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onLivingDamage(net.minecraftforge.event.entity.living.LivingDamageEvent event) {
+        LivingEntity living = event.getEntity();
+        if (net.dandare21.fracturedutils.threshold.HealthThresholdManager.hasThresholds(living)) {
+            float reduced = net.dandare21.fracturedutils.threshold.HealthThresholdManager.applyDamageReduction(living, event.getAmount());
+            if (reduced <= 0.0f) {
+                event.setAmount(0.0f);
+                event.setCanceled(true);
+            } else {
+                event.setAmount(reduced);
             }
         }
     }
@@ -91,6 +117,19 @@ public class ServerEventHandler {
             if (mgr.hasActiveCheckpoint() && !player.isSpectator() && mgr.isPlayerMatchingCheckpoint(player.getServer(), player)) {
                 event.setCanceled(true);
                 mgr.setPlayerDowned(player);
+                return;
+            }
+        }
+
+        LivingEntity living = event.getEntity();
+        if (net.dandare21.fracturedutils.threshold.HealthThresholdManager.hasThresholds(living)) {
+            var activeOpt = net.dandare21.fracturedutils.threshold.HealthThresholdManager.getActiveThreshold(living);
+            if (activeOpt.isPresent()) {
+                float minHp = activeOpt.get().getMinHealthResolved(living);
+                if (minHp > 0.0f) {
+                    event.setCanceled(true);
+                    living.setHealth(minHp);
+                }
             }
         }
     }

@@ -470,7 +470,7 @@ public class MusicSequenceScreen extends Screen {
     private void togglePreviewPlayback() {
         if (!this.isPreviewPlaying) {
             long endMs = getEffectiveEndMs();
-            if (this.playheadMs >= endMs) {
+            if (this.playheadMs >= endMs || this.playheadMs < currentSequence.getStartMs()) {
                 this.playheadMs = currentSequence.getStartMs();
             }
         }

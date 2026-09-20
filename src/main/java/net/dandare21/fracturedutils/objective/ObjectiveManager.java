@@ -155,7 +155,7 @@ public class ObjectiveManager {
         int idx = instance.getCurrentIndex();
         if (idx >= 0 && idx < actions.size()) {
             OrchestratorAction action = actions.get(idx);
-            if (action instanceof WaitUntilAction || action instanceof DelayAction || action instanceof AwaitTriggerAction) {
+            if (action instanceof WaitUntilAction || action instanceof DelayAction || action instanceof AwaitTriggerAction || action instanceof net.dandare21.fracturedutils.orchestrator.action.WaitForMusicSequenceAction) {
                 return action;
             }
         }
@@ -187,6 +187,8 @@ public class ObjectiveManager {
                 return "Wait for Players Ready";
             } else if (mode.equals("downloads")) {
                 return "Downloading Data...";
+            } else if (mode.equals("music_sequence") || mode.equals("wait_music_sequence") || mode.equals("wait_for_music_sequence") || mode.equals("music_sequence_end") || mode.equals("music_end")) {
+                return !wua.getTriggerId().isBlank() ? ("Wait for Music: " + wua.getTriggerId()) : "Wait for Music Sequence";
             } else {
                 return "Wait: " + wua.getWaitType();
             }
@@ -196,6 +198,8 @@ public class ObjectiveManager {
             return String.format(Locale.ROOT, "Countdown: %.1fs", ticks / 20.0f);
         } else if (action instanceof AwaitTriggerAction ata) {
             return "Wait for Trigger: " + ata.getTriggerId();
+        } else if (action instanceof net.dandare21.fracturedutils.orchestrator.action.WaitForMusicSequenceAction wfms) {
+            return !wfms.getSequenceFile().isBlank() ? ("Wait for Music: " + wfms.getSequenceFile()) : "Wait for Music Sequence";
         }
         return "";
     }

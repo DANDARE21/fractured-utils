@@ -71,12 +71,16 @@ public class MusicSequenceManager {
         private final long expectedDurationMs;
         private final Set<UUID> targetPlayerUuids;
         private final Set<Integer> executedEntryIndices = new HashSet<>();
+        private final Set<UUID> spawnedPuppetUuids = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        private final Set<String> spawnedActorTags = Collections.newSetFromMap(new ConcurrentHashMap<>());
         private boolean finished = false;
+        private boolean reachedOutMarker = false;
 
         public ActiveMusicSequence(String fileName, MusicSequence sequence, Collection<ServerPlayer> targets) {
             this.fileName = fileName;
             this.sequence = sequence;
-            this.startTimeMs = System.currentTimeMillis();
+            long inMs = sequence.getStartMs();
+            this.startTimeMs = System.currentTimeMillis() - inMs;
             this.targetPlayerUuids = new HashSet<>();
             if (targets != null) {
                 for (ServerPlayer player : targets) {
@@ -106,6 +110,16 @@ public class MusicSequenceManager {
             } else {
                 this.expectedDurationMs = Math.max(30000L, maxEntryTimestamp + 1000L);
             }
+
+            // Exclude actions outside the [IN, OUT] marker bounds
+            long outMs = getOutMarkerMs();
+            List<MusicSequenceEntry> entries = sequence.getEntries();
+            for (int i = 0; i < entries.size(); i++) {
+                long ts = entries.get(i).getTimestampMs();
+                if (ts < inMs || ts > outMs) {
+                    this.executedEntryIndices.add(i);
+                }
+            }
         }
 
         public String getFileName() {
@@ -128,6 +142,14 @@ public class MusicSequenceManager {
             return expectedDurationMs;
         }
 
+        public long getInMarkerMs() {
+            return sequence.getStartMs();
+        }
+
+        public long getOutMarkerMs() {
+            return sequence.getEndMs() > 0 ? sequence.getEndMs() : expectedDurationMs;
+        }
+
         public boolean isFinished() {
             return finished;
         }
@@ -136,12 +158,40 @@ public class MusicSequenceManager {
             this.finished = finished;
         }
 
+        public boolean hasReachedOutMarker() {
+            return reachedOutMarker;
+        }
+
+        public void setReachedOutMarker(boolean reachedOutMarker) {
+            this.reachedOutMarker = reachedOutMarker;
+        }
+
         public Set<UUID> getTargetPlayerUuids() {
             return targetPlayerUuids;
         }
 
         public Set<Integer> getExecutedEntryIndices() {
             return executedEntryIndices;
+        }
+
+        public Set<UUID> getSpawnedPuppetUuids() {
+            return spawnedPuppetUuids;
+        }
+
+        public Set<String> getSpawnedActorTags() {
+            return spawnedActorTags;
+        }
+
+        public void trackSpawnedPuppet(UUID uuid) {
+            if (uuid != null) {
+                spawnedPuppetUuids.add(uuid);
+            }
+        }
+
+        public void trackSpawnedActorTag(String tag) {
+            if (tag != null && !tag.isBlank()) {
+                spawnedActorTags.add(tag);
+            }
         }
 
         public Collection<ServerPlayer> getTargets(MinecraftServer server) {
@@ -219,7 +269,90 @@ public class MusicSequenceManager {
     }
 
     public boolean hasActiveSequences() {
-        return !activeSequences.isEmpty();
+        for (ActiveMusicSequence activeSeq : activeSequences) {
+            if (!activeSeq.isFinished()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean hasActiveSequence() {
+        return hasActiveSequences();
+    }
+
+    private final Map<String, Long> lastOutMarkerReachedTimes = new ConcurrentHashMap<>();
+
+    public void recordOutMarkerReached(String fileName) {
+        if (fileName != null && !fileName.isBlank()) {
+            lastOutMarkerReachedTimes.put(sanitizeFileName(fileName), System.currentTimeMillis());
+        }
+    }
+
+    public boolean hasReachedOutMarker(String fileName, long maxAgeMs) {
+        if (fileName == null || fileName.isBlank()) {
+            long now = System.currentTimeMillis();
+            for (long t : lastOutMarkerReachedTimes.values()) {
+                if (now - t <= maxAgeMs) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        String clean = sanitizeFileName(fileName);
+        Long t = lastOutMarkerReachedTimes.get(clean);
+        return t != null && (System.currentTimeMillis() - t <= maxAgeMs);
+    }
+
+    private final Set<UUID> allSequenceSpawnedPuppetUuids = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
+    public void trackSpawnedPuppet(UUID uuid) {
+        if (uuid != null) {
+            allSequenceSpawnedPuppetUuids.add(uuid);
+        }
+    }
+
+    public void untrackSpawnedPuppet(UUID uuid) {
+        if (uuid != null) {
+            allSequenceSpawnedPuppetUuids.remove(uuid);
+        }
+    }
+
+    public void despawnAllSequencePuppets(MinecraftServer server) {
+        if (server == null) return;
+        int despawnedCount = 0;
+
+        // 1. Despawn tracked entity UUIDs across all server levels
+        for (UUID uuid : new ArrayList<>(allSequenceSpawnedPuppetUuids)) {
+            if (uuid == null) continue;
+            for (ServerLevel level : server.getAllLevels()) {
+                Entity entity = level.getEntity(uuid);
+                if (entity != null) {
+                    entity.discard();
+                    despawnedCount++;
+                    break;
+                }
+            }
+        }
+        allSequenceSpawnedPuppetUuids.clear();
+
+        // 2. Despawn any entities tagged with "music_seq_puppet" across all levels
+        for (ServerLevel level : server.getAllLevels()) {
+            for (Entity e : level.getAllEntities()) {
+                if (e.getTags().contains("music_seq_puppet")) {
+                    e.discard();
+                    despawnedCount++;
+                }
+            }
+        }
+
+        // 3. Clear tracked puppets from all active sequence instances
+        for (ActiveMusicSequence activeSeq : activeSequences) {
+            activeSeq.getSpawnedPuppetUuids().clear();
+            activeSeq.getSpawnedActorTags().clear();
+        }
+
+        FracturedUtils.LOGGER.info("[MusicSequenceManager] Despawned {} sequence-spawned puppet(s).", despawnedCount);
     }
 
     private MusicSequenceManager() {
@@ -359,7 +492,8 @@ public class MusicSequenceManager {
                     1000,
                     PlaybackMode.SERVER_CONTROLLED,
                     sequence.isLooping(),
-                    2000
+                    2000,
+                    sequence.getStartMs()
             );
         }
 
@@ -367,7 +501,8 @@ public class MusicSequenceManager {
         activeSequences.removeIf(seq -> seq.getFileName().equalsIgnoreCase(fileName));
         ActiveMusicSequence activeSeq = new ActiveMusicSequence(fileName, sequence, targets);
         activeSequences.add(activeSeq);
-        FracturedUtils.LOGGER.info("[MusicSequenceManager] Started music sequence '{}' with {} entries (expected duration: {}ms).", fileName, sequence.getEntries().size(), activeSeq.getExpectedDurationMs());
+        FracturedUtils.LOGGER.info("[MusicSequenceManager] Started music sequence '{}' with {} entries (expected duration: {}ms, in: {}ms, out: {}ms).",
+                fileName, sequence.getEntries().size(), activeSeq.getExpectedDurationMs(), activeSeq.getInMarkerMs(), activeSeq.getOutMarkerMs());
         return true;
     }
 
@@ -393,6 +528,8 @@ public class MusicSequenceManager {
         long now = System.currentTimeMillis();
 
         for (ActiveMusicSequence activeSeq : activeSequences) {
+            long inMs = activeSeq.getInMarkerMs();
+            long outMs = activeSeq.getOutMarkerMs();
             long elapsedMs = now - activeSeq.getStartTimeMs();
             List<MusicSequenceEntry> entries = activeSeq.getSequence().getEntries();
 
@@ -402,22 +539,53 @@ public class MusicSequenceManager {
                 }
 
                 MusicSequenceEntry entry = entries.get(i);
-                if (elapsedMs >= entry.getTimestampMs()) {
+                long entryTs = entry.getTimestampMs();
+
+                // Skip actions outside [IN, OUT] marker bounds
+                if (entryTs < inMs || entryTs > outMs) {
+                    activeSeq.getExecutedEntryIndices().add(i);
+                    continue;
+                }
+
+                if (elapsedMs >= entryTs) {
                     executeEntry(server, activeSeq, entry);
                     activeSeq.getExecutedEntryIndices().add(i);
                 }
             }
 
-            long endMs = activeSeq.getSequence().getEndMs() > 0 ? activeSeq.getSequence().getEndMs() : activeSeq.getExpectedDurationMs();
-
-            if (elapsedMs >= endMs) {
+            if (elapsedMs >= outMs) {
                 if (activeSeq.getSequence().isLooping()) {
-                    activeSeq.setStartTimeMs(now - activeSeq.getSequence().getStartMs());
+                    activeSeq.setStartTimeMs(now - inMs);
                     activeSeq.getExecutedEntryIndices().clear();
+                    // Re-exclude actions outside bounds for the loop pass
+                    for (int i = 0; i < entries.size(); i++) {
+                        long entryTs = entries.get(i).getTimestampMs();
+                        if (entryTs < inMs || entryTs > outMs) {
+                            activeSeq.getExecutedEntryIndices().add(i);
+                        }
+                    }
+                    if (activeSeq.getSequence().getSongTrack() != null && !activeSeq.getSequence().getSongTrack().trim().isEmpty()) {
+                        EventAudioManager.getInstance().playAudio(
+                                server,
+                                activeSeq.getSequence().getSongTrack(),
+                                ModSoundSources.EVENT_MUSIC,
+                                activeSeq.getTargets(server),
+                                activeSeq.getSequence().getVolume(),
+                                activeSeq.getSequence().getPitch(),
+                                0,
+                                PlaybackMode.SERVER_CONTROLLED,
+                                true,
+                                2000,
+                                inMs
+                        );
+                    }
                     FracturedUtils.LOGGER.info("[MusicSequenceManager] Looping sequence '{}' (reset to {}ms)",
-                            activeSeq.getFileName(), activeSeq.getSequence().getStartMs());
+                            activeSeq.getFileName(), inMs);
                 } else {
+                    activeSeq.setReachedOutMarker(true);
                     activeSeq.setFinished(true);
+                    recordOutMarkerReached(activeSeq.getFileName());
+
                     EventAudioManager.getInstance().stopAudio(server, activeSeq.getTargets(server), 500);
                     S2CCameraOverridePacket clearPacket = new S2CCameraOverridePacket(
                             false, "CLEAR", 0, 0, 0, 0, 0, 0, 70.0, 0, false, -1, 0, 0, 0
@@ -427,7 +595,7 @@ public class MusicSequenceManager {
                         ScreenEffectManager.stopAllEffects(player);
                     }
                     FracturedUtils.LOGGER.info("[MusicSequenceManager] Sequence '{}' reached OUT marker at {}ms. Stopped audio and finished.",
-                            activeSeq.getFileName(), endMs);
+                            activeSeq.getFileName(), outMs);
                 }
             }
         }
@@ -745,6 +913,8 @@ public class MusicSequenceManager {
                 if (!taggedEntities.isEmpty()) {
                     for (Entity e : taggedEntities) {
                         e.discard();
+                        activeSeq.getSpawnedPuppetUuids().remove(e.getUUID());
+                        untrackSpawnedPuppet(e.getUUID());
                     }
                     FracturedUtils.LOGGER.info("[MusicSequenceManager] Despawned {} entity/entities with custom tag '{}'",
                             taggedEntities.size(), actorTag);
@@ -1172,8 +1342,12 @@ public class MusicSequenceManager {
 
                 if (actorTag != null && !actorTag.isBlank()) {
                     entity.addTag(actorTag);
+                    activeSeq.trackSpawnedActorTag(actorTag);
                 }
                 entity.addTag("puppet_actor");
+                entity.addTag("music_seq_puppet");
+                activeSeq.trackSpawnedPuppet(entity.getUUID());
+                trackSpawnedPuppet(entity.getUUID());
 
                 if (!actorName.isBlank()) {
                     entity.setCustomName(Component.literal(actorName));

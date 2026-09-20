@@ -61,7 +61,7 @@ public class CheckpointManager {
     }
 
     public boolean hasActiveCheckpoint() {
-        return activeSequence != null && activeSequence.getState() == net.dandare21.fracturedutils.orchestrator.SequenceState.RUNNING;
+        return activeSequence != null && activeSequence.getState() != net.dandare21.fracturedutils.orchestrator.SequenceState.FINISHED;
     }
 
     public boolean isPlayerMatchingCheckpoint(MinecraftServer server, ServerPlayer player) {
@@ -149,34 +149,50 @@ public class CheckpointManager {
         }
     }
 
+    public synchronized void restoreCheckpoint(MinecraftServer server) {
+        if (server == null || !hasActiveCheckpoint()) return;
+
+        teamWipeTimerTicks = -1;
+
+        List<ServerPlayer> playersToRestore = new ArrayList<>(pendingWipePlayers);
+        if (playersToRestore.isEmpty()) {
+            playersToRestore = net.dandare21.fracturedutils.util.SelectorUtils.getTargetPlayers(server, targetSelector);
+        }
+
+        for (ServerPlayer player : playersToRestore) {
+            if (player != null && player.connection != null) {
+                revivePlayer(player);
+                player.teleportTo(player.serverLevel(), spawnX, spawnY, spawnZ, yaw, pitch);
+                player.setHealth(player.getMaxHealth());
+            }
+        }
+
+        if (activeSequence != null && checkpointIndex >= 0) {
+            activeSequence.setCurrentIndex(checkpointIndex);
+            activeSequence.unpause();
+        }
+
+        // 1. Despawn any puppets spawned by music sequences
+        net.dandare21.fracturedutils.sound.sequence.MusicSequenceManager.getInstance().despawnAllSequencePuppets(server);
+
+        // 2. Stop active music sequences and event audio when restoring checkpoint
+        net.dandare21.fracturedutils.sound.sequence.MusicSequenceManager.getInstance().stopAllSequences(server);
+        net.dandare21.fracturedutils.sound.event.EventAudioManager.getInstance().stopAudio(server, null, 0);
+
+        downedPlayers.clear();
+        reviveProgress.clear();
+        reviverMap.clear();
+        lastReviveAttemptTick.clear();
+        pendingWipePlayers.clear();
+    }
+
     public void tick(MinecraftServer server) {
         if (server == null || !hasActiveCheckpoint()) return;
 
         if (teamWipeTimerTicks > 0) {
             teamWipeTimerTicks--;
             if (teamWipeTimerTicks == 0) {
-                teamWipeTimerTicks = -1;
-                for (ServerPlayer player : pendingWipePlayers) {
-                    if (player != null && player.connection != null) {
-                        revivePlayer(player);
-                        player.teleportTo(player.serverLevel(), spawnX, spawnY, spawnZ, yaw, pitch);
-                        player.setHealth(player.getMaxHealth());
-                    }
-                }
-                if (activeSequence != null && checkpointIndex >= 0) {
-                    activeSequence.setCurrentIndex(checkpointIndex);
-                    activeSequence.unpause();
-                }
-
-                // Stop active music sequences and audio when restoring checkpoint
-                net.dandare21.fracturedutils.sound.sequence.MusicSequenceManager.getInstance().stopAllSequences(server);
-                net.dandare21.fracturedutils.sound.event.EventAudioManager.getInstance().stopAudio(server, null, 0);
-
-                downedPlayers.clear();
-                reviveProgress.clear();
-                reviverMap.clear();
-                lastReviveAttemptTick.clear();
-                pendingWipePlayers.clear();
+                restoreCheckpoint(server);
             }
             return;
         }

@@ -38,6 +38,7 @@ public class ServerEventHandler {
         net.dandare21.fracturedutils.command.MusicSequenceCommand.register(event.getDispatcher());
         net.dandare21.fracturedutils.command.BossPuppetCommand.register(event.getDispatcher());
         net.dandare21.fracturedutils.command.ScreenEffectCommand.register(event.getDispatcher());
+        net.dandare21.fracturedutils.command.BossHealthBarCommand.register(event.getDispatcher());
     }
 
     @SubscribeEvent
@@ -49,6 +50,7 @@ public class ServerEventHandler {
             net.dandare21.fracturedutils.dialog.DialogManager.getInstance().tick(event.getServer());
             net.dandare21.fracturedutils.sound.event.EventAudioManager.getInstance().tick(event.getServer());
             net.dandare21.fracturedutils.sound.sequence.MusicSequenceManager.getInstance().tick(event.getServer());
+            net.dandare21.fracturedutils.bossbar.BossHealthBarManager.getInstance().tick(event.getServer());
 
             for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
                 if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
@@ -184,6 +186,7 @@ public class ServerEventHandler {
             MaintenanceManager.getInstance().checkAndKickOnJoin(player);
             net.dandare21.fracturedutils.ping.PingManager.getInstance().syncToPlayer(player);
             net.dandare21.fracturedutils.sound.event.EventAudioManager.getInstance().onPlayerJoin(player);
+            net.dandare21.fracturedutils.bossbar.BossHealthBarManager.getInstance().onPlayerJoin(player);
 
             WaitingRoomManager mgr = WaitingRoomManager.getInstance();
             if (mgr.isActive()) {

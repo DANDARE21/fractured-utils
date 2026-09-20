@@ -18,7 +18,7 @@ public class ClientSoundOptionsHandler {
 
     private static final OptionInstance<Double> EVENT_MUSIC_OPTION = new OptionInstance<>(
             "options.event_music_volume",
-            OptionInstance.noTooltip(),
+            val -> null,
             (caption, value) -> {
                 int pct = (int) Math.round(value * 100.0);
                 return Component.literal("Event Music: " + (pct == 0 ? "OFF" : pct + "%"));
@@ -30,7 +30,7 @@ public class ClientSoundOptionsHandler {
 
     private static final OptionInstance<Double> EVENT_AMBIENCE_OPTION = new OptionInstance<>(
             "options.event_ambience_volume",
-            OptionInstance.noTooltip(),
+            val -> null,
             (caption, value) -> {
                 int pct = (int) Math.round(value * 100.0);
                 return Component.literal("Event Ambience: " + (pct == 0 ? "OFF" : pct + "%"));

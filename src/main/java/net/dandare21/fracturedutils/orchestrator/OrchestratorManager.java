@@ -225,6 +225,8 @@ public class OrchestratorManager {
             return String.format(Locale.ROOT, "puppet suppress (nav=%b, tgt=%b, look=%b, actions=%b)", psa.isSuppressNavigation(), psa.isSuppressTargeting(), psa.isSuppressLook(), psa.isSuppressActions());
         } else if (action instanceof PuppetStopAction) {
             return "puppet stop action";
+        } else if (action instanceof WaitForMusicSequenceAction wfms) {
+            return !wfms.getSequenceFile().isBlank() ? wfms.getSequenceFile() : "[any active]";
         }
         return "";
     }

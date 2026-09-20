@@ -146,18 +146,23 @@ public class EventAudioManager {
     }
 
     public synchronized void playAudio(MinecraftServer server, String soundEventId, SoundSource category, Collection<ServerPlayer> targets, float volume, float pitch, int fadeDurationMs, PlaybackMode mode, boolean looping, int syncThresholdMs) {
+        playAudio(server, soundEventId, category, targets, volume, pitch, fadeDurationMs, mode, looping, syncThresholdMs, 0L);
+    }
+
+    public synchronized void playAudio(MinecraftServer server, String soundEventId, SoundSource category, Collection<ServerPlayer> targets, float volume, float pitch, int fadeDurationMs, PlaybackMode mode, boolean looping, int syncThresholdMs, long startOffsetMs) {
         if (server == null || soundEventId == null || soundEventId.trim().isEmpty()) return;
 
         String namespace = ServerConfig.getEventAudioNamespace();
         String fullSoundId = soundEventId.contains(":") ? soundEventId.trim() : namespace + ":" + soundEventId.trim();
 
+        long safeOffset = Math.max(0L, startOffsetMs);
         this.isPlaying = true;
         this.currentSoundId = fullSoundId;
         this.currentCategory = category != null ? category : ModSoundSources.EVENT_MUSIC;
         this.currentVolume = volume;
         this.currentPitch = pitch;
         this.currentFadeDurationMs = fadeDurationMs;
-        this.playbackStartTimeMs = System.currentTimeMillis();
+        this.playbackStartTimeMs = System.currentTimeMillis() - safeOffset;
         this.currentMode = mode != null ? mode : PlaybackMode.SERVER_CONTROLLED;
         this.currentLooping = looping;
         this.currentSyncThresholdMs = syncThresholdMs;
@@ -172,7 +177,7 @@ public class EventAudioManager {
         }
 
         S2CPlayEventAudioPacket packet = new S2CPlayEventAudioPacket(
-                fullSoundId, currentCategory, volume, pitch, fadeDurationMs, 0L, true, currentMode, looping, syncThresholdMs
+                fullSoundId, currentCategory, volume, pitch, fadeDurationMs, safeOffset, true, currentMode, looping, syncThresholdMs
         );
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
@@ -183,8 +188,8 @@ public class EventAudioManager {
             }
         }
 
-        FracturedUtils.LOGGER.info("[EventAudioManager] Started event audio '{}' (channel: {}, mode: {}, loop: {}, vol: {}, pitch: {})",
-                fullSoundId, currentCategory.getName(), currentMode, looping, volume, pitch);
+        FracturedUtils.LOGGER.info("[EventAudioManager] Started event audio '{}' (channel: {}, mode: {}, loop: {}, vol: {}, pitch: {}, offset: {}ms)",
+                fullSoundId, currentCategory.getName(), currentMode, looping, volume, pitch, safeOffset);
     }
 
     public synchronized void stopAudio(MinecraftServer server, Collection<ServerPlayer> targets, int fadeDurationMs) {

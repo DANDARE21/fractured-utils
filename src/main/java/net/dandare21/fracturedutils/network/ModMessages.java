@@ -48,6 +48,7 @@ import net.dandare21.fracturedutils.network.packet.ClientboundAttackIndicatorPac
 import net.dandare21.fracturedutils.network.packet.S2CCameraOverridePacket;
 import net.dandare21.fracturedutils.screeneffect.packet.S2CPlayScreenEffectPacket;
 import net.dandare21.fracturedutils.screeneffect.packet.S2CStopScreenEffectPacket;
+import net.dandare21.fracturedutils.bossbar.network.S2CSyncBossBarsPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -353,6 +354,12 @@ public class ModMessages {
                 .decoder(S2CStopScreenEffectPacket::new)
                 .encoder(S2CStopScreenEffectPacket::encode)
                 .consumerMainThread(S2CStopScreenEffectPacket::handle)
+                .add();
+
+        net.messageBuilder(S2CSyncBossBarsPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(S2CSyncBossBarsPacket::new)
+                .encoder(S2CSyncBossBarsPacket::encode)
+                .consumerMainThread(S2CSyncBossBarsPacket::handle)
                 .add();
     }
 

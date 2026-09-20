@@ -21,6 +21,7 @@ public class ActionAdapter implements JsonSerializer<OrchestratorAction>, JsonDe
         builder.registerTypeAdapter(NewObjectiveAction.class, adapter);
         builder.registerTypeAdapter(EndObjectiveAction.class, adapter);
         builder.registerTypeAdapter(PlayMusicSequenceAction.class, adapter);
+        builder.registerTypeAdapter(WaitForMusicSequenceAction.class, adapter);
         builder.registerTypeAdapter(ExecutePuppetAction.class, adapter);
         builder.registerTypeAdapter(PuppetMoveToAction.class, adapter);
         builder.registerTypeAdapter(PuppetLookAtAction.class, adapter);
@@ -90,6 +91,11 @@ public class ActionAdapter implements JsonSerializer<OrchestratorAction>, JsonDe
             case "play_music_sequence":
             case "music_sequence":
                 return RAW_GSON.fromJson(obj, PlayMusicSequenceAction.class);
+            case "wait_for_music_sequence":
+            case "wait_music_sequence":
+            case "wait_music":
+            case "music_sequence_end":
+                return RAW_GSON.fromJson(obj, WaitForMusicSequenceAction.class);
             case "wait_until":
                 return RAW_GSON.fromJson(obj, WaitUntilAction.class);
             case "dialog":

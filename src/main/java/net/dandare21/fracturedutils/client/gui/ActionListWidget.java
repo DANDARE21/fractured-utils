@@ -454,6 +454,11 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
                     return "Wait until all players in waiting room are ready";
                 } else if (mode.equals("downloads") || mode.equals("downloads_end") || mode.equals("cutscene_downloads") || mode.equals("video_downloads")) {
                     return "Wait for cutscene downloads to complete";
+                } else if (mode.equals("music_sequence") || mode.equals("wait_music_sequence") || mode.equals("wait_for_music_sequence") || mode.equals("music_sequence_end") || mode.equals("music_end")) {
+                    if (wua.getTriggerId() != null && !wua.getTriggerId().isBlank()) {
+                        return "🎵 Wait for music sequence \"" + wua.getTriggerId() + "\" to end on OUT marker";
+                    }
+                    return "🎵 Wait for active music sequence to end on OUT marker";
                 } else {
                     return "Trigger Signal: \"" + wua.getTriggerId() + "\"";
                 }
@@ -477,6 +482,11 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
             } else if (action instanceof PlayMusicSequenceAction pmsa) {
                 String modeTag = pmsa.isAwaitCompletion() ? " [Wait Finish]" : " [Async]";
                 return "🎵 Play Music Sequence: \"" + pmsa.getSequenceFile() + "\"" + modeTag;
+            } else if (action instanceof WaitForMusicSequenceAction wfms) {
+                if (!wfms.getSequenceFile().isBlank()) {
+                    return "🎵 Wait for music sequence \"" + wfms.getSequenceFile() + "\" to end on OUT marker";
+                }
+                return "🎵 Wait for active music sequence to end on OUT marker";
             } else if (action instanceof ExecutePuppetAction epa) {
                 String targetInfo = !epa.getEntityUuid().isBlank() ? ("UUID: " + epa.getEntityUuid()) : (!epa.getTargetSelector().isBlank() ? epa.getTargetSelector() : "All Puppets");
                 String timing = epa.getWindupTicks() > 0 ? (epa.getWindupTicks() + "t windup + " + epa.getDurationTicks() + "t dur") : (epa.getDurationTicks() + "t dur");

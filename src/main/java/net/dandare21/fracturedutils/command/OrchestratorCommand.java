@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
+import net.dandare21.fracturedutils.checkpoint.CheckpointManager;
 import net.dandare21.fracturedutils.network.ModMessages;
 import net.dandare21.fracturedutils.network.packet.S2CSendSequenceDataPacket;
 import net.dandare21.fracturedutils.orchestrator.OrchestratorManager;
@@ -92,6 +93,9 @@ public class OrchestratorCommand {
                                 .then(Commands.argument("file_name", StringArgumentType.string())
                                         .suggests(SUGGEST_SEQUENCES)
                                         .executes(ctx -> executeCancel(ctx, StringArgumentType.getString(ctx, "file_name"), EntityArgument.getPlayers(ctx, "targets"))))))
+                .then(Commands.literal("checkpoint")
+                        .then(Commands.literal("restore")
+                                .executes(OrchestratorCommand::executeRestoreCheckpoint)))
                 .then(Commands.literal("ui")
                         .executes(OrchestratorCommand::openUi))
         );
@@ -216,6 +220,17 @@ public class OrchestratorCommand {
             source.sendSuccess(() -> Component.literal("No matching active sequence found to cancel.").withStyle(ChatFormatting.GRAY), true);
             return 0;
         }
+    }
+
+    private static int executeRestoreCheckpoint(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        if (!CheckpointManager.getInstance().hasActiveCheckpoint()) {
+            source.sendFailure(Component.literal("No active orchestrator checkpoint found to restore."));
+            return 0;
+        }
+        CheckpointManager.getInstance().restoreCheckpoint(source.getServer());
+        source.sendSuccess(() -> Component.literal("Restored active orchestrator checkpoint, despawned sequence puppets, and stopped music sequences.").withStyle(ChatFormatting.GREEN), true);
+        return 1;
     }
 
     private static int openUi(CommandContext<CommandSourceStack> ctx) {

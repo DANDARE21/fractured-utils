@@ -71,6 +71,7 @@ public class ClientEventHandler {
         net.dandare21.fracturedutils.client.gui.DialogHudOverlay.tick();
         net.dandare21.fracturedutils.client.camera.ClientCameraHandler.clientTick();
         net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler.clientTick();
+        net.dandare21.fracturedutils.bossbar.client.ClientBossBarManager.getInstance().clientTick();
         ClientCutsceneHandler.getInstance().onClientTick();
 
         Minecraft mc = Minecraft.getInstance();
@@ -164,6 +165,10 @@ public class ClientEventHandler {
     @SubscribeEvent
     public static void onRenderGuiOverlay(RenderGuiOverlayEvent.Post event) {
         ClientCutsceneHandler.getInstance().renderOverlay(event);
+
+        if (event.getOverlay().id().equals(VanillaGuiOverlay.BOSS_EVENT_PROGRESS.id())) {
+            net.dandare21.fracturedutils.bossbar.client.ClientBossBarManager.getInstance().render(event.getGuiGraphics(), event.getPartialTick());
+        }
 
         if (event.getOverlay().id().equals(VanillaGuiOverlay.HOTBAR.id())) {
             Minecraft mc = Minecraft.getInstance();
@@ -443,6 +448,7 @@ public class ClientEventHandler {
         net.dandare21.fracturedutils.client.gui.DialogHudOverlay.clearActiveDialog();
         net.dandare21.fracturedutils.client.camera.ClientCameraHandler.clearCameraOverride();
         net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler.clearAllEffects();
+        net.dandare21.fracturedutils.bossbar.client.ClientBossBarManager.getInstance().clear();
     }
 
     @SubscribeEvent

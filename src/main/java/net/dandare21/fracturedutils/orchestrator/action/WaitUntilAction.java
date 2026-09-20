@@ -358,6 +358,30 @@ public class WaitUntilAction implements OrchestratorAction {
             }
             graceTicks = 0;
             return ActionResult.SUCCESS;
+        } else if (mode.equals("music_sequence") || mode.equals("wait_music_sequence") || mode.equals("wait_for_music_sequence") || mode.equals("music_sequence_end") || mode.equals("music_end")) {
+            net.dandare21.fracturedutils.sound.sequence.MusicSequenceManager mgr = net.dandare21.fracturedutils.sound.sequence.MusicSequenceManager.getInstance();
+            boolean hasTarget = (triggerId != null && !triggerId.isBlank());
+            boolean activeNow = hasTarget ? mgr.isSequenceActive(triggerId) : mgr.hasActiveSequence();
+
+            if (activeNow) {
+                hasSeenActive = true;
+                return ActionResult.BLOCK;
+            }
+            if (hasSeenActive) {
+                hasSeenActive = false;
+                graceTicks = 0;
+                return ActionResult.SUCCESS;
+            }
+            if (mgr.hasReachedOutMarker(triggerId, 1500L)) {
+                graceTicks = 0;
+                return ActionResult.SUCCESS;
+            }
+            graceTicks++;
+            if (graceTicks < 10) {
+                return ActionResult.BLOCK;
+            }
+            graceTicks = 0;
+            return ActionResult.SUCCESS;
         } else if (mode.equals("proximity") || mode.equals("marker") || mode.equals("player_proximity") || mode.equals("area")) {
             ServerLevel level = null;
             String targetName = instance.getTargetPlayerName();

@@ -78,6 +78,15 @@ public class CustomTextureBossBarStyleRenderer implements IBossBarStyleRenderer 
             graphics.fill(markerX, barY - 1, markerX + 1, barY + barHeight + 1, 0xFFFFFFFF);
         }
 
+        // Draw Active Entity Health Threshold Barrier Lines
+        for (float threshold : bar.getEntityThresholds()) {
+            int markerX = x + (int) (threshold * barWidth);
+            graphics.fill(markerX - 1, barY - 1, markerX + 2, barY + barHeight + 1, 0xFF000000);
+            graphics.fill(markerX, barY - 2, markerX + 1, barY + barHeight + 2, 0xFFFFDD00);
+            graphics.fill(markerX - 1, barY - 3, markerX + 2, barY - 1, 0xFFFFDD00);
+            graphics.fill(markerX - 1, barY + barHeight + 1, markerX + 2, barY + barHeight + 3, 0xFFFFDD00);
+        }
+
         // Draw Health Numbers
         if (bar.getTextDisplayMode() != BossHealthBar.TextDisplayMode.NONE) {
             String text = formatHealthText(bar);

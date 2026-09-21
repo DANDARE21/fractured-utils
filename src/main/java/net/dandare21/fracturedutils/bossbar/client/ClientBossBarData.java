@@ -39,6 +39,7 @@ public class ClientBossBarData {
     private boolean visible = true;
 
     private final List<Float> phaseThresholds = new ArrayList<>();
+    private final List<Float> entityThresholds = new ArrayList<>();
 
     public ClientBossBarData(String id, Component name) {
         this.id = id;
@@ -94,6 +95,9 @@ public class ClientBossBarData {
 
         this.phaseThresholds.clear();
         this.phaseThresholds.addAll(other.phaseThresholds);
+
+        this.entityThresholds.clear();
+        this.entityThresholds.addAll(other.entityThresholds);
     }
 
     public String getId() {
@@ -231,5 +235,9 @@ public class ClientBossBarData {
 
     public List<Float> getPhaseThresholds() {
         return phaseThresholds;
+    }
+
+    public List<Float> getEntityThresholds() {
+        return entityThresholds;
     }
 }

@@ -9,6 +9,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.dandare21.fracturedutils.threshold.HealthThreshold;
+import net.dandare21.fracturedutils.threshold.HealthThresholdManager;
 import org.slf4j.Logger;
 
 import javax.annotation.Nullable;
@@ -118,6 +120,7 @@ public class BossHealthBarManager {
                 float sumCurrentHealth = 0.0f;
                 float sumMaxHealth = 0.0f;
                 boolean hasAnyAlive = false;
+                List<Float> activeThresholds = new ArrayList<>();
 
                 for (UUID entityUuid : bar.getLinkedEntityUuids()) {
                     LivingEntity living = findLivingEntity(server, entityUuid);
@@ -126,6 +129,20 @@ public class BossHealthBarManager {
                         sumCurrentHealth += Math.max(0.0f, living.getHealth());
                         sumMaxHealth += living.getMaxHealth();
                         bar.getCachedMaxHealth().put(entityUuid, living.getMaxHealth());
+
+                        // For a single linked entity, collect all active thresholds on this entity
+                        if (bar.getLinkedEntityUuids().size() == 1) {
+                            List<HealthThreshold> ths = HealthThresholdManager.getThresholds(living);
+                            for (HealthThreshold th : ths) {
+                                float minHp = th.getMinHealthResolved(living);
+                                if (minHp > 0.0f && living.getMaxHealth() > 0.0f) {
+                                    float frac = Math.max(0.005f, Math.min(0.995f, minHp / living.getMaxHealth()));
+                                    if (!activeThresholds.contains(frac)) {
+                                        activeThresholds.add(frac);
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         // Entity is dead or removed/despawned
                         Float cachedMax = bar.getCachedMaxHealth().get(entityUuid);
@@ -134,6 +151,31 @@ public class BossHealthBarManager {
                         }
                     }
                 }
+
+                // For multiple linked entities, calculate combined threshold from active barriers
+                if (bar.getLinkedEntityUuids().size() > 1 && sumMaxHealth > 0.0f) {
+                    float sumMinHp = 0.0f;
+                    boolean anyThreshold = false;
+                    for (UUID entityUuid : bar.getLinkedEntityUuids()) {
+                        LivingEntity living = findLivingEntity(server, entityUuid);
+                        if (living != null && living.isAlive() && !living.isRemoved()) {
+                            Optional<HealthThreshold> activeOpt = HealthThresholdManager.getActiveThreshold(living);
+                            if (activeOpt.isPresent()) {
+                                anyThreshold = true;
+                                sumMinHp += activeOpt.get().getMinHealthResolved(living);
+                            }
+                        }
+                    }
+                    if (anyThreshold && sumMinHp > 0.0f) {
+                        float combinedFrac = Math.max(0.005f, Math.min(0.995f, sumMinHp / sumMaxHealth));
+                        if (!activeThresholds.contains(combinedFrac)) {
+                            activeThresholds.add(combinedFrac);
+                        }
+                    }
+                }
+
+                Collections.sort(activeThresholds);
+                bar.setEntityThresholds(activeThresholds);
 
                 bar.setCurrentHealth(sumCurrentHealth);
                 bar.setMaxHealth(Math.max(1.0f, sumMaxHealth));

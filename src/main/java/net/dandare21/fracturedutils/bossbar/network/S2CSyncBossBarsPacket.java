@@ -44,6 +44,8 @@ public class S2CSyncBossBarsPacket {
                     cb.getPhaseThresholds().addAll(pm.getThresholds());
                 }
 
+                cb.getEntityThresholds().addAll(sb.getEntityThresholds());
+
                 this.bars.add(cb);
             }
         }
@@ -90,6 +92,11 @@ public class S2CSyncBossBarsPacket {
                 }
             }
 
+            int thresholdCount = buf.readVarInt();
+            for (int t = 0; t < thresholdCount; t++) {
+                cb.getEntityThresholds().add(buf.readFloat());
+            }
+
             this.bars.add(cb);
         }
     }
@@ -129,6 +136,11 @@ public class S2CSyncBossBarsPacket {
                     pm.addThreshold(t);
                 }
                 pm.toNetwork(buf);
+            }
+
+            buf.writeVarInt(bar.getEntityThresholds().size());
+            for (float t : bar.getEntityThresholds()) {
+                buf.writeFloat(t);
             }
         }
     }

@@ -93,6 +93,19 @@ public class FracturedBossBarStyleRenderer implements IBossBarStyleRenderer {
             graphics.fill(markerX, barY - 4, markerX + 1, barY + barHeight + 4, primaryColor);
         }
 
+        // 8b. Active Entity Health Threshold Barrier Lines
+        for (float threshold : bar.getEntityThresholds()) {
+            int markerX = x + (int) (threshold * barWidth);
+            // Holographic barrier drop shadow
+            graphics.fill(markerX - 2, barY - 4, markerX + 3, barY + barHeight + 4, 0xAA000000);
+            graphics.fill(markerX - 1, barY - 5, markerX + 2, barY + barHeight + 5, 0xFFFFCC00);
+            // Bright white energy center beam
+            graphics.fill(markerX, barY - 4, markerX + 1, barY + barHeight + 4, 0xFFFFFFFF);
+            // Diamond node accents at top and bottom
+            graphics.fill(markerX - 2, barY - 6, markerX + 3, barY - 3, 0xFFFFCC00);
+            graphics.fill(markerX - 2, barY + barHeight + 3, markerX + 3, barY + barHeight + 6, 0xFFFFCC00);
+        }
+
         // 9. Numeric Health Info
         if (bar.getTextDisplayMode() != BossHealthBar.TextDisplayMode.NONE) {
             String text = formatHealthText(bar);

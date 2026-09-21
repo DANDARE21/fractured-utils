@@ -68,10 +68,22 @@ public class BossHealthBar {
     private final Set<UUID> assignedPlayers = Sets.newHashSet();
 
     private final Map<String, IBossBarFeature> features = new LinkedHashMap<>();
+    private final List<Float> entityThresholds = new ArrayList<>();
 
     public BossHealthBar(String id, Component name) {
         this.id = id;
         this.name = name;
+    }
+
+    public List<Float> getEntityThresholds() {
+        return entityThresholds;
+    }
+
+    public void setEntityThresholds(List<Float> thresholds) {
+        this.entityThresholds.clear();
+        if (thresholds != null) {
+            this.entityThresholds.addAll(thresholds);
+        }
     }
 
     public String getId() {
@@ -309,6 +321,11 @@ public class BossHealthBar {
             buf.writeUtf(feature.getFeatureId());
             feature.toNetwork(buf);
         }
+
+        buf.writeVarInt(this.entityThresholds.size());
+        for (float t : this.entityThresholds) {
+            buf.writeFloat(t);
+        }
     }
 
     // --- NBT Serialization ---
@@ -363,6 +380,12 @@ public class BossHealthBar {
             featuresTag.put(entry.getKey(), entry.getValue().serializeNbt());
         }
         tag.put("Features", featuresTag);
+
+        ListTag thresholdsTag = new ListTag();
+        for (float t : this.entityThresholds) {
+            thresholdsTag.add(net.minecraft.nbt.FloatTag.valueOf(t));
+        }
+        tag.put("EntityThresholds", thresholdsTag);
 
         return tag;
     }
@@ -451,6 +474,13 @@ public class BossHealthBar {
                     feature.deserializeNbt(featuresTag.getCompound(key));
                     bar.features.put(key, feature);
                 }
+            }
+        }
+
+        if (tag.contains("EntityThresholds", Tag.TAG_LIST)) {
+            ListTag list = tag.getList("EntityThresholds", Tag.TAG_FLOAT);
+            for (int i = 0; i < list.size(); i++) {
+                bar.entityThresholds.add(list.getFloat(i));
             }
         }
 

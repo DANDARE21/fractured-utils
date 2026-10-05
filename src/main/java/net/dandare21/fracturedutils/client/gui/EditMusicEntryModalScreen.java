@@ -1383,6 +1383,15 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private void openCameraSetupScreen() {
+        if (timestampBox != null) {
+            try {
+                entry.setTimestampMs(Math.max(0L, Long.parseLong(timestampBox.getValue().trim())));
+            } catch (Exception ignored) {}
+        }
+        if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
+            entry.setDescription(descriptionBox.getValue().trim());
+        }
+
         double x = parseDouble(cameraPosXBox, entry.getCameraX());
         double y = parseDouble(cameraPosYBox, entry.getCameraY());
         double z = parseDouble(cameraPosZBox, entry.getCameraZ());
@@ -1391,7 +1400,24 @@ public class EditMusicEntryModalScreen extends Screen {
         float roll = parseFloat(cameraRollBox, entry.getCameraRoll());
         double fov = parseDouble(cameraFovBox, entry.getCameraFov());
 
+        entry.setCameraX(x);
+        entry.setCameraY(y);
+        entry.setCameraZ(z);
+        entry.setCameraYaw(yaw);
+        entry.setCameraPitch(pitch);
+        entry.setCameraRoll(roll);
+        entry.setCameraFov(fov);
+
         this.minecraft.setScreen(new CameraSetupScreen(this, x, y, z, yaw, pitch, roll, fov, true, res -> {
+            entry.setUseCamera(res.useCamera());
+            entry.setCameraX(res.x());
+            entry.setCameraY(res.y());
+            entry.setCameraZ(res.z());
+            entry.setCameraYaw(res.yaw());
+            entry.setCameraPitch(res.pitch());
+            entry.setCameraRoll(res.roll());
+            entry.setCameraFov(res.fov());
+
             if (cameraPosXBox != null) cameraPosXBox.setValue(String.format(Locale.US, "%.1f", res.x()));
             if (cameraPosYBox != null) cameraPosYBox.setValue(String.format(Locale.US, "%.1f", res.y()));
             if (cameraPosZBox != null) cameraPosZBox.setValue(String.format(Locale.US, "%.1f", res.z()));
@@ -1405,7 +1431,7 @@ public class EditMusicEntryModalScreen extends Screen {
     private double parseDouble(EditBox box, double fallback) {
         if (box == null || box.getValue().trim().isEmpty()) return fallback;
         try {
-            return Double.parseDouble(box.getValue().trim());
+            return Double.parseDouble(box.getValue().trim().replace(",", "."));
         } catch (Exception ignored) {
             return fallback;
         }

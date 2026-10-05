@@ -120,7 +120,7 @@ public class CameraMath {
      */
     public static Vec3 getRightVector(float yaw, float pitch, float roll) {
         Quaternionf q = eulerToQuaternion(yaw, pitch, roll);
-        Vector3f right = new Vector3f(1.0f, 0.0f, 0.0f);
+        Vector3f right = new Vector3f(-1.0f, 0.0f, 0.0f);
         q.transform(right);
         return new Vec3(right.x, right.y, right.z);
     }

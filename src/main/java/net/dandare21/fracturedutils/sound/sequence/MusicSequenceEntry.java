@@ -32,6 +32,25 @@ public class MusicSequenceEntry {
     private double cameraShoulderOffset = 0.55;
     private boolean cameraInterpolate = true;
 
+    // Advanced Spline & Easing Settings
+    private String splineMode = "CATMULL_ROM"; // CATMULL_ROM, BEZIER, LINEAR, STEP
+    private String cameraEasing = "EASE_IN_OUT_CUBIC";
+    private double inHandleX = 0.0;
+    private double inHandleY = 0.0;
+    private double inHandleZ = 0.0;
+    private double outHandleX = 0.0;
+    private double outHandleY = 0.0;
+    private double outHandleZ = 0.0;
+
+    // Decoupled Look-At Target (Inverse Kinematics)
+    private boolean lookAtEnabled = false;
+    private String lookAtMode = "COORDINATE"; // COORDINATE, ENTITY
+    private double lookAtX = 0.0;
+    private double lookAtY = 0.0;
+    private double lookAtZ = 0.0;
+    private String lookAtTarget = "@p";
+    private double lookAtWeight = 1.0;
+
     // Screen Effect Settings
     private String screenEffectId = "fractured_utils:screen_shake";
     private float screenEffectIntensity = 2.0f;
@@ -48,6 +67,11 @@ public class MusicSequenceEntry {
 
     // Custom Puppet Action Parameters
     private java.util.Map<String, String> puppetParams = new java.util.LinkedHashMap<>();
+
+    // Puppet Spawn Settings
+    private float spawnYaw = 0.0f;
+    private float spawnPitch = 0.0f;
+    private boolean showNametag = false;
 
     public MusicSequenceEntry() {
         this.timestampMs = 0L;
@@ -320,6 +344,126 @@ public class MusicSequenceEntry {
         this.cameraInterpolate = cameraInterpolate;
     }
 
+    public String getSplineMode() {
+        return (splineMode != null && !splineMode.isBlank()) ? splineMode : "CATMULL_ROM";
+    }
+
+    public void setSplineMode(String splineMode) {
+        this.splineMode = (splineMode != null && !splineMode.isBlank()) ? splineMode : "CATMULL_ROM";
+    }
+
+    public String getCameraEasing() {
+        return (cameraEasing != null && !cameraEasing.isBlank()) ? cameraEasing : "EASE_IN_OUT_CUBIC";
+    }
+
+    public void setCameraEasing(String cameraEasing) {
+        this.cameraEasing = (cameraEasing != null && !cameraEasing.isBlank()) ? cameraEasing : "EASE_IN_OUT_CUBIC";
+    }
+
+    public double getInHandleX() {
+        return inHandleX;
+    }
+
+    public void setInHandleX(double inHandleX) {
+        this.inHandleX = inHandleX;
+    }
+
+    public double getInHandleY() {
+        return inHandleY;
+    }
+
+    public void setInHandleY(double inHandleY) {
+        this.inHandleY = inHandleY;
+    }
+
+    public double getInHandleZ() {
+        return inHandleZ;
+    }
+
+    public void setInHandleZ(double inHandleZ) {
+        this.inHandleZ = inHandleZ;
+    }
+
+    public double getOutHandleX() {
+        return outHandleX;
+    }
+
+    public void setOutHandleX(double outHandleX) {
+        this.outHandleX = outHandleX;
+    }
+
+    public double getOutHandleY() {
+        return outHandleY;
+    }
+
+    public void setOutHandleY(double outHandleY) {
+        this.outHandleY = outHandleY;
+    }
+
+    public double getOutHandleZ() {
+        return outHandleZ;
+    }
+
+    public void setOutHandleZ(double outHandleZ) {
+        this.outHandleZ = outHandleZ;
+    }
+
+    public boolean isLookAtEnabled() {
+        return lookAtEnabled;
+    }
+
+    public void setLookAtEnabled(boolean lookAtEnabled) {
+        this.lookAtEnabled = lookAtEnabled;
+    }
+
+    public String getLookAtMode() {
+        return (lookAtMode != null && !lookAtMode.isBlank()) ? lookAtMode : "COORDINATE";
+    }
+
+    public void setLookAtMode(String lookAtMode) {
+        this.lookAtMode = (lookAtMode != null && !lookAtMode.isBlank()) ? lookAtMode : "COORDINATE";
+    }
+
+    public double getLookAtX() {
+        return lookAtX;
+    }
+
+    public void setLookAtX(double lookAtX) {
+        this.lookAtX = lookAtX;
+    }
+
+    public double getLookAtY() {
+        return lookAtY;
+    }
+
+    public void setLookAtY(double lookAtY) {
+        this.lookAtY = lookAtY;
+    }
+
+    public double getLookAtZ() {
+        return lookAtZ;
+    }
+
+    public void setLookAtZ(double lookAtZ) {
+        this.lookAtZ = lookAtZ;
+    }
+
+    public String getLookAtTarget() {
+        return (lookAtTarget != null && !lookAtTarget.isBlank()) ? lookAtTarget : "@p";
+    }
+
+    public void setLookAtTarget(String lookAtTarget) {
+        this.lookAtTarget = (lookAtTarget != null && !lookAtTarget.isBlank()) ? lookAtTarget : "@p";
+    }
+
+    public double getLookAtWeight() {
+        return lookAtWeight;
+    }
+
+    public void setLookAtWeight(double lookAtWeight) {
+        this.lookAtWeight = Math.max(0.0, Math.min(1.0, lookAtWeight));
+    }
+
     public String getScreenEffectId() {
         return (screenEffectId != null && !screenEffectId.isBlank()) ? screenEffectId : "fractured_utils:screen_shake";
     }
@@ -469,6 +613,21 @@ public class MusicSequenceEntry {
         entry.setCameraBackDistance(this.cameraBackDistance);
         entry.setCameraShoulderOffset(this.cameraShoulderOffset);
         entry.setCameraInterpolate(this.cameraInterpolate);
+        entry.setSplineMode(this.splineMode);
+        entry.setCameraEasing(this.cameraEasing);
+        entry.setInHandleX(this.inHandleX);
+        entry.setInHandleY(this.inHandleY);
+        entry.setInHandleZ(this.inHandleZ);
+        entry.setOutHandleX(this.outHandleX);
+        entry.setOutHandleY(this.outHandleY);
+        entry.setOutHandleZ(this.outHandleZ);
+        entry.setLookAtEnabled(this.lookAtEnabled);
+        entry.setLookAtMode(this.lookAtMode);
+        entry.setLookAtX(this.lookAtX);
+        entry.setLookAtY(this.lookAtY);
+        entry.setLookAtZ(this.lookAtZ);
+        entry.setLookAtTarget(this.lookAtTarget);
+        entry.setLookAtWeight(this.lookAtWeight);
         entry.setScreenEffectId(this.screenEffectId);
         entry.setScreenEffectIntensity(this.screenEffectIntensity);
         entry.setScreenEffectFrequency(this.screenEffectFrequency);
@@ -484,6 +643,33 @@ public class MusicSequenceEntry {
         if (this.puppetParams != null) {
             entry.setPuppetParams(new java.util.LinkedHashMap<>(this.puppetParams));
         }
+        entry.setSpawnYaw(this.spawnYaw);
+        entry.setSpawnPitch(this.spawnPitch);
+        entry.setShowNametag(this.showNametag);
         return entry;
+    }
+
+    public float getSpawnYaw() {
+        return spawnYaw;
+    }
+
+    public void setSpawnYaw(float spawnYaw) {
+        this.spawnYaw = spawnYaw;
+    }
+
+    public float getSpawnPitch() {
+        return spawnPitch;
+    }
+
+    public void setSpawnPitch(float spawnPitch) {
+        this.spawnPitch = spawnPitch;
+    }
+
+    public boolean isShowNametag() {
+        return showNametag;
+    }
+
+    public void setShowNametag(boolean showNametag) {
+        this.showNametag = showNametag;
     }
 }

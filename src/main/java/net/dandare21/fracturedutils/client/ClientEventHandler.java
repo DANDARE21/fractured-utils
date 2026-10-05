@@ -143,14 +143,14 @@ public class ClientEventHandler {
     @SubscribeEvent
     public static void onRenderHand(net.minecraftforge.client.event.RenderHandEvent event) {
         Minecraft mc = Minecraft.getInstance();
-        if (ClientDownedData.isDowned() || net.dandare21.fracturedutils.client.camera.CustomCameraManager.isActive() || mc.screen instanceof net.dandare21.fracturedutils.client.gui.DownedSpectateScreen || mc.screen instanceof net.dandare21.fracturedutils.client.gui.TeamWipeScreen) {
+        if (ClientDownedData.isDowned() || net.dandare21.fracturedutils.client.camera.CustomCameraManager.isCameraActive() || mc.screen instanceof net.dandare21.fracturedutils.client.gui.DownedSpectateScreen || mc.screen instanceof net.dandare21.fracturedutils.client.gui.TeamWipeScreen) {
             event.setCanceled(true);
         }
     }
 
     @SubscribeEvent
     public static void onMovementInput(net.minecraftforge.client.event.MovementInputUpdateEvent event) {
-        if (net.dandare21.fracturedutils.client.camera.CustomCameraManager.isActive()) {
+        if (net.dandare21.fracturedutils.client.camera.CustomCameraManager.isCameraActive()) {
             event.getInput().forwardImpulse = 0.0F;
             event.getInput().leftImpulse = 0.0F;
             event.getInput().up = false;
@@ -420,7 +420,10 @@ public class ClientEventHandler {
 
     @SubscribeEvent
     public static void onComputeCameraAngles(net.minecraftforge.client.event.ViewportEvent.ComputeCameraAngles event) {
-        if (net.dandare21.fracturedutils.client.camera.CustomCameraManager.isActive()) {
+        if (net.dandare21.fracturedutils.client.camera.CustomCameraManager.hasActiveTrack()) {
+            net.dandare21.fracturedutils.client.camera.CustomCameraManager.updateTrackFrame((float) event.getPartialTick());
+        }
+        if (net.dandare21.fracturedutils.client.camera.CustomCameraManager.isCameraActive()) {
             net.dandare21.fracturedutils.client.camera.CameraUtils.applyCameraOverride(event.getCamera(), event);
         }
         net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler.onComputeCameraAngles(event);
@@ -436,6 +439,13 @@ public class ClientEventHandler {
 
     @SubscribeEvent
     public static void onRenderPlayerPre(net.minecraftforge.client.event.RenderPlayerEvent.Pre event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (event.getEntity() == mc.player && net.dandare21.fracturedutils.client.camera.CustomCameraManager.isCameraActive()) {
+            if (net.dandare21.fracturedutils.client.camera.CameraUtils.isPlayerTooClose(mc.player, (float) event.getPartialTick())) {
+                event.setCanceled(true);
+                return;
+            }
+        }
         if (event.getEntity() != null && ClientDownedData.isPlayerDowned(event.getEntity().getUUID())) {
             if (!net.dandare21.fracturedutils.client.animation.PlayerAnimationManager.isAnimationPlaying(event.getEntity())) {
                 net.dandare21.fracturedutils.client.animation.PlayerAnimationManager.playAnimation(event.getEntity(), "startDown", true);

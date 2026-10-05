@@ -1,6 +1,8 @@
 package net.dandare21.fracturedutils.client.gui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import net.dandare21.fracturedutils.client.camera.CameraMath;
+import net.dandare21.fracturedutils.client.camera.CameraTransform;
 import net.dandare21.fracturedutils.client.camera.CustomCameraManager;
 import net.dandare21.fracturedutils.dialog.DialogLine;
 import net.minecraft.client.Minecraft;
@@ -22,7 +24,11 @@ public class CameraSetupScreen extends Screen {
     private static final int CYAN_BG = 0xFF05090C;
     private static final int RED_CANCEL = 0xFFFF3355;
 
-    public record CameraResult(boolean useCamera, double x, double y, double z, float yaw, float pitch, double fov) {}
+    public record CameraResult(boolean useCamera, double x, double y, double z, float yaw, float pitch, float roll, double fov) {
+        public CameraResult(boolean useCamera, double x, double y, double z, float yaw, float pitch, double fov) {
+            this(useCamera, x, y, z, yaw, pitch, 0.0f, fov);
+        }
+    }
 
     private final Screen parentScreen;
     private final Consumer<CameraResult> onGenericSave;
@@ -33,11 +39,12 @@ public class CameraSetupScreen extends Screen {
     private double cameraZ;
     private float cameraYaw;
     private float cameraPitch;
+    private float cameraRoll;
     private double cameraFov;
 
     private CyberpunkCheckbox useCameraCheckbox;
     private CyberpunkSlider fovSlider;
-    private EditBox posXBox, posYBox, posZBox, yawBox, pitchBox;
+    private EditBox posXBox, posYBox, posZBox, yawBox, pitchBox, rollBox;
 
     private boolean updatingBoxes = false;
 
@@ -48,6 +55,7 @@ public class CameraSetupScreen extends Screen {
                 line != null ? line.getCameraZ() : 0.0,
                 line != null ? line.getCameraYaw() : 0.0f,
                 line != null ? line.getCameraPitch() : 0.0f,
+                0.0f,
                 line != null ? line.getCameraFov() : 70.0,
                 line != null && line.isUseCamera(),
                 res -> {
@@ -69,6 +77,12 @@ public class CameraSetupScreen extends Screen {
     public CameraSetupScreen(Screen parentScreen, double initialX, double initialY, double initialZ,
                              float initialYaw, float initialPitch, double initialFov, boolean initialUseCamera,
                              Consumer<CameraResult> onGenericSave) {
+        this(parentScreen, initialX, initialY, initialZ, initialYaw, initialPitch, 0.0f, initialFov, initialUseCamera, onGenericSave);
+    }
+
+    public CameraSetupScreen(Screen parentScreen, double initialX, double initialY, double initialZ,
+                             float initialYaw, float initialPitch, float initialRoll, double initialFov, boolean initialUseCamera,
+                             Consumer<CameraResult> onGenericSave) {
         super(Component.literal("Camera Setup"));
         this.parentScreen = parentScreen;
         this.onGenericSave = onGenericSave;
@@ -85,12 +99,14 @@ public class CameraSetupScreen extends Screen {
                 this.cameraZ = eyePos.z;
                 this.cameraYaw = mc.player.getYRot();
                 this.cameraPitch = mc.player.getXRot();
+                this.cameraRoll = 0.0f;
             } else {
                 this.cameraX = 0.0;
                 this.cameraY = 64.0;
                 this.cameraZ = 0.0;
                 this.cameraYaw = 0.0f;
                 this.cameraPitch = 0.0f;
+                this.cameraRoll = 0.0f;
             }
             this.useCamera = true;
         } else {
@@ -99,6 +115,7 @@ public class CameraSetupScreen extends Screen {
             this.cameraZ = initialZ;
             this.cameraYaw = initialYaw;
             this.cameraPitch = initialPitch;
+            this.cameraRoll = initialRoll;
         }
         this.cameraFov = initialFov > 0.0 ? initialFov : 70.0;
     }
@@ -119,7 +136,7 @@ public class CameraSetupScreen extends Screen {
 
         // 1. Enable Camera Checkbox
         this.useCameraCheckbox = new CyberpunkCheckbox(panelLeft + 15, currentY, panelWidth - 30, 18,
-                Component.literal("Enable Custom Camera for this Dialog Line"),
+                Component.literal("Enable Custom Camera for this Shot"),
                 this.useCamera,
                 checked -> {
                     this.useCamera = checked;
@@ -149,38 +166,46 @@ public class CameraSetupScreen extends Screen {
         this.addRenderableWidget(this.fovSlider);
         currentY += 28;
 
-        // 4. Coordinates Inputs (X, Y, Z, Yaw, Pitch)
-        int inputW = 58;
-        this.posXBox = new EditBox(this.font, panelLeft + 15, currentY, inputW, 16, Component.literal("X"));
+        // 4. 6-DOF Coordinates Inputs (X, Y, Z, Yaw, Pitch, Roll)
+        int inputW = 48;
+        int gap = 4;
+        int startX = panelLeft + 15;
+
+        this.posXBox = new EditBox(this.font, startX, currentY, inputW, 16, Component.literal("X"));
         this.posXBox.setValue(String.format(Locale.US, "%.1f", this.cameraX));
         this.posXBox.setResponder(val -> parseCoordInputs());
         this.addRenderableWidget(this.posXBox);
 
-        this.posYBox = new EditBox(this.font, panelLeft + 78, currentY, inputW, 16, Component.literal("Y"));
+        this.posYBox = new EditBox(this.font, startX + (inputW + gap), currentY, inputW, 16, Component.literal("Y"));
         this.posYBox.setValue(String.format(Locale.US, "%.1f", this.cameraY));
         this.posYBox.setResponder(val -> parseCoordInputs());
         this.addRenderableWidget(this.posYBox);
 
-        this.posZBox = new EditBox(this.font, panelLeft + 141, currentY, inputW, 16, Component.literal("Z"));
+        this.posZBox = new EditBox(this.font, startX + (inputW + gap) * 2, currentY, inputW, 16, Component.literal("Z"));
         this.posZBox.setValue(String.format(Locale.US, "%.1f", this.cameraZ));
         this.posZBox.setResponder(val -> parseCoordInputs());
         this.addRenderableWidget(this.posZBox);
 
-        this.yawBox = new EditBox(this.font, panelLeft + 204, currentY, inputW, 16, Component.literal("Yaw"));
+        this.yawBox = new EditBox(this.font, startX + (inputW + gap) * 3, currentY, inputW, 16, Component.literal("Yaw"));
         this.yawBox.setValue(String.format(Locale.US, "%.0f", this.cameraYaw));
         this.yawBox.setResponder(val -> parseCoordInputs());
         this.addRenderableWidget(this.yawBox);
 
-        this.pitchBox = new EditBox(this.font, panelLeft + 267, currentY, inputW, 16, Component.literal("Pitch"));
+        this.pitchBox = new EditBox(this.font, startX + (inputW + gap) * 4, currentY, inputW, 16, Component.literal("Pitch"));
         this.pitchBox.setValue(String.format(Locale.US, "%.0f", this.cameraPitch));
         this.pitchBox.setResponder(val -> parseCoordInputs());
         this.addRenderableWidget(this.pitchBox);
+
+        this.rollBox = new EditBox(this.font, startX + (inputW + gap) * 5, currentY, inputW, 16, Component.literal("Roll"));
+        this.rollBox.setValue(String.format(Locale.US, "%.0f", this.cameraRoll));
+        this.rollBox.setResponder(val -> parseCoordInputs());
+        this.addRenderableWidget(this.rollBox);
 
         // 5. Save & Cancel Buttons
         int btnY = panelTop + panelHeight - 24;
         CyberpunkButton saveBtn = new CyberpunkButton(panelLeft + panelWidth - 110, btnY, 95, 18, Component.literal("✓ Save Camera"), b -> {
             if (onGenericSave != null) {
-                onGenericSave.accept(new CameraResult(this.useCamera, this.cameraX, this.cameraY, this.cameraZ, this.cameraYaw, this.cameraPitch, this.cameraFov));
+                onGenericSave.accept(new CameraResult(this.useCamera, this.cameraX, this.cameraY, this.cameraZ, this.cameraYaw, this.cameraPitch, this.cameraRoll, this.cameraFov));
             }
             CustomCameraManager.clearCustomCamera();
             this.minecraft.setScreen(parentScreen);
@@ -225,12 +250,13 @@ public class CameraSetupScreen extends Screen {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.getWindow() == null) return;
 
-        // If an edit box is currently focused for typing, skip WASD camera movement
+        // If an edit box is currently focused for typing, skip hotkey camera movement
         if ((posXBox != null && posXBox.isFocused()) ||
             (posYBox != null && posYBox.isFocused()) ||
             (posZBox != null && posZBox.isFocused()) ||
             (yawBox != null && yawBox.isFocused()) ||
-            (pitchBox != null && pitchBox.isFocused())) {
+            (pitchBox != null && pitchBox.isFocused()) ||
+            (rollBox != null && rollBox.isFocused())) {
             return;
         }
 
@@ -243,6 +269,10 @@ public class CameraSetupScreen extends Screen {
         boolean ctrl = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_CONTROL) ||
                        InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_CONTROL);
 
+        boolean q = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_Q);
+        boolean e = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_E);
+        boolean r = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_R);
+
         boolean isSprinting = false;
         if (mc.options != null && mc.options.keySprint != null && mc.options.keySprint.getKey() != null) {
             int sprintKeyCode = mc.options.keySprint.getKey().getValue();
@@ -254,59 +284,64 @@ public class CameraSetupScreen extends Screen {
             isSprinting = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_SHIFT) || InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_SHIFT);
         }
 
+        boolean changed = false;
+
+        // Roll adjustments (Q = CCW, E = CW, R = Reset)
+        if (q) {
+            this.cameraRoll -= isSprinting ? 1.5f : 0.4f;
+            changed = true;
+        }
+        if (e) {
+            this.cameraRoll += isSprinting ? 1.5f : 0.4f;
+            changed = true;
+        }
+        if (r) {
+            this.cameraRoll = 0.0f;
+            changed = true;
+        }
+
         if (w || s || a || d || space || ctrl) {
-            // Fine, non-snappy adjustment step (0.04 blocks/tick), faster when sprinting (0.20 blocks/tick)
             double speed = isSprinting ? 0.20 : 0.04;
 
-            double yawRad = Math.toRadians(this.cameraYaw);
-            double pitchRad = Math.toRadians(this.cameraPitch);
-
-            // Forward vector relative to camera rotation
-            double fwdX = -Math.sin(yawRad) * Math.cos(pitchRad);
-            double fwdY = -Math.sin(pitchRad);
-            double fwdZ = Math.cos(yawRad) * Math.cos(pitchRad);
-
-            // Right vector relative to camera rotation
-            double rightX = Math.cos(yawRad);
-            double rightY = 0.0;
-            double rightZ = Math.sin(yawRad);
-
-            // Up vector relative to camera orientation
-            double upX = Math.sin(yawRad) * Math.sin(pitchRad);
-            double upY = Math.cos(pitchRad);
-            double upZ = -Math.cos(yawRad) * Math.sin(pitchRad);
+            Vec3 fwd = CameraMath.getForwardVector(this.cameraYaw, this.cameraPitch);
+            Vec3 right = CameraMath.getRightVector(this.cameraYaw, this.cameraPitch, this.cameraRoll);
+            Vec3 up = CameraMath.getUpVector(this.cameraYaw, this.cameraPitch, this.cameraRoll);
 
             if (w) {
-                this.cameraX += fwdX * speed;
-                this.cameraY += fwdY * speed;
-                this.cameraZ += fwdZ * speed;
+                this.cameraX += fwd.x * speed;
+                this.cameraY += fwd.y * speed;
+                this.cameraZ += fwd.z * speed;
             }
             if (s) {
-                this.cameraX -= fwdX * speed;
-                this.cameraY -= fwdY * speed;
-                this.cameraZ -= fwdZ * speed;
+                this.cameraX -= fwd.x * speed;
+                this.cameraY -= fwd.y * speed;
+                this.cameraZ -= fwd.z * speed;
             }
             if (d) {
-                this.cameraX += rightX * speed;
-                this.cameraY += rightY * speed;
-                this.cameraZ += rightZ * speed;
+                this.cameraX += right.x * speed;
+                this.cameraY += right.y * speed;
+                this.cameraZ += right.z * speed;
             }
             if (a) {
-                this.cameraX -= rightX * speed;
-                this.cameraY -= rightY * speed;
-                this.cameraZ -= rightZ * speed;
+                this.cameraX -= right.x * speed;
+                this.cameraY -= right.y * speed;
+                this.cameraZ -= right.z * speed;
             }
             if (space) {
-                this.cameraX += upX * speed;
-                this.cameraY += upY * speed;
-                this.cameraZ += upZ * speed;
+                this.cameraX += up.x * speed;
+                this.cameraY += up.y * speed;
+                this.cameraZ += up.z * speed;
             }
             if (ctrl) {
-                this.cameraX -= upX * speed;
-                this.cameraY -= upY * speed;
-                this.cameraZ -= upZ * speed;
+                this.cameraX -= up.x * speed;
+                this.cameraY -= up.y * speed;
+                this.cameraZ -= up.z * speed;
             }
 
+            changed = true;
+        }
+
+        if (changed) {
             syncBoxesAndPreview();
         }
     }
@@ -318,6 +353,7 @@ public class CameraSetupScreen extends Screen {
         if (posZBox != null) posZBox.setValue(String.format(Locale.US, "%.1f", this.cameraZ));
         if (yawBox != null) yawBox.setValue(String.format(Locale.US, "%.0f", this.cameraYaw));
         if (pitchBox != null) pitchBox.setValue(String.format(Locale.US, "%.0f", this.cameraPitch));
+        if (rollBox != null) rollBox.setValue(String.format(Locale.US, "%.0f", this.cameraRoll));
         updatingBoxes = false;
         updatePreview();
     }
@@ -331,6 +367,7 @@ public class CameraSetupScreen extends Screen {
             this.cameraZ = eyePos.z;
             this.cameraYaw = mc.player.getYRot();
             this.cameraPitch = mc.player.getXRot();
+            this.cameraRoll = 0.0f;
 
             syncBoxesAndPreview();
             mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.get(), 1.3f));
@@ -339,18 +376,19 @@ public class CameraSetupScreen extends Screen {
 
     private void parseCoordInputs() {
         if (updatingBoxes) return;
-        try { if (posXBox != null && !posXBox.getValue().isEmpty()) this.cameraX = Double.parseDouble(posXBox.getValue().trim()); } catch (Exception ignored) {}
-        try { if (posYBox != null && !posYBox.getValue().isEmpty()) this.cameraY = Double.parseDouble(posYBox.getValue().trim()); } catch (Exception ignored) {}
-        try { if (posZBox != null && !posZBox.getValue().isEmpty()) this.cameraZ = Double.parseDouble(posZBox.getValue().trim()); } catch (Exception ignored) {}
-        try { if (yawBox != null && !yawBox.getValue().isEmpty()) this.cameraYaw = Float.parseFloat(yawBox.getValue().trim()); } catch (Exception ignored) {}
-        try { if (pitchBox != null && !pitchBox.getValue().isEmpty()) this.cameraPitch = Float.parseFloat(pitchBox.getValue().trim()); } catch (Exception ignored) {}
+        try { if (posXBox != null && !posXBox.getValue().isEmpty()) this.cameraX = Double.parseDouble(posXBox.getValue().trim().replace(",", ".")); } catch (Exception ignored) {}
+        try { if (posYBox != null && !posYBox.getValue().isEmpty()) this.cameraY = Double.parseDouble(posYBox.getValue().trim().replace(",", ".")); } catch (Exception ignored) {}
+        try { if (posZBox != null && !posZBox.getValue().isEmpty()) this.cameraZ = Double.parseDouble(posZBox.getValue().trim().replace(",", ".")); } catch (Exception ignored) {}
+        try { if (yawBox != null && !yawBox.getValue().isEmpty()) this.cameraYaw = Float.parseFloat(yawBox.getValue().trim().replace(",", ".")); } catch (Exception ignored) {}
+        try { if (pitchBox != null && !pitchBox.getValue().isEmpty()) this.cameraPitch = Float.parseFloat(pitchBox.getValue().trim().replace(",", ".")); } catch (Exception ignored) {}
+        try { if (rollBox != null && !rollBox.getValue().isEmpty()) this.cameraRoll = Float.parseFloat(rollBox.getValue().trim().replace(",", ".")); } catch (Exception ignored) {}
         updatePreview();
     }
 
     private void updatePreview() {
         if (this.useCamera) {
-            CustomCameraManager.setCustomCamera(this.cameraX, this.cameraY, this.cameraZ, this.cameraYaw, this.cameraPitch, true);
-            CustomCameraManager.setCustomFov(this.cameraFov);
+            CameraTransform transform = CameraTransform.fromEuler(this.cameraX, this.cameraY, this.cameraZ, this.cameraYaw, this.cameraPitch, this.cameraRoll, this.cameraFov);
+            CustomCameraManager.setCustomTransform(transform, true);
         } else {
             CustomCameraManager.clearCustomCamera();
         }
@@ -373,6 +411,16 @@ public class CameraSetupScreen extends Screen {
             mouseY /= scale;
         }
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        double scale = getLayoutScale();
+        if (scale < 1.0) {
+            mouseX /= scale;
+            mouseY /= scale;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
@@ -402,22 +450,28 @@ public class CameraSetupScreen extends Screen {
         guiGraphics.fill(panelLeft, panelTop + 2, panelLeft + 2, panelTop + panelHeight, CYAN_MAIN);
         guiGraphics.fill(panelLeft + panelWidth - 2, panelTop, panelLeft + panelWidth, panelTop + panelHeight, CYAN_MAIN);
 
-        guiGraphics.drawString(this.font, Component.literal("CAMERA SETUP & LIVE PREVIEW").withStyle(net.minecraft.ChatFormatting.BOLD), panelLeft + 15, panelTop + 8, CYAN_MAIN);
+        guiGraphics.drawString(this.font, Component.literal("6-DOF CAMERA SETUP & LIVE PREVIEW").withStyle(net.minecraft.ChatFormatting.BOLD), panelLeft + 15, panelTop + 8, CYAN_MAIN);
         guiGraphics.fill(panelLeft + 15, panelTop + 18, panelLeft + panelWidth - 15, panelTop + 19, 0xAA00E5FF);
 
-        guiGraphics.drawString(this.font, Component.literal("X"), panelLeft + 15, panelTop + 114, 0xAAAAAA);
-        guiGraphics.drawString(this.font, Component.literal("Y"), panelLeft + 78, panelTop + 114, 0xAAAAAA);
-        guiGraphics.drawString(this.font, Component.literal("Z"), panelLeft + 141, panelTop + 114, 0xAAAAAA);
-        guiGraphics.drawString(this.font, Component.literal("Yaw"), panelLeft + 204, panelTop + 114, 0xAAAAAA);
-        guiGraphics.drawString(this.font, Component.literal("Pitch"), panelLeft + 267, panelTop + 114, 0xAAAAAA);
+        int inputW = 48;
+        int gap = 4;
+        int startX = panelLeft + 15;
+        guiGraphics.drawString(this.font, Component.literal("X"), startX, panelTop + 114, 0xAAAAAA);
+        guiGraphics.drawString(this.font, Component.literal("Y"), startX + (inputW + gap), panelTop + 114, 0xAAAAAA);
+        guiGraphics.drawString(this.font, Component.literal("Z"), startX + (inputW + gap) * 2, panelTop + 114, 0xAAAAAA);
+        guiGraphics.drawString(this.font, Component.literal("Yaw"), startX + (inputW + gap) * 3, panelTop + 114, 0xAAAAAA);
+        guiGraphics.drawString(this.font, Component.literal("Pitch"), startX + (inputW + gap) * 4, panelTop + 114, 0xAAAAAA);
+        guiGraphics.drawString(this.font, Component.literal("Roll"), startX + (inputW + gap) * 5, panelTop + 114, 0xAAAAAA);
 
         // Top Banner & Control Instructions Indicators
-        String bannerText = this.useCamera ? "LIVE CAMERA PREVIEW ACTIVE" : "CAMERA OVERRIDE DISABLED";
+        String bannerText = this.useCamera ? "LIVE 6-DOF CAMERA PREVIEW ACTIVE" : "CAMERA OVERRIDE DISABLED";
         int bannerColor = this.useCamera ? 0xFF00E5FF : 0xFFFF3355;
-        guiGraphics.drawCenteredString(this.font, Component.literal(bannerText).withStyle(net.minecraft.ChatFormatting.BOLD), effWidth / 2, 12, bannerColor);
+        guiGraphics.drawCenteredString(this.font, Component.literal(bannerText).withStyle(net.minecraft.ChatFormatting.BOLD), effWidth / 2, 10, bannerColor);
 
         if (this.useCamera) {
-            guiGraphics.drawCenteredString(this.font, Component.literal("💡 Right-Click Drag: Rotate | WASD / Space / Ctrl: Camera-Space Movement | Sprint Key: Fast"), effWidth / 2, 26, 0xFFFFEE55);
+            guiGraphics.drawCenteredString(this.font, Component.literal("💡 Right-Click Drag: Aim | WASD / Space / Ctrl: Move | Q/E: Roll | R: Reset Roll | Sprint: Fast"), effWidth / 2, 22, 0xFFFFEE55);
+            String rollText = String.format(Locale.US, "Current Roll: %.1f° (Z-tilt)", this.cameraRoll);
+            guiGraphics.drawCenteredString(this.font, Component.literal(rollText), effWidth / 2, 34, 0xAAFFFFFF);
         }
 
         super.render(guiGraphics, scaledMouseX, scaledMouseY, partialTick);

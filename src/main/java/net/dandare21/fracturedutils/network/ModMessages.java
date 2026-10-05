@@ -46,6 +46,7 @@ import net.dandare21.fracturedutils.network.packet.C2SSpawnPuppetPacket;
 import net.dandare21.fracturedutils.network.packet.ClientboundPuppetAnimPacket;
 import net.dandare21.fracturedutils.network.packet.ClientboundAttackIndicatorPacket;
 import net.dandare21.fracturedutils.network.packet.S2CCameraOverridePacket;
+import net.dandare21.fracturedutils.network.packet.S2CPlayCameraTrackPacket;
 import net.dandare21.fracturedutils.screeneffect.packet.S2CPlayScreenEffectPacket;
 import net.dandare21.fracturedutils.screeneffect.packet.S2CStopScreenEffectPacket;
 import net.dandare21.fracturedutils.bossbar.network.S2CSyncBossBarsPacket;
@@ -342,6 +343,12 @@ public class ModMessages {
                 .decoder(S2CCameraOverridePacket::new)
                 .encoder(S2CCameraOverridePacket::encode)
                 .consumerMainThread(S2CCameraOverridePacket::handle)
+                .add();
+
+        net.messageBuilder(S2CPlayCameraTrackPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(S2CPlayCameraTrackPacket::new)
+                .encoder(S2CPlayCameraTrackPacket::encode)
+                .consumerMainThread(S2CPlayCameraTrackPacket::handle)
                 .add();
 
         net.messageBuilder(S2CPlayScreenEffectPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)

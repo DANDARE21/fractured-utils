@@ -39,6 +39,7 @@ public class DialogHudOverlay {
 
     // Multiplayer consensus player readiness state
     private static final List<UUID> readyPlayerUUIDs = new ArrayList<>();
+    private static boolean dialogSetCamera = false;
 
     public static void setActiveDialog(String speaker, String text, int delayTicks, int charSpeedTicks, String letterSound, float letterSoundPitchMin, float letterSoundPitchMax, boolean waitForInput, boolean useCamera, double cameraX, double cameraY, double cameraZ, float cameraYaw, float cameraPitch, double cameraFov) {
         activeSpeaker = speaker != null ? speaker : "";
@@ -63,10 +64,14 @@ public class DialogHudOverlay {
         active = true;
 
         if (useCamera) {
+            dialogSetCamera = true;
             net.dandare21.fracturedutils.client.camera.CustomCameraManager.setCustomCamera(cameraX, cameraY, cameraZ, cameraYaw, cameraPitch, true);
             net.dandare21.fracturedutils.client.camera.CustomCameraManager.setCustomFov(cameraFov);
         } else {
-            net.dandare21.fracturedutils.client.camera.CustomCameraManager.clearCustomCamera();
+            if (dialogSetCamera && net.dandare21.fracturedutils.client.camera.CustomCameraManager.getActiveTrack() == null) {
+                net.dandare21.fracturedutils.client.camera.CustomCameraManager.clearCustomCamera();
+            }
+            dialogSetCamera = false;
         }
     }
 
@@ -82,7 +87,10 @@ public class DialogHudOverlay {
         activeSpeaker = "";
         activeText = "";
         readyPlayerUUIDs.clear();
-        net.dandare21.fracturedutils.client.camera.CustomCameraManager.clearCustomCamera();
+        if (dialogSetCamera && net.dandare21.fracturedutils.client.camera.CustomCameraManager.getActiveTrack() == null) {
+            net.dandare21.fracturedutils.client.camera.CustomCameraManager.clearCustomCamera();
+        }
+        dialogSetCamera = false;
     }
 
     public static boolean isActive() {

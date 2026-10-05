@@ -17,6 +17,7 @@ import net.dandare21.fracturedutils.puppet.registry.ModPuppetActions;
 import net.dandare21.fracturedutils.puppet.target.ActionTarget;
 import net.dandare21.fracturedutils.network.ModMessages;
 import net.dandare21.fracturedutils.network.packet.S2CCameraOverridePacket;
+import net.dandare21.fracturedutils.network.packet.S2CPlayCameraTrackPacket;
 import net.dandare21.fracturedutils.screeneffect.ScreenEffectInstance;
 import net.dandare21.fracturedutils.screeneffect.ScreenEffectManager;
 import net.dandare21.fracturedutils.screeneffect.effects.HueShiftEffect;
@@ -501,6 +502,35 @@ public class MusicSequenceManager {
         activeSequences.removeIf(seq -> seq.getFileName().equalsIgnoreCase(fileName));
         ActiveMusicSequence activeSeq = new ActiveMusicSequence(fileName, sequence, targets);
         activeSequences.add(activeSeq);
+
+        // Compile and dispatch synchronized 6-DOF camera track to players if present
+        List<MusicSequenceEntry> cameraEntries = new ArrayList<>();
+        for (MusicSequenceEntry entry : sequence.getEntries()) {
+            MusicSequenceChannel matchedChannel = null;
+            for (MusicSequenceChannel ch : sequence.getChannels()) {
+                if (ch.getId().equalsIgnoreCase(entry.getChannelId())) {
+                    matchedChannel = ch;
+                    break;
+                }
+            }
+            boolean isCameraChannel = (matchedChannel != null && MusicSequenceChannel.TYPE_CAMERA.equalsIgnoreCase(matchedChannel.getType()));
+            boolean isCameraEntry = isCameraChannel || entry.isUseCamera() || "CAMERA".equalsIgnoreCase(entry.getActionType());
+            if (isCameraEntry) {
+                cameraEntries.add(entry);
+            }
+        }
+        if (!cameraEntries.isEmpty()) {
+            S2CPlayCameraTrackPacket cameraPacket = new S2CPlayCameraTrackPacket(
+                    fileName, activeSeq.getStartTimeMs(), sequence.isLooping(),
+                    activeSeq.getInMarkerMs(), activeSeq.getOutMarkerMs(), cameraEntries
+            );
+            for (ServerPlayer player : targets) {
+                ModMessages.sendToPlayer(cameraPacket, player);
+            }
+            FracturedUtils.LOGGER.info("[MusicSequenceManager] Dispatched 6-DOF camera track ({} keyframes) to {} players",
+                    cameraEntries.size(), targets.size());
+        }
+
         FracturedUtils.LOGGER.info("[MusicSequenceManager] Started music sequence '{}' with {} entries (expected duration: {}ms, in: {}ms, out: {}ms).",
                 fileName, sequence.getEntries().size(), activeSeq.getExpectedDurationMs(), activeSeq.getInMarkerMs(), activeSeq.getOutMarkerMs());
         return true;
@@ -628,7 +658,24 @@ public class MusicSequenceManager {
         boolean isCameraEntry = isCameraChannel || entry.isUseCamera() || "CAMERA".equalsIgnoreCase(entry.getActionType());
 
         if (isCameraEntry) {
-            executeCameraEntry(server, activeSeq, entry, contextPlayer);
+            // Camera shots are dispatched and evaluated continuously as a 6-DOF track on client via S2CPlayCameraTrackPacket.
+            // Do not dispatch legacy single-keyframe override packets which destroy the active spline track.
+            String rawCmd = entry.getCommand();
+            if (rawCmd != null && !rawCmd.isBlank() && !rawCmd.toLowerCase(Locale.ROOT).startsWith("camera")) {
+                String cmd = rawCmd.trim();
+                if (cmd.startsWith("/")) cmd = cmd.substring(1);
+                if (contextPlayer != null) {
+                    cmd = cmd.replace("%player%", contextPlayer.getGameProfile().getName()).replace("%uuid%", contextPlayer.getStringUUID());
+                } else {
+                    cmd = cmd.replace("%player%", "@p").replace("%uuid%", "");
+                }
+                CommandSourceStack sourceStack = contextPlayer != null
+                        ? contextPlayer.createCommandSourceStack().withPermission(4).withSuppressedOutput()
+                        : server.createCommandSourceStack();
+                try {
+                    server.getCommands().performPrefixedCommand(sourceStack, cmd);
+                } catch (Exception ignored) {}
+            }
             return;
         }
 
@@ -927,15 +974,23 @@ public class MusicSequenceManager {
             }
         } else if ("TOGGLE_AI".equalsIgnoreCase(sub)) {
             try {
-                List<IPuppetHandler> handlers = SelectorUtils.getPuppetHandlersByTag(server, actorTag);
+                boolean hasSpecificActor = !actorTag.isBlank() || (channel != null && !channel.getActorTag().isBlank());
+                List<IPuppetHandler> handlers = new ArrayList<>();
+                if (!actorTag.isBlank()) {
+                    handlers.addAll(SelectorUtils.getPuppetHandlersByTag(server, actorTag));
+                }
                 if (handlers.isEmpty() && channel != null && !channel.getActorTag().isBlank()) {
-                    handlers = SelectorUtils.getPuppetHandlersByTag(server, channel.getActorTag());
+                    handlers.addAll(SelectorUtils.getPuppetHandlersByTag(server, channel.getActorTag()));
+                }
+                if (!hasSpecificActor && handlers.isEmpty()) {
+                    handlers.addAll(SelectorUtils.getPuppetHandlersByTag(server, "puppet_actor"));
                 }
                 if (handlers.isEmpty()) {
-                    handlers = SelectorUtils.getPuppetHandlersByTag(server, "puppet_actor");
-                }
-                if (handlers.isEmpty()) {
-                    FracturedUtils.LOGGER.warn("[MusicSequenceManager] No active puppet handlers found with tag '{}' to toggle AI", actorTag);
+                    if (hasSpecificActor) {
+                        FracturedUtils.LOGGER.debug("[MusicSequenceManager] Skipping TOGGLE_AI: Targeted puppet actor '{}' is not present or dead.", actorTag);
+                    } else {
+                        FracturedUtils.LOGGER.warn("[MusicSequenceManager] No active puppet handlers found with tag '{}' to toggle AI", actorTag);
+                    }
                     return;
                 }
                 boolean isRestore = cmd.contains("puppet_restore") || entry.getDescription().toLowerCase(Locale.ROOT).contains("restore");
@@ -1025,26 +1080,31 @@ public class MusicSequenceManager {
                 }
 
                 List<IPuppetHandler> handlers = new ArrayList<>();
+                boolean hasSpecificActor = !actorTag.isBlank() || (channel != null && !channel.getActorTag().isBlank());
+
                 if (!actorTag.isBlank()) {
                     handlers.addAll(SelectorUtils.getPuppetHandlersByTag(server, actorTag));
                 }
                 if (handlers.isEmpty() && channel != null && !channel.getActorTag().isBlank()) {
                     handlers.addAll(SelectorUtils.getPuppetHandlersByTag(server, channel.getActorTag()));
                 }
-                if (handlers.isEmpty() && channel != null && !channel.getName().isBlank()) {
-                    handlers.addAll(SelectorUtils.getPuppetHandlersByTag(server, channel.getName().toLowerCase(Locale.ROOT).replace(" ", "_")));
-                }
-                if (handlers.isEmpty()) {
-                    handlers.addAll(SelectorUtils.getPuppetHandlersByTag(server, "puppet_actor"));
-                }
-                if (handlers.isEmpty()) {
-                    for (ServerLevel level : server.getAllLevels()) {
-                        for (Entity e : level.getAllEntities()) {
-                            if (e.isAlive() && e instanceof Mob mob) {
-                                if (mob instanceof VoidHeraldBoss || mob.getTags().contains("puppet_actor") || (!actorTag.isBlank() && mob.getTags().contains(actorTag))) {
-                                    mob.getCapability(PuppetCapabilityProvider.PUPPET_HANDLER).ifPresent(h -> {
-                                        if (!handlers.contains(h)) handlers.add(h);
-                                    });
+                // Only fall back to channel name / generic puppet_actor if no specific actor tag was configured
+                if (!hasSpecificActor) {
+                    if (handlers.isEmpty() && channel != null && !channel.getName().isBlank()) {
+                        handlers.addAll(SelectorUtils.getPuppetHandlersByTag(server, channel.getName().toLowerCase(Locale.ROOT).replace(" ", "_")));
+                    }
+                    if (handlers.isEmpty()) {
+                        handlers.addAll(SelectorUtils.getPuppetHandlersByTag(server, "puppet_actor"));
+                    }
+                    if (handlers.isEmpty()) {
+                        for (ServerLevel level : server.getAllLevels()) {
+                            for (Entity e : level.getAllEntities()) {
+                                if (e.isAlive() && e instanceof Mob mob) {
+                                    if (mob instanceof VoidHeraldBoss || mob.getTags().contains("puppet_actor")) {
+                                        mob.getCapability(PuppetCapabilityProvider.PUPPET_HANDLER).ifPresent(h -> {
+                                            if (!handlers.contains(h)) handlers.add(h);
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -1052,8 +1112,13 @@ public class MusicSequenceManager {
                 }
 
                 if (handlers.isEmpty()) {
-                    FracturedUtils.LOGGER.warn("[MusicSequenceManager] Cannot execute action '{}': No alive mob found with custom tag '{}' or 'puppet_actor'!",
-                            actionId, actorTag);
+                    if (hasSpecificActor) {
+                        FracturedUtils.LOGGER.debug("[MusicSequenceManager] Skipping action '{}': Targeted puppet actor '{}' is not present or dead.",
+                                actionId, actorTag);
+                    } else {
+                        FracturedUtils.LOGGER.warn("[MusicSequenceManager] Cannot execute action '{}': No alive mob found with custom tag '{}' or 'puppet_actor'!",
+                                actionId, actorTag);
+                    }
                     return;
                 }
 
@@ -1276,9 +1341,44 @@ public class MusicSequenceManager {
         // Resolve ServerLevel
         ServerLevel level = contextPlayer != null ? contextPlayer.serverLevel() : server.overworld();
 
-        // Resolve Coordinates
+        // Resolve Coordinates & Facing
         Vec3 basePos = contextPlayer != null ? contextPlayer.position() : new Vec3(0, 64, 0);
         float yaw = contextPlayer != null ? contextPlayer.getYRot() : 0.0F;
+        float pitch = 0.0F;
+
+        if (entry.getSpawnYaw() != 0.0F || entry.getSpawnPitch() != 0.0F) {
+            yaw = entry.getSpawnYaw();
+            pitch = entry.getSpawnPitch();
+        } else if (entry.getPuppetParams() != null && entry.getPuppetParams().containsKey("spawnYaw")) {
+            try {
+                yaw = Float.parseFloat(entry.getPuppetParam("spawnYaw", String.valueOf(yaw)));
+                pitch = Float.parseFloat(entry.getPuppetParam("spawnPitch", "0.0"));
+            } catch (Exception ignored) {}
+        } else if (cmd.contains("Rotation:[")) {
+            try {
+                int start = cmd.indexOf("Rotation:[") + 10;
+                int end = cmd.indexOf(']', start);
+                if (end > start) {
+                    String rotStr = cmd.substring(start, end);
+                    String[] rotParts = rotStr.split(",");
+                    if (rotParts.length >= 1) {
+                        yaw = Float.parseFloat(rotParts[0].trim().replace("f", "").replace("F", ""));
+                    }
+                    if (rotParts.length >= 2) {
+                        pitch = Float.parseFloat(rotParts[1].trim().replace("f", "").replace("F", ""));
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        boolean showNametag = entry.isShowNametag();
+        if (entry.getPuppetParams() != null && entry.getPuppetParams().containsKey("showNametag")) {
+            showNametag = Boolean.parseBoolean(entry.getPuppetParam("showNametag", "false"));
+        } else if (cmd.contains("CustomNameVisible:1") || cmd.contains("CustomNameVisible:1b")) {
+            showNametag = true;
+        } else if (cmd.contains("CustomNameVisible:0") || cmd.contains("CustomNameVisible:0b")) {
+            showNametag = false;
+        }
 
         double spawnX = parseCoordinate(xStr, basePos.x);
         double spawnY = parseCoordinate(yStr, basePos.y);
@@ -1300,6 +1400,17 @@ public class MusicSequenceManager {
                             String nbtStr = cmd.substring(nbtStart, nbtEnd + 1);
                             CompoundTag tag = TagParser.parseTag(nbtStr);
 
+                            if (tag.contains("Rotation", 9)) {
+                                ListTag rot = tag.getList("Rotation", 5);
+                                if (rot.size() >= 2) {
+                                    yaw = rot.getFloat(0);
+                                    pitch = rot.getFloat(1);
+                                }
+                            }
+                            if (tag.contains("CustomNameVisible")) {
+                                showNametag = tag.getBoolean("CustomNameVisible");
+                            }
+
                             // Supply the actual position and rotation to the NBT tag so Entity.load does not zero them!
                             ListTag posList = new ListTag();
                             posList.add(DoubleTag.valueOf(spawnX));
@@ -1309,8 +1420,9 @@ public class MusicSequenceManager {
 
                             ListTag rotList = new ListTag();
                             rotList.add(FloatTag.valueOf(yaw));
-                            rotList.add(FloatTag.valueOf(0.0F));
+                            rotList.add(FloatTag.valueOf(pitch));
                             tag.put("Rotation", rotList);
+                            tag.putBoolean("CustomNameVisible", showNametag);
 
                             entity.load(tag);
                             if (actorTag != null && !actorTag.isBlank()) entity.addTag(actorTag);
@@ -1323,6 +1435,7 @@ public class MusicSequenceManager {
                                         h.setSuppressAi(true);
                                         h.setSuppressNavigation(true);
                                         h.setSuppressTargeting(true);
+                                        h.setSuppressLook(true);
                                     });
                                 }
                             }
@@ -1333,10 +1446,10 @@ public class MusicSequenceManager {
                 }
 
                 // Explicitly set position, rotation and head yaw after any NBT loading
-                entity.moveTo(spawnX, spawnY, spawnZ, yaw, 0.0F);
+                entity.moveTo(spawnX, spawnY, spawnZ, yaw, pitch);
                 entity.setPos(spawnX, spawnY, spawnZ);
                 entity.setYRot(yaw);
-                entity.setXRot(0.0F);
+                entity.setXRot(pitch);
                 entity.setYHeadRot(yaw);
                 entity.setYBodyRot(yaw);
 
@@ -1351,11 +1464,15 @@ public class MusicSequenceManager {
 
                 if (!actorName.isBlank()) {
                     entity.setCustomName(Component.literal(actorName));
-                    entity.setCustomNameVisible(true);
+                    entity.setCustomNameVisible(showNametag);
                 }
 
                 if (entity instanceof Mob mob) {
-                    mob.moveTo(spawnX, spawnY, spawnZ, yaw, 0.0F);
+                    mob.moveTo(spawnX, spawnY, spawnZ, yaw, pitch);
+                    mob.setYRot(yaw);
+                    mob.setXRot(pitch);
+                    mob.setYHeadRot(yaw);
+                    mob.setYBodyRot(yaw);
                     mob.setPersistenceRequired();
                     if (disableAi) {
                         mob.setNoAi(true);
@@ -1363,19 +1480,23 @@ public class MusicSequenceManager {
                             h.setSuppressAi(true);
                             h.setSuppressNavigation(true);
                             h.setSuppressTargeting(true);
+                            h.setSuppressLook(true);
                         });
                     }
                 }
 
                 boolean added = level.addFreshEntity(entity);
-                FracturedUtils.LOGGER.info("[MusicSequenceManager] Successfully spawned puppet actor '{}' ({}) with tag '{}' at ({}, {}, {}) [UUID: {}] in dimension {} (added: {})",
+                FracturedUtils.LOGGER.info("[MusicSequenceManager] Successfully spawned puppet actor '{}' ({}) with tag '{}' at ({}, {}, {}) facing [yaw: {}, pitch: {}] [nametag: {}] [UUID: {}] in dimension {} (added: {})",
                         actorName, ForgeRegistries.ENTITY_TYPES.getKey(type), actorTag,
                         String.format(Locale.ROOT, "%.2f", spawnX), String.format(Locale.ROOT, "%.2f", spawnY), String.format(Locale.ROOT, "%.2f", spawnZ),
+                        String.format(Locale.ROOT, "%.1f", yaw), String.format(Locale.ROOT, "%.1f", pitch),
+                        showNametag,
                         entity.getStringUUID(), level.dimension().location(), added);
 
                 if (contextPlayer != null) {
                     contextPlayer.sendSystemMessage(Component.literal("🎭 Spawned Puppet '" + actorName + "' [#" + actorTag + "] at ("
-                            + String.format(Locale.ROOT, "%.1f, %.1f, %.1f", spawnX, spawnY, spawnZ) + ")")
+                            + String.format(Locale.ROOT, "%.1f, %.1f, %.1f", spawnX, spawnY, spawnZ) + ") facing "
+                            + String.format(Locale.ROOT, "%.0f°", yaw))
                             .withStyle(ChatFormatting.LIGHT_PURPLE));
                 }
             } else {

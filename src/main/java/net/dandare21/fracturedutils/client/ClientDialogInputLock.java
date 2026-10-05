@@ -18,7 +18,7 @@ public class ClientDialogInputLock {
     private static Float savedPlayerPitch = null;
 
     public static boolean shouldLockInput() {
-        return CustomCameraManager.isActive();
+        return CustomCameraManager.isCameraActive();
     }
 
     @SubscribeEvent

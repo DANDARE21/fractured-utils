@@ -10,6 +10,8 @@ import net.dandare21.fracturedutils.sound.DialogSoundRegistry;
 import net.dandare21.fracturedutils.sound.ModSounds;
 import net.dandare21.fracturedutils.sound.sequence.MusicSequenceChannel;
 import net.dandare21.fracturedutils.sound.sequence.MusicSequenceEntry;
+import net.dandare21.fracturedutils.client.camera.CameraEasing;
+import net.dandare21.fracturedutils.client.camera.SplineInterpolationType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -22,6 +24,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.util.Mth;
 import net.dandare21.fracturedutils.puppet.fsm.ActionParameter;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
@@ -102,6 +105,17 @@ public class EditMusicEntryModalScreen extends Screen {
     private EditBox cameraDurationBox;
     private boolean cameraInterpolate = true;
 
+    // Advanced Spline, Easing & Decoupled Look-At Target Inputs
+    private SplineInterpolationType cameraSplineMode = SplineInterpolationType.CATMULL_ROM;
+    private CameraEasing cameraEasing = CameraEasing.EASE_IN_OUT_CUBIC;
+    private EditBox cameraInHandleXBox, cameraInHandleYBox, cameraInHandleZBox;
+    private EditBox cameraOutHandleXBox, cameraOutHandleYBox, cameraOutHandleZBox;
+    private boolean cameraLookAtEnabled = false;
+    private String cameraLookAtMode = "COORDINATE";
+    private EditBox cameraLookAtXBox, cameraLookAtYBox, cameraLookAtZBox;
+    private EditBox cameraLookAtTargetBox;
+    private EditBox cameraLookAtWeightBox;
+
     // Dialog state & inputs
     private DialogLine dialogLine;
     private EditBox dialogSpeakerBox;
@@ -139,7 +153,12 @@ public class EditMusicEntryModalScreen extends Screen {
     private EditBox spawnXBox;
     private EditBox spawnYBox;
     private EditBox spawnZBox;
+    private EditBox spawnYawBox;
+    private EditBox spawnPitchBox;
+    private float spawnYaw = 0.0f;
+    private float spawnPitch = 0.0f;
     private boolean spawnDisableAi = false;
+    private boolean showNametag = false;
 
     // Puppet Toggle AI Inputs
     private boolean isSuppressAi = true;
@@ -268,9 +287,18 @@ public class EditMusicEntryModalScreen extends Screen {
     private void initCameraState() {
         this.activeCameraMode = entry.getCameraMode();
         if (this.activeCameraMode == null || this.activeCameraMode.isBlank()) {
-            this.activeCameraMode = "STATIC";
+            this.activeCameraMode = "KEYFRAME";
+        }
+        if ("STATIC".equalsIgnoreCase(this.activeCameraMode)) {
+            this.activeCameraMode = "KEYFRAME";
+        } else if ("CLEAR".equalsIgnoreCase(this.activeCameraMode)) {
+            this.activeCameraMode = "DISABLE";
         }
         this.cameraInterpolate = entry.isCameraInterpolate();
+        this.cameraSplineMode = SplineInterpolationType.fromString(entry.getSplineMode());
+        this.cameraEasing = CameraEasing.fromString(entry.getCameraEasing());
+        this.cameraLookAtEnabled = entry.isLookAtEnabled();
+        this.cameraLookAtMode = entry.getLookAtMode();
         if (entry.getDurationMs() <= 0 && entry.getTotalDurationMs() <= 0) {
             entry.setDurationMs(3000);
         }
@@ -321,8 +349,44 @@ public class EditMusicEntryModalScreen extends Screen {
         }
 
         // Parse spawn
-        if (entry.getCommand().contains("NoAI:1b")) {
+        if (entry.getCommand().contains("NoAI:1b") || entry.getCommand().contains("NoAI:1")) {
             this.spawnDisableAi = true;
+        }
+        if (entry.getCommand().contains("CustomNameVisible:1b") || entry.getCommand().contains("CustomNameVisible:1") || entry.isShowNametag() || "true".equalsIgnoreCase(entry.getPuppetParam("showNametag", "false"))) {
+            this.showNametag = true;
+        } else {
+            this.showNametag = false;
+        }
+
+        if (entry.getSpawnYaw() != 0.0f || entry.getSpawnPitch() != 0.0f) {
+            this.spawnYaw = entry.getSpawnYaw();
+            this.spawnPitch = entry.getSpawnPitch();
+        } else if (entry.getPuppetParams() != null && entry.getPuppetParams().containsKey("spawnYaw")) {
+            try {
+                this.spawnYaw = Float.parseFloat(entry.getPuppetParam("spawnYaw", "0.0"));
+                this.spawnPitch = Float.parseFloat(entry.getPuppetParam("spawnPitch", "0.0"));
+            } catch (Exception ignored) {}
+        } else {
+            String c = entry.getCommand().trim();
+            if (c.contains("Rotation:[")) {
+                try {
+                    int start = c.indexOf("Rotation:[") + 10;
+                    int end = c.indexOf(']', start);
+                    if (end > start) {
+                        String rotStr = c.substring(start, end);
+                        String[] rotParts = rotStr.split(",");
+                        if (rotParts.length >= 1) {
+                            this.spawnYaw = Float.parseFloat(rotParts[0].trim().replace("f", "").replace("F", "").replace(',', '.'));
+                        }
+                        if (rotParts.length >= 2) {
+                            this.spawnPitch = Float.parseFloat(rotParts[1].trim().replace("f", "").replace("F", "").replace(',', '.'));
+                        }
+                    }
+                } catch (Exception ignored) {}
+            } else if (this.minecraft != null && this.minecraft.player != null) {
+                this.spawnYaw = this.minecraft.player.getYRot();
+                this.spawnPitch = 0.0f;
+            }
         }
 
         // Parse timings
@@ -418,7 +482,7 @@ public class EditMusicEntryModalScreen extends Screen {
 
     private int getPanelHeight() {
         if (isDialog) return 450;
-        if (isCamera) return 258;
+        if (isCamera) return 336;
         if (isScreenEffect) return 260;
         if (isPuppet) return 450;
         return 202;
@@ -876,81 +940,224 @@ public class EditMusicEntryModalScreen extends Screen {
         int contentW = panelWidth - 28;
         int currentY = panelTop + 30;
 
-        // 1. Four Camera Mode Tabs
+        // 1. Four Camera Mode Tabs: ENABLE, KEYFRAME, DISABLE, TRACKING
         int tabW = (contentW - 9) / 4;
-        CyberpunkButton staticTab = new CyberpunkButton(contentX, currentY, tabW, 20, Component.literal("📌 STATIC"),
-                b -> switchCameraMode("STATIC"),
-                MusicSequenceChannel.COLOR_CAMERA, "STATIC".equalsIgnoreCase(activeCameraMode), Component.literal("Fixed coordinates, angles and flight setup"));
+        boolean isKeyframe = "KEYFRAME".equalsIgnoreCase(activeCameraMode) || "STATIC".equalsIgnoreCase(activeCameraMode);
+        boolean isEnable = "ENABLE".equalsIgnoreCase(activeCameraMode);
+        boolean isDisable = "DISABLE".equalsIgnoreCase(activeCameraMode) || "CLEAR".equalsIgnoreCase(activeCameraMode);
+        boolean isTracking = "FOLLOW".equalsIgnoreCase(activeCameraMode) || "OVER_THE_SHOULDER".equalsIgnoreCase(activeCameraMode);
 
-        CyberpunkButton followTab = new CyberpunkButton(contentX + tabW + 3, currentY, tabW, 20, Component.literal("👤 FOLLOW"),
+        CyberpunkButton enableTab = new CyberpunkButton(contentX, currentY, tabW, 20, Component.literal("🟢 ENABLE"),
+                b -> switchCameraMode("ENABLE"),
+                0xFF00FF88, isEnable, Component.literal("Turn camera override ON at this timestamp"));
+
+        CyberpunkButton keyframeTab = new CyberpunkButton(contentX + tabW + 3, currentY, tabW, 20, Component.literal("📷 KEYFRAME"),
+                b -> switchCameraMode("KEYFRAME"),
+                MusicSequenceChannel.COLOR_CAMERA, isKeyframe, Component.literal("Camera position & spline transition to next keyframe"));
+
+        CyberpunkButton disableTab = new CyberpunkButton(contentX + (tabW + 3) * 2, currentY, tabW, 20, Component.literal("🔴 DISABLE"),
+                b -> switchCameraMode("DISABLE"),
+                0xFFFF3355, isDisable, Component.literal("Turn camera override OFF and restore player controls"));
+
+        CyberpunkButton trackingTab = new CyberpunkButton(contentX + (tabW + 3) * 3, currentY, tabW, 20, Component.literal("👤 TRACKING"),
                 b -> switchCameraMode("FOLLOW"),
-                0xFF00E5FF, "FOLLOW".equalsIgnoreCase(activeCameraMode), Component.literal("Track entity or player with height offset"));
+                0xFF00E5FF, isTracking, Component.literal("Follow player or entity in 3rd-person"));
 
-        CyberpunkButton otsTab = new CyberpunkButton(contentX + (tabW + 3) * 2, currentY, tabW, 20, Component.literal("🎥 3RD PERSON"),
-                b -> switchCameraMode("OVER_THE_SHOULDER"),
-                0xFFAA55FF, "OVER_THE_SHOULDER".equalsIgnoreCase(activeCameraMode), Component.literal("Over-the-shoulder dynamic camera tracking"));
+        this.addRenderableWidget(enableTab);
+        this.addRenderableWidget(keyframeTab);
+        this.addRenderableWidget(disableTab);
+        this.addRenderableWidget(trackingTab);
 
-        CyberpunkButton clearTab = new CyberpunkButton(contentX + (tabW + 3) * 3, currentY, tabW, 20, Component.literal("🔄 CLEAR"),
-                b -> switchCameraMode("CLEAR"),
-                0xFFFF3355, "CLEAR".equalsIgnoreCase(activeCameraMode), Component.literal("Restore normal player camera controls"));
-
-        this.addRenderableWidget(staticTab);
-        this.addRenderableWidget(followTab);
-        this.addRenderableWidget(otsTab);
-        this.addRenderableWidget(clearTab);
-
-        // 2. Mode-Specific Content Area Card (Height = 58)
-        int card1Y = panelTop + 56;
-        if ("STATIC".equalsIgnoreCase(activeCameraMode)) {
+        // 2. Mode-Specific Content Area Card
+        int card1Y = panelTop + 52;
+        if (isKeyframe) {
             initStaticCameraControls(contentX, card1Y, contentW);
-        } else if ("FOLLOW".equalsIgnoreCase(activeCameraMode)) {
-            initFollowCameraControls(contentX, card1Y, contentW);
-        } else if ("OVER_THE_SHOULDER".equalsIgnoreCase(activeCameraMode)) {
-            initOtsCameraControls(contentX, card1Y, contentW);
-        } else if ("CLEAR".equalsIgnoreCase(activeCameraMode)) {
-            initClearCameraControls(contentX, card1Y, contentW);
+
+            // 3. Spline & Easing Controls (Card 2)
+            int card2Y = panelTop + 112;
+            int sW = 140;
+            int eW = 168;
+            CyberpunkButton splineBtn = new CyberpunkButton(contentX + 6, card2Y + 5, sW, 18,
+                    Component.literal("SPLINE: " + cameraSplineMode.getDisplayName()),
+                    b -> {
+                        SplineInterpolationType[] vals = SplineInterpolationType.values();
+                        int next = (cameraSplineMode.ordinal() + 1) % vals.length;
+                        cameraSplineMode = vals[next];
+                        this.init();
+                    }, MusicSequenceChannel.COLOR_CAMERA, false, Component.literal(cameraSplineMode.getDescription()));
+            this.addRenderableWidget(splineBtn);
+
+            CameraEasing[] easingPresets = new CameraEasing[]{
+                    CameraEasing.LINEAR,
+                    CameraEasing.EASE_IN_QUAD,
+                    CameraEasing.EASE_OUT_QUAD,
+                    CameraEasing.EASE_IN_OUT_QUAD,
+                    CameraEasing.EASE_IN_CUBIC,
+                    CameraEasing.EASE_OUT_CUBIC,
+                    CameraEasing.EASE_IN_OUT_CUBIC,
+                    CameraEasing.EASE_IN_OUT_SINE,
+                    CameraEasing.EASE_IN_OUT_EXPO,
+                    CameraEasing.EASE_OUT_ELASTIC,
+                    CameraEasing.EASE_OUT_BOUNCE,
+                    CameraEasing.INSTANT
+            };
+            CyberpunkButton easingBtn = new CyberpunkButton(contentX + 10 + sW, card2Y + 5, eW, 18,
+                    Component.literal("EASE: " + cameraEasing.getDisplayName()),
+                    b -> {
+                        int cur = 0;
+                        for (int i = 0; i < easingPresets.length; i++) {
+                            if (easingPresets[i] == cameraEasing) {
+                                cur = i;
+                                break;
+                            }
+                        }
+                        cameraEasing = easingPresets[(cur + 1) % easingPresets.length];
+                        b.setMessage(Component.literal("EASE: " + cameraEasing.getDisplayName()));
+                    }, 0xFF00FF88, false, Component.literal("Per-segment acceleration & easing curve"));
+            this.addRenderableWidget(easingBtn);
+
+            int smW = contentW - (sW + eW + 18);
+            CyberpunkButton smoothToggle = new CyberpunkButton(contentX + 14 + sW + eW, card2Y + 5, smW, 18,
+                    Component.literal(cameraInterpolate ? "SMOOTH: ON" : "SMOOTH: OFF"),
+                    b -> {
+                        cameraInterpolate = !cameraInterpolate;
+                        b.setMessage(Component.literal(cameraInterpolate ? "SMOOTH: ON" : "SMOOTH: OFF"));
+                        if (b instanceof CyberpunkButton cb) {
+                            cb.setAccentColor(cameraInterpolate ? 0xFF00FF88 : 0xFF8899AA);
+                        }
+                    },
+                    cameraInterpolate ? 0xFF00FF88 : 0xFF8899AA, false, Component.literal("Smooth interpolation between keyframe coordinates"));
+            this.addRenderableWidget(smoothToggle);
+
+            // Bézier handles row if Bézier spline selected
+            if (cameraSplineMode == SplineInterpolationType.BEZIER) {
+                int by = card2Y + 29;
+                int hW = 34;
+                this.cameraInHandleXBox = new EditBox(this.font, contentX + 44, by, hW, 16, Component.literal("InX"));
+                this.cameraInHandleXBox.setValue(String.format(Locale.US, "%.1f", entry.getInHandleX()));
+                this.addRenderableWidget(this.cameraInHandleXBox);
+
+                this.cameraInHandleYBox = new EditBox(this.font, contentX + 82, by, hW, 16, Component.literal("InY"));
+                this.cameraInHandleYBox.setValue(String.format(Locale.US, "%.1f", entry.getInHandleY()));
+                this.addRenderableWidget(this.cameraInHandleYBox);
+
+                this.cameraInHandleZBox = new EditBox(this.font, contentX + 120, by, hW, 16, Component.literal("InZ"));
+                this.cameraInHandleZBox.setValue(String.format(Locale.US, "%.1f", entry.getInHandleZ()));
+                this.addRenderableWidget(this.cameraInHandleZBox);
+
+                this.cameraOutHandleXBox = new EditBox(this.font, contentX + 224, by, hW, 16, Component.literal("OutX"));
+                this.cameraOutHandleXBox.setValue(String.format(Locale.US, "%.1f", entry.getOutHandleX()));
+                this.addRenderableWidget(this.cameraOutHandleXBox);
+
+                this.cameraOutHandleYBox = new EditBox(this.font, contentX + 262, by, hW, 16, Component.literal("OutY"));
+                this.cameraOutHandleYBox.setValue(String.format(Locale.US, "%.1f", entry.getOutHandleY()));
+                this.addRenderableWidget(this.cameraOutHandleYBox);
+
+                this.cameraOutHandleZBox = new EditBox(this.font, contentX + 300, by, hW, 16, Component.literal("OutZ"));
+                this.cameraOutHandleZBox.setValue(String.format(Locale.US, "%.1f", entry.getOutHandleZ()));
+                this.addRenderableWidget(this.cameraOutHandleZBox);
+            }
+
+            // 4. Decoupled Look-At Target (Inverse Kinematics) (Card 3)
+            int card3Y = panelTop + 172;
+            CyberpunkButton lookAtToggle = new CyberpunkButton(contentX + 6, card3Y + 5, 115, 18,
+                    Component.literal(cameraLookAtEnabled ? "LOOK-AT IK: ON" : "LOOK-AT IK: OFF"),
+                    b -> {
+                        cameraLookAtEnabled = !cameraLookAtEnabled;
+                        this.init();
+                    },
+                    cameraLookAtEnabled ? 0xFF00FF88 : 0xFF8899AA, false, Component.literal("Decouple camera orientation to lock target via Inverse Kinematics"));
+            this.addRenderableWidget(lookAtToggle);
+
+            CyberpunkButton lookAtModeBtn = new CyberpunkButton(contentX + 126, card3Y + 5, 100, 18,
+                    Component.literal("COORDINATE".equalsIgnoreCase(cameraLookAtMode) ? "TGT: COORD" : "TGT: ENTITY"),
+                    b -> {
+                        cameraLookAtMode = "COORDINATE".equalsIgnoreCase(cameraLookAtMode) ? "ENTITY" : "COORDINATE";
+                        this.init();
+                    },
+                    0xFF00E5FF, false, Component.literal("Switch look-at IK target between 3D world coordinate and entity"));
+            this.addRenderableWidget(lookAtModeBtn);
+
+            if ("COORDINATE".equalsIgnoreCase(cameraLookAtMode)) {
+                int cW = 40;
+                this.cameraLookAtXBox = new EditBox(this.font, contentX + 246, card3Y + 5, cW, 18, Component.literal("LX"));
+                this.cameraLookAtXBox.setValue(String.format(Locale.US, "%.1f", entry.getLookAtX()));
+                this.addRenderableWidget(this.cameraLookAtXBox);
+
+                this.cameraLookAtYBox = new EditBox(this.font, contentX + 290, card3Y + 5, cW, 18, Component.literal("LY"));
+                this.cameraLookAtYBox.setValue(String.format(Locale.US, "%.1f", entry.getLookAtY()));
+                this.addRenderableWidget(this.cameraLookAtYBox);
+
+                this.cameraLookAtZBox = new EditBox(this.font, contentX + 334, card3Y + 5, cW, 18, Component.literal("LZ"));
+                this.cameraLookAtZBox.setValue(String.format(Locale.US, "%.1f", entry.getLookAtZ()));
+                this.addRenderableWidget(this.cameraLookAtZBox);
+            } else {
+                this.cameraLookAtTargetBox = new EditBox(this.font, contentX + 246, card3Y + 5, 128, 18, Component.literal("Target"));
+                this.cameraLookAtTargetBox.setValue(entry.getLookAtTarget().isEmpty() ? "@p" : entry.getLookAtTarget());
+                this.cameraLookAtTargetBox.setHint(Component.literal("@p, UUID, or #tag"));
+                this.addRenderableWidget(this.cameraLookAtTargetBox);
+            }
+
+            this.cameraLookAtWeightBox = new EditBox(this.font, contentX + contentW - 40, card3Y + 5, 36, 18, Component.literal("Weight"));
+            this.cameraLookAtWeightBox.setValue(String.format(Locale.US, "%.2f", entry.getLookAtWeight() > 0 ? entry.getLookAtWeight() : 1.0));
+            this.addRenderableWidget(this.cameraLookAtWeightBox);
+
+            // 5. Timing Section (Card 4)
+            int card4Y = panelTop + 226;
+            initTimingWidgets(contentX, card4Y, contentW);
+
+            // 6. Description / Note Box
+            int descLabelY = panelTop + 264;
+            this.descriptionBox = new EditBox(this.font, contentX, descLabelY + 12, contentW, 18, Component.literal("Description / Note"));
+            this.descriptionBox.setMaxLength(128);
+            this.descriptionBox.setValue(entry.getDescription());
+            this.descriptionBox.setHint(Component.literal("Optional label or cinematic note for timeline"));
+            this.addRenderableWidget(this.descriptionBox);
+        } else if (isEnable) {
+            initActivationCameraControls(contentX, card1Y, contentW, true);
+
+            int card2Y = panelTop + 120;
+            initTimingWidgets(contentX, card2Y, contentW);
+
+            int descLabelY = panelTop + 176;
+            this.descriptionBox = new EditBox(this.font, contentX, descLabelY + 13, contentW, 18, Component.literal("Description / Note"));
+            this.descriptionBox.setMaxLength(128);
+            this.descriptionBox.setValue(entry.getDescription().isEmpty() ? "Enable Camera" : entry.getDescription());
+            this.descriptionBox.setHint(Component.literal("Optional label or note for timeline"));
+            this.addRenderableWidget(this.descriptionBox);
+        } else if (isDisable) {
+            initActivationCameraControls(contentX, card1Y, contentW, false);
+
+            int card2Y = panelTop + 120;
+            initTimingWidgets(contentX, card2Y, contentW);
+
+            int descLabelY = panelTop + 176;
+            this.descriptionBox = new EditBox(this.font, contentX, descLabelY + 13, contentW, 18, Component.literal("Description / Note"));
+            this.descriptionBox.setMaxLength(128);
+            this.descriptionBox.setValue(entry.getDescription().isEmpty() ? "Disable Camera" : entry.getDescription());
+            this.descriptionBox.setHint(Component.literal("Optional label or note for timeline"));
+            this.addRenderableWidget(this.descriptionBox);
+        } else {
+            // TRACKING (FOLLOW or OVER_THE_SHOULDER)
+            if ("OVER_THE_SHOULDER".equalsIgnoreCase(activeCameraMode)) {
+                initOtsCameraControls(contentX, card1Y, contentW);
+            } else {
+                initFollowCameraControls(contentX, card1Y, contentW);
+            }
+
+            int card2Y = panelTop + 120;
+            initTimingWidgets(contentX, card2Y, contentW);
+
+            int descLabelY = panelTop + 176;
+            this.descriptionBox = new EditBox(this.font, contentX, descLabelY + 13, contentW, 18, Component.literal("Description / Note"));
+            this.descriptionBox.setMaxLength(128);
+            this.descriptionBox.setValue(entry.getDescription());
+            this.descriptionBox.setHint(Component.literal("Optional label or note for timeline"));
+            this.addRenderableWidget(this.descriptionBox);
         }
 
-        // 3. Timing & Interpolation Section Card (Height = 50)
-        int card2Y = panelTop + 120;
-        this.timestampBox = new EditBox(this.font, contentX + 66, card2Y + 5, 64, 18, Component.literal("Timestamp (ms)"));
-        this.timestampBox.setMaxLength(10);
-        this.timestampBox.setValue(String.valueOf(entry.getTimestampMs()));
-        this.addRenderableWidget(this.timestampBox);
-
-        this.cameraDurationBox = new EditBox(this.font, contentX + 192, card2Y + 5, 56, 18, Component.literal("Duration (ms)"));
-        this.cameraDurationBox.setMaxLength(10);
-        this.cameraDurationBox.setValue(String.valueOf(entry.getDurationMs() > 0 ? entry.getDurationMs() : 3000));
-        this.addRenderableWidget(this.cameraDurationBox);
-
-        CyberpunkButton smoothToggle = new CyberpunkButton(contentX + 256, card2Y + 5, 94, 18,
-                Component.literal(cameraInterpolate ? "SMOOTH: ON" : "SMOOTH: OFF"),
-                b -> {
-                    cameraInterpolate = !cameraInterpolate;
-                    b.setMessage(Component.literal(cameraInterpolate ? "SMOOTH: ON" : "SMOOTH: OFF"));
-                    if (b instanceof CyberpunkButton cb) {
-                        cb.setAccentColor(cameraInterpolate ? 0xFF00FF88 : 0xFF8899AA);
-                    }
-                },
-                cameraInterpolate ? 0xFF00FF88 : 0xFF8899AA, false, Component.literal("Smooth camera interpolation between shots"));
-        this.addRenderableWidget(smoothToggle);
-
-        int qx = contentX + 356;
-        int btnW = 32;
-        this.addRenderableWidget(new CyberpunkButton(qx, card2Y + 5, btnW, 18, Component.literal("+1s"), b -> adjustTimestamp(1000)));
-        this.addRenderableWidget(new CyberpunkButton(qx + btnW + 2, card2Y + 5, btnW, 18, Component.literal("+3s"), b -> adjustTimestamp(3000)));
-        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 2, card2Y + 5, btnW, 18, Component.literal("+5s"), b -> adjustTimestamp(5000)));
-
-        // 4. Description / Note Box
-        int descLabelY = panelTop + 176;
-        this.descriptionBox = new EditBox(this.font, contentX, descLabelY + 13, contentW, 18, Component.literal("Description / Note"));
-        this.descriptionBox.setMaxLength(128);
-        this.descriptionBox.setValue(entry.getDescription());
-        this.descriptionBox.setHint(Component.literal("Optional label or cinematic note for timeline"));
-        this.addRenderableWidget(this.descriptionBox);
-
-        // 5. Footer: Save, Cancel, Delete
-        int footerY = panelTop + 224;
+        // Footer: Save, Cancel, Delete
+        int footerY = panelTop + panelHeight - 28;
         CyberpunkButton saveBtn = new CyberpunkButton(panelLeft + panelWidth - 14 - 110, footerY, 110, 20,
                 Component.literal("✓ Save Camera"), b -> saveCameraEntry(), MusicSequenceChannel.COLOR_CAMERA, false);
         this.addRenderableWidget(saveBtn);
@@ -967,6 +1174,21 @@ public class EditMusicEntryModalScreen extends Screen {
             }, RED_CANCEL, false);
             this.addRenderableWidget(deleteBtn);
         }
+    }
+
+    private void initTimingWidgets(int contentX, int cardY, int contentW) {
+        this.timestampBox = new EditBox(this.font, contentX + 66, cardY + 5, 75, 18, Component.literal("Timestamp (ms)"));
+        this.timestampBox.setMaxLength(10);
+        this.timestampBox.setValue(String.valueOf(entry.getTimestampMs()));
+        this.addRenderableWidget(this.timestampBox);
+
+        int qx = contentX + 150;
+        int btnW = 38;
+        this.addRenderableWidget(new CyberpunkButton(qx, cardY + 5, btnW, 18, Component.literal("-1s"), b -> adjustTimestamp(-1000)));
+        this.addRenderableWidget(new CyberpunkButton(qx + btnW + 2, cardY + 5, btnW, 18, Component.literal("-0.1s"), b -> adjustTimestamp(-100)));
+        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 2, cardY + 5, btnW, 18, Component.literal("+0.1s"), b -> adjustTimestamp(100)));
+        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 3, cardY + 5, btnW, 18, Component.literal("+1s"), b -> adjustTimestamp(1000)));
+        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 4, cardY + 5, btnW, 18, Component.literal("+3s"), b -> adjustTimestamp(3000)));
     }
 
     private void initStaticCameraControls(int contentX, int card1Y, int contentW) {
@@ -1058,6 +1280,86 @@ public class EditMusicEntryModalScreen extends Screen {
         this.addRenderableWidget(this.cameraPitchBox);
     }
 
+    private void initActivationCameraControls(int contentX, int card1Y, int contentW, boolean isEnable) {
+        long currentDur = entry.getDurationMs() > 0 ? entry.getDurationMs() : (entry.getTotalDurationMs() > 0 ? entry.getTotalDurationMs() : 1000L);
+        this.cameraDurationBox = new EditBox(this.font, contentX + 104, card1Y + 5, 54, 18, Component.literal("Duration"));
+        this.cameraDurationBox.setValue(String.valueOf(currentDur));
+        this.addRenderableWidget(this.cameraDurationBox);
+
+        int qx = contentX + 162;
+        int btnW = 34;
+        this.addRenderableWidget(new CyberpunkButton(qx, card1Y + 5, btnW, 18, Component.literal("0ms"), b -> {
+            if (cameraDurationBox != null) cameraDurationBox.setValue("0");
+            cameraInterpolate = false;
+            this.init();
+        }, 0xFFFF5555, false, Component.literal("Instant cut without smooth transition")));
+
+        this.addRenderableWidget(new CyberpunkButton(qx + btnW + 2, card1Y + 5, btnW, 18, Component.literal(".5s"), b -> {
+            if (cameraDurationBox != null) cameraDurationBox.setValue("500");
+            cameraInterpolate = true;
+            this.init();
+        }, 0xFF00FF88, false, Component.literal("500ms transition duration")));
+
+        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 2, card1Y + 5, btnW, 18, Component.literal("1s"), b -> {
+            if (cameraDurationBox != null) cameraDurationBox.setValue("1000");
+            cameraInterpolate = true;
+            this.init();
+        }, 0xFF00FF88, false, Component.literal("1000ms (1s) transition duration")));
+
+        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 3, card1Y + 5, btnW, 18, Component.literal("2s"), b -> {
+            if (cameraDurationBox != null) cameraDurationBox.setValue("2000");
+            cameraInterpolate = true;
+            this.init();
+        }, 0xFF00FF88, false, Component.literal("2000ms (2s) transition duration")));
+
+        CameraEasing[] easingPresets = new CameraEasing[]{
+                CameraEasing.LINEAR,
+                CameraEasing.EASE_IN_QUAD,
+                CameraEasing.EASE_OUT_QUAD,
+                CameraEasing.EASE_IN_OUT_QUAD,
+                CameraEasing.EASE_IN_CUBIC,
+                CameraEasing.EASE_OUT_CUBIC,
+                CameraEasing.EASE_IN_OUT_CUBIC,
+                CameraEasing.EASE_IN_OUT_SINE,
+                CameraEasing.EASE_IN_OUT_EXPO,
+                CameraEasing.EASE_OUT_ELASTIC,
+                CameraEasing.EASE_OUT_BOUNCE,
+                CameraEasing.INSTANT
+        };
+
+        int eW = 168;
+        CyberpunkButton easingBtn = new CyberpunkButton(contentX + 6, card1Y + 29, eW, 18,
+                Component.literal("EASE: " + cameraEasing.getDisplayName()),
+                b -> {
+                    int cur = 0;
+                    for (int i = 0; i < easingPresets.length; i++) {
+                        if (easingPresets[i] == cameraEasing) {
+                            cur = i;
+                            break;
+                        }
+                    }
+                    cameraEasing = easingPresets[(cur + 1) % easingPresets.length];
+                    if (cameraEasing == CameraEasing.INSTANT) {
+                        cameraInterpolate = false;
+                    }
+                    this.init();
+                }, 0xFF00FF88, false, Component.literal("Activation/transition interpolation curve"));
+        this.addRenderableWidget(easingBtn);
+
+        int smW = 120;
+        CyberpunkButton smoothToggle = new CyberpunkButton(contentX + 12 + eW, card1Y + 29, smW, 18,
+                Component.literal(cameraInterpolate ? "SMOOTH: ON" : "SMOOTH: OFF"),
+                b -> {
+                    cameraInterpolate = !cameraInterpolate;
+                    b.setMessage(Component.literal(cameraInterpolate ? "SMOOTH: ON" : "SMOOTH: OFF"));
+                    if (b instanceof CyberpunkButton cb) {
+                        cb.setAccentColor(cameraInterpolate ? 0xFF00FF88 : 0xFF8899AA);
+                    }
+                },
+                cameraInterpolate ? 0xFF00FF88 : 0xFF8899AA, false, Component.literal("Toggle smooth interpolation vs instant cut"));
+        this.addRenderableWidget(smoothToggle);
+    }
+
     private void initClearCameraControls(int contentX, int card1Y, int contentW) {
     }
 
@@ -1075,6 +1377,7 @@ public class EditMusicEntryModalScreen extends Screen {
             if (cameraPosZBox != null) cameraPosZBox.setValue(String.format(Locale.US, "%.1f", eye.z));
             if (cameraYawBox != null) cameraYawBox.setValue(String.format(Locale.US, "%.0f", mc.player.getYRot()));
             if (cameraPitchBox != null) cameraPitchBox.setValue(String.format(Locale.US, "%.0f", mc.player.getXRot()));
+            if (cameraRollBox != null) cameraRollBox.setValue(String.format(Locale.US, "%.0f", 0.0f));
             mc.getSoundManager().play(SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK.get(), 1.2f));
         }
     }
@@ -1085,14 +1388,16 @@ public class EditMusicEntryModalScreen extends Screen {
         double z = parseDouble(cameraPosZBox, entry.getCameraZ());
         float yaw = parseFloat(cameraYawBox, entry.getCameraYaw());
         float pitch = parseFloat(cameraPitchBox, entry.getCameraPitch());
+        float roll = parseFloat(cameraRollBox, entry.getCameraRoll());
         double fov = parseDouble(cameraFovBox, entry.getCameraFov());
 
-        this.minecraft.setScreen(new CameraSetupScreen(this, x, y, z, yaw, pitch, fov, true, res -> {
+        this.minecraft.setScreen(new CameraSetupScreen(this, x, y, z, yaw, pitch, roll, fov, true, res -> {
             if (cameraPosXBox != null) cameraPosXBox.setValue(String.format(Locale.US, "%.1f", res.x()));
             if (cameraPosYBox != null) cameraPosYBox.setValue(String.format(Locale.US, "%.1f", res.y()));
             if (cameraPosZBox != null) cameraPosZBox.setValue(String.format(Locale.US, "%.1f", res.z()));
             if (cameraYawBox != null) cameraYawBox.setValue(String.format(Locale.US, "%.0f", res.yaw()));
             if (cameraPitchBox != null) cameraPitchBox.setValue(String.format(Locale.US, "%.0f", res.pitch()));
+            if (cameraRollBox != null) cameraRollBox.setValue(String.format(Locale.US, "%.0f", res.roll()));
             if (cameraFovBox != null) cameraFovBox.setValue(String.format(Locale.US, "%.0f", res.fov()));
         }));
     }
@@ -1101,6 +1406,15 @@ public class EditMusicEntryModalScreen extends Screen {
         if (box == null || box.getValue().trim().isEmpty()) return fallback;
         try {
             return Double.parseDouble(box.getValue().trim());
+        } catch (Exception ignored) {
+            return fallback;
+        }
+    }
+
+    private int parseInt(EditBox box, int fallback) {
+        if (box == null || box.getValue().trim().isEmpty()) return fallback;
+        try {
+            return Integer.parseInt(box.getValue().trim());
         } catch (Exception ignored) {
             return fallback;
         }
@@ -1162,7 +1476,7 @@ public class EditMusicEntryModalScreen extends Screen {
         paramLabelRenderers.clear();
         if (activePuppetMode == PuppetSubAction.SPAWN) {
             initSpawnControls(contentX, currentY, contentW);
-            currentY += 76;
+            currentY += 92;
         } else if (activePuppetMode == PuppetSubAction.DESPAWN) {
             initDespawnControls(contentX, currentY, contentW);
             currentY += 76;
@@ -1277,14 +1591,100 @@ public class EditMusicEntryModalScreen extends Screen {
         this.addRenderableWidget(playerPosBtn);
         this.addRenderableWidget(lookPosBtn);
 
-        // AI Disable Toggle
+        // Facing Row (Yaw & Pitch)
+        this.spawnYawBox = new EditBox(this.font, contentX + 28, currentY + 38, 48, 18, Component.literal("Yaw"));
+        this.spawnYawBox.setValue(String.format(Locale.ROOT, "%.1f", this.spawnYaw));
+        this.spawnYawBox.setMaxLength(16);
+
+        this.spawnPitchBox = new EditBox(this.font, contentX + 114, currentY + 38, 48, 18, Component.literal("Pitch"));
+        this.spawnPitchBox.setValue(String.format(Locale.ROOT, "%.1f", this.spawnPitch));
+        this.spawnPitchBox.setMaxLength(16);
+
+        this.addRenderableWidget(this.spawnYawBox);
+        this.addRenderableWidget(this.spawnPitchBox);
+
+        CyberpunkButton matchRotBtn = new CyberpunkButton(contentX + 168, currentY + 38, 102, 18, Component.literal("📍 MATCH ROT"), b -> {
+            if (minecraft != null && minecraft.player != null) {
+                spawnYawBox.setValue(String.format(Locale.ROOT, "%.1f", minecraft.player.getYRot()));
+                spawnPitchBox.setValue(String.format(Locale.ROOT, "%.1f", minecraft.player.getXRot()));
+            }
+        }, 0xFF00FF88, false, Component.literal("Copy player's current yaw and pitch angles"));
+
+        CyberpunkButton facePlayerBtn = new CyberpunkButton(contentX + 274, currentY + 38, 104, 18, Component.literal("👁 FACE PLAYER"), b -> {
+            if (minecraft != null && minecraft.player != null) {
+                double sx = parseCoordinate(spawnXBox.getValue(), minecraft.player.getX());
+                double sy = parseCoordinate(spawnYBox.getValue(), minecraft.player.getY());
+                double sz = parseCoordinate(spawnZBox.getValue(), minecraft.player.getZ());
+                double dx = minecraft.player.getX() - sx;
+                double dy = minecraft.player.getEyeY() - (sy + 1.6);
+                double dz = minecraft.player.getZ() - sz;
+                double dist = Math.sqrt(dx * dx + dz * dz);
+                float yRot = (float) (Mth.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
+                float xRot = (float) (-(Mth.atan2(dy, dist) * (180.0 / Math.PI)));
+                spawnYawBox.setValue(String.format(Locale.ROOT, "%.1f", Mth.wrapDegrees(yRot)));
+                spawnPitchBox.setValue(String.format(Locale.ROOT, "%.1f", Mth.clamp(xRot, -90.0F, 90.0F)));
+            }
+        }, 0xFF00E5FF, false, Component.literal("Calculate facing angles toward current player position"));
+
+        CyberpunkButton faceLookBtn = new CyberpunkButton(contentX + 382, currentY + 38, 104, 18, Component.literal("🎯 FACE LOOK"), b -> {
+            if (minecraft != null && minecraft.player != null) {
+                HitResult hit = minecraft.player.pick(50.0D, 0.0F, false);
+                if (hit != null && hit.getType() != HitResult.Type.MISS) {
+                    Vec3 target = hit.getLocation();
+                    double sx = parseCoordinate(spawnXBox.getValue(), minecraft.player.getX());
+                    double sy = parseCoordinate(spawnYBox.getValue(), minecraft.player.getY());
+                    double sz = parseCoordinate(spawnZBox.getValue(), minecraft.player.getZ());
+                    double dx = target.x - sx;
+                    double dy = target.y - (sy + 1.6);
+                    double dz = target.z - sz;
+                    double dist = Math.sqrt(dx * dx + dz * dz);
+                    float yRot = (float) (Mth.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
+                    float xRot = (float) (-(Mth.atan2(dy, dist) * (180.0 / Math.PI)));
+                    spawnYawBox.setValue(String.format(Locale.ROOT, "%.1f", Mth.wrapDegrees(yRot)));
+                    spawnPitchBox.setValue(String.format(Locale.ROOT, "%.1f", Mth.clamp(xRot, -90.0F, 90.0F)));
+                }
+            }
+        }, 0xFF00FFCC, false, Component.literal("Calculate facing angles toward crosshair block position"));
+
+        this.addRenderableWidget(matchRotBtn);
+        this.addRenderableWidget(facePlayerBtn);
+        this.addRenderableWidget(faceLookBtn);
+
+        // Toggles Row (AI Disable & Nametag Toggle)
+        int toggleW = (contentW - 6) / 2;
         Component aiLabel = Component.literal(spawnDisableAi ? "[✓] DISABLE AI ON SPAWN: YES" : "[ ] DISABLE AI ON SPAWN: NO");
-        CyberpunkButton toggleAiOnSpawnBtn = new CyberpunkButton(contentX, currentY + 38, contentW, 18, aiLabel, b -> {
+        CyberpunkButton toggleAiOnSpawnBtn = new CyberpunkButton(contentX, currentY + 62, toggleW, 18, aiLabel, b -> {
             spawnDisableAi = !spawnDisableAi;
             b.setMessage(Component.literal(spawnDisableAi ? "[✓] DISABLE AI ON SPAWN: YES" : "[ ] DISABLE AI ON SPAWN: NO"));
             ((CyberpunkButton) b).setAccentColor(spawnDisableAi ? 0xFFFF9900 : 0xFF778899);
         }, spawnDisableAi ? 0xFFFF9900 : 0xFF778899, false, Component.literal("When enabled, adds NoAI:1b so entity stays frozen upon summon until instructed"));
         this.addRenderableWidget(toggleAiOnSpawnBtn);
+
+        Component nametagLabel = Component.literal(showNametag ? "[✓] SHOW NAMETAG: ON" : "[ ] SHOW NAMETAG: OFF");
+        CyberpunkButton toggleNametagBtn = new CyberpunkButton(contentX + toggleW + 6, currentY + 62, toggleW, 18, nametagLabel, b -> {
+            showNametag = !showNametag;
+            b.setMessage(Component.literal(showNametag ? "[✓] SHOW NAMETAG: ON" : "[ ] SHOW NAMETAG: OFF"));
+            ((CyberpunkButton) b).setAccentColor(showNametag ? 0xFF00FF88 : 0xFF778899);
+        }, showNametag ? 0xFF00FF88 : 0xFF778899, false, Component.literal("Toggle entity nametag visibility above head (default: OFF)"));
+        this.addRenderableWidget(toggleNametagBtn);
+    }
+
+    private static double parseCoordinate(String coordStr, double baseVal) {
+        if (coordStr == null || coordStr.isBlank()) return baseVal;
+        String s = coordStr.trim().replace(',', '.');
+        if (s.equals("~")) return baseVal;
+        if (s.startsWith("~")) {
+            try {
+                return baseVal + Double.parseDouble(s.substring(1));
+            } catch (Exception ignored) {
+                return baseVal;
+            }
+        }
+        try {
+            return Double.parseDouble(s);
+        } catch (Exception ignored) {
+            return baseVal;
+        }
     }
 
     private void initDespawnControls(int contentX, int currentY, int contentW) {
@@ -2062,13 +2462,7 @@ public class EditMusicEntryModalScreen extends Screen {
             entry.setChannelId(channel.getId());
         }
 
-        int duration = 3000;
-        try {
-            if (cameraDurationBox != null && !cameraDurationBox.getValue().trim().isEmpty()) {
-                duration = Math.max(0, Integer.parseInt(cameraDurationBox.getValue().trim()));
-            }
-        } catch (Exception ignored) {}
-        entry.setDurationMs(duration);
+        entry.setDurationMs(0);
         entry.setWindupMs(0);
         entry.setJumpMs(0);
         entry.setRecoveryMs(0);
@@ -2077,13 +2471,29 @@ public class EditMusicEntryModalScreen extends Screen {
         entry.setCameraMode(activeCameraMode);
         entry.setCameraInterpolate(cameraInterpolate);
 
-        if ("CLEAR".equalsIgnoreCase(activeCameraMode)) {
-            entry.setUseCamera(false);
-            entry.setCommand("camera clear");
+        if ("ENABLE".equalsIgnoreCase(activeCameraMode)) {
+            entry.setUseCamera(true);
+            entry.setCommand("camera enable");
+            int dur = Math.max(0, parseInt(cameraDurationBox, entry.getDurationMs() > 0 ? entry.getDurationMs() : 1000));
+            entry.setDurationMs(dur);
+            entry.setCameraEasing(cameraEasing != null ? cameraEasing.name() : "EASE_IN_OUT_CUBIC");
+            entry.setCameraInterpolate(cameraInterpolate);
             if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
                 entry.setDescription(descriptionBox.getValue().trim());
             } else {
-                entry.setDescription("Reset Camera");
+                entry.setDescription("Enable Camera");
+            }
+        } else if ("DISABLE".equalsIgnoreCase(activeCameraMode) || "CLEAR".equalsIgnoreCase(activeCameraMode)) {
+            entry.setUseCamera(false);
+            entry.setCommand("camera disable");
+            int dur = Math.max(0, parseInt(cameraDurationBox, entry.getDurationMs() > 0 ? entry.getDurationMs() : 1000));
+            entry.setDurationMs(dur);
+            entry.setCameraEasing(cameraEasing != null ? cameraEasing.name() : "EASE_IN_OUT_CUBIC");
+            entry.setCameraInterpolate(cameraInterpolate);
+            if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
+                entry.setDescription(descriptionBox.getValue().trim());
+            } else {
+                entry.setDescription("Disable Camera");
             }
         } else if ("FOLLOW".equalsIgnoreCase(activeCameraMode)) {
             entry.setUseCamera(true);
@@ -2116,7 +2526,7 @@ public class EditMusicEntryModalScreen extends Screen {
                 entry.setDescription("OTS: " + tgt);
             }
         } else {
-            // STATIC
+            // KEYFRAME (or STATIC)
             entry.setUseCamera(true);
             entry.setCameraX(parseDouble(cameraPosXBox, entry.getCameraX()));
             entry.setCameraY(parseDouble(cameraPosYBox, entry.getCameraY()));
@@ -2125,13 +2535,34 @@ public class EditMusicEntryModalScreen extends Screen {
             entry.setCameraPitch(parseFloat(cameraPitchBox, entry.getCameraPitch()));
             entry.setCameraRoll(parseFloat(cameraRollBox, entry.getCameraRoll()));
             entry.setCameraFov(parseDouble(cameraFovBox, entry.getCameraFov()));
-            entry.setCommand(String.format(Locale.US, "camera static %.1f %.1f %.1f %.0f %.0f %.0f",
+
+            entry.setSplineMode(cameraSplineMode != null ? cameraSplineMode.name() : "CATMULL_ROM");
+            entry.setCameraEasing(cameraEasing != null ? cameraEasing.name() : "EASE_IN_OUT_CUBIC");
+            entry.setLookAtEnabled(cameraLookAtEnabled);
+            entry.setLookAtMode(cameraLookAtMode);
+            entry.setLookAtX(parseDouble(cameraLookAtXBox, entry.getLookAtX()));
+            entry.setLookAtY(parseDouble(cameraLookAtYBox, entry.getLookAtY()));
+            entry.setLookAtZ(parseDouble(cameraLookAtZBox, entry.getLookAtZ()));
+            String lookAtTarget = cameraLookAtTargetBox != null ? cameraLookAtTargetBox.getValue().trim() : "";
+            entry.setLookAtTarget(lookAtTarget);
+            entry.setLookAtWeight((float) parseDouble(cameraLookAtWeightBox, 1.0));
+
+            if (cameraSplineMode == SplineInterpolationType.BEZIER) {
+                entry.setInHandleX(parseDouble(cameraInHandleXBox, 0.0));
+                entry.setInHandleY(parseDouble(cameraInHandleYBox, 0.0));
+                entry.setInHandleZ(parseDouble(cameraInHandleZBox, 0.0));
+                entry.setOutHandleX(parseDouble(cameraOutHandleXBox, 0.0));
+                entry.setOutHandleY(parseDouble(cameraOutHandleYBox, 0.0));
+                entry.setOutHandleZ(parseDouble(cameraOutHandleZBox, 0.0));
+            }
+
+            entry.setCommand(String.format(Locale.US, "camera keyframe %.1f %.1f %.1f %.0f %.0f %.0f %.0f",
                     entry.getCameraX(), entry.getCameraY(), entry.getCameraZ(),
-                    entry.getCameraYaw(), entry.getCameraPitch(), entry.getCameraFov()));
+                    entry.getCameraYaw(), entry.getCameraPitch(), entry.getCameraRoll(), entry.getCameraFov()));
             if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
                 entry.setDescription(descriptionBox.getValue().trim());
             } else {
-                entry.setDescription(String.format(Locale.US, "Camera (%.1f, %.1f, %.1f)",
+                entry.setDescription(String.format(Locale.US, "Keyframe (%.1f, %.1f, %.1f)",
                         entry.getCameraX(), entry.getCameraY(), entry.getCameraZ()));
             }
         }
@@ -2143,6 +2574,12 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private void switchPuppetMode(PuppetSubAction newMode) {
+        if (this.spawnYawBox != null) {
+            try { this.spawnYaw = Float.parseFloat(this.spawnYawBox.getValue().trim().replace(',', '.')); } catch (Exception ignored) {}
+        }
+        if (this.spawnPitchBox != null) {
+            try { this.spawnPitch = Float.parseFloat(this.spawnPitchBox.getValue().trim().replace(',', '.')); } catch (Exception ignored) {}
+        }
         this.activePuppetMode = newMode;
         this.init();
     }
@@ -2205,14 +2642,28 @@ public class EditMusicEntryModalScreen extends Screen {
                 if (y.isEmpty()) y = "~";
                 if (z.isEmpty()) z = "~";
 
-                String cmd = String.format(Locale.ROOT, "summon %s %s %s %s {Tags:[\"%s\",\"puppet_actor\"],CustomName:'{\"text\":\"%s\"}',NoAI:%sb,PersistenceRequired:1b}",
-                        entityType, x, y, z, actorTag, actorName, spawnDisableAi ? "1" : "0");
+                String yawStr = spawnYawBox != null ? spawnYawBox.getValue().trim().replace(',', '.') : "0.0";
+                String pitchStr = spawnPitchBox != null ? spawnPitchBox.getValue().trim().replace(',', '.') : "0.0";
+                float sYaw = 0.0f;
+                float sPitch = 0.0f;
+                try { sYaw = Float.parseFloat(yawStr); } catch (Exception ignored) {}
+                try { sPitch = Float.parseFloat(pitchStr); } catch (Exception ignored) {}
+
+                entry.setSpawnYaw(sYaw);
+                entry.setSpawnPitch(sPitch);
+                entry.setShowNametag(showNametag);
+                entry.putPuppetParam("spawnYaw", String.format(Locale.ROOT, "%.2f", sYaw));
+                entry.putPuppetParam("spawnPitch", String.format(Locale.ROOT, "%.2f", sPitch));
+                entry.putPuppetParam("showNametag", String.valueOf(showNametag));
+
+                String cmd = String.format(Locale.ROOT, "summon %s %s %s %s {Tags:[\"%s\",\"puppet_actor\"],CustomName:'{\"text\":\"%s\"}',CustomNameVisible:%sb,NoAI:%sb,PersistenceRequired:1b,Rotation:[%.2ff,%.2ff]}",
+                        entityType, x, y, z, actorTag, actorName, showNametag ? "1" : "0", spawnDisableAi ? "1" : "0", sYaw, sPitch);
                 entry.setCommand(cmd);
 
                 if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
                     entry.setDescription(descriptionBox.getValue().trim());
                 } else {
-                    entry.setDescription("Spawn " + actorName + " @ " + x + " " + y + " " + z);
+                    entry.setDescription("Spawn " + actorName + " @ " + x + " " + y + " " + z + " (facing " + String.format(Locale.ROOT, "%.0f°", sYaw) + ")");
                 }
             } else if (activePuppetMode == PuppetSubAction.DESPAWN) {
                 entry.setWindupMs(0);
@@ -2656,7 +3107,11 @@ public class EditMusicEntryModalScreen extends Screen {
         int card1H = 58;
         drawInputFrame(guiGraphics, contentX, card1Y, contentW, card1H, false, false);
 
-        if ("STATIC".equalsIgnoreCase(activeCameraMode)) {
+        boolean isKeyframe = "KEYFRAME".equalsIgnoreCase(activeCameraMode) || "STATIC".equalsIgnoreCase(activeCameraMode);
+        boolean isEnable = "ENABLE".equalsIgnoreCase(activeCameraMode);
+        boolean isDisable = "DISABLE".equalsIgnoreCase(activeCameraMode) || "CLEAR".equalsIgnoreCase(activeCameraMode);
+
+        if (isKeyframe) {
             int y1 = card1Y + 5;
             guiGraphics.drawString(this.font, "X:", contentX + 6, y1 + 5, TEXT_LABEL, false);
             guiGraphics.drawString(this.font, "Y:", contentX + 70, y1 + 5, TEXT_LABEL, false);
@@ -2667,58 +3122,91 @@ public class EditMusicEntryModalScreen extends Screen {
             guiGraphics.drawString(this.font, "Pitch:", contentX + 76, y2 + 5, TEXT_LABEL, false);
             guiGraphics.drawString(this.font, "Roll:", contentX + 154, y2 + 5, TEXT_LABEL, false);
             guiGraphics.drawString(this.font, "FOV:", contentX + 228, y2 + 5, TEXT_LABEL, false);
-            guiGraphics.drawString(this.font, "Roll 0° • FOV 70° (Normal)", contentX + 298, y2 + 5, TEXT_MUTED, false);
-        } else if ("FOLLOW".equalsIgnoreCase(activeCameraMode)) {
-            int y1 = card1Y + 5;
-            guiGraphics.drawString(this.font, "Target:", contentX + 6, y1 + 5, TEXT_LABEL, false);
-            guiGraphics.drawString(this.font, "Height:", contentX + 210, y1 + 5, TEXT_LABEL, false);
-            guiGraphics.drawString(this.font, "FOV:", contentX + 310, y1 + 5, TEXT_LABEL, false);
+            guiGraphics.drawString(this.font, "6-DOF • Quat", contentX + 300, y2 + 5, TEXT_MUTED, false);
 
-            int y2 = card1Y + 31;
-            guiGraphics.drawString(this.font, "Pitch:", contentX + 6, y2 + 5, TEXT_LABEL, false);
-            guiGraphics.drawString(this.font, "Tracks player/entity from above (Height offset: 5.5)", contentX + 106, y2 + 5, TEXT_MUTED, false);
-        } else if ("OVER_THE_SHOULDER".equalsIgnoreCase(activeCameraMode)) {
-            int y1 = card1Y + 5;
-            guiGraphics.drawString(this.font, "Target:", contentX + 6, y1 + 5, TEXT_LABEL, false);
-            guiGraphics.drawString(this.font, "Back:", contentX + 170, y1 + 5, TEXT_LABEL, false);
-            guiGraphics.drawString(this.font, "Side:", contentX + 256, y1 + 5, TEXT_LABEL, false);
-            guiGraphics.drawString(this.font, "FOV:", contentX + 340, y1 + 5, TEXT_LABEL, false);
+            // Card 2: Spline & Easing
+            int card2Y = panelTop + 116;
+            int card2H = cameraSplineMode == SplineInterpolationType.BEZIER ? 48 : 28;
+            drawInputFrame(guiGraphics, contentX, card2Y, contentW, card2H, false, false);
+            if (cameraSplineMode == SplineInterpolationType.BEZIER) {
+                int by = card2Y + 31;
+                guiGraphics.drawString(this.font, "T-In:", contentX + 6, by + 3, TEXT_LABEL, false);
+                guiGraphics.drawString(this.font, "T-Out:", contentX + 172, by + 3, TEXT_LABEL, false);
+            }
 
-            int y2 = card1Y + 31;
-            guiGraphics.drawString(this.font, "Height:", contentX + 6, y2 + 5, TEXT_LABEL, false);
-            guiGraphics.drawString(this.font, "Pitch:", contentX + 104, y2 + 5, TEXT_LABEL, false);
-            guiGraphics.drawString(this.font, "Cinematic 3rd-person shoulder tracking", contentX + 196, y2 + 5, TEXT_MUTED, false);
-        } else if ("CLEAR".equalsIgnoreCase(activeCameraMode)) {
-            guiGraphics.drawCenteredString(this.font, "🔄 CLEAR CAMERA OVERRIDE", contentX + (contentW / 2), card1Y + 14, MusicSequenceChannel.COLOR_CAMERA);
-            guiGraphics.drawCenteredString(this.font, "Restores first-person player controls and camera perspective at this timestamp.", contentX + (contentW / 2), card1Y + 32, 0xFFAABBCC);
+            // Card 3: Decoupled Look-At Target (Inverse Kinematics)
+            int card3Y = panelTop + 172;
+            int card3H = 28;
+            drawInputFrame(guiGraphics, contentX, card3Y, contentW, card3H, false, false);
+            if ("COORDINATE".equalsIgnoreCase(cameraLookAtMode)) {
+                guiGraphics.drawString(this.font, "Target Coord:", contentX + 230, card3Y + 5, TEXT_MUTED, false);
+            }
+            guiGraphics.drawString(this.font, "Wt:", contentX + contentW - 60, card3Y + 9, TEXT_LABEL, false);
+
+            // Card 4: Timing Card
+            int card4Y = panelTop + 226;
+            int card4H = 28;
+            drawInputFrame(guiGraphics, contentX, card4Y, contentW, card4H, false, false);
+            guiGraphics.drawString(this.font, "Timestamp:", contentX + 6, card4Y + 9, TEXT_LABEL, false);
+
+            // Description Label
+            int descLabelY = panelTop + 264;
+            guiGraphics.drawString(this.font, "Timeline Label / Note (Optional):", contentX, descLabelY + 2, TEXT_LABEL, false);
+        } else if (isEnable) {
+            drawInputFrame(guiGraphics, contentX, card1Y, contentW, 54, false, false);
+            guiGraphics.drawString(this.font, "Blend-In (ms):", contentX + 6, card1Y + 10, TEXT_LABEL, false);
+
+            int card2Y = panelTop + 120;
+            int card2H = 28;
+            drawInputFrame(guiGraphics, contentX, card2Y, contentW, card2H, false, false);
+            guiGraphics.drawString(this.font, "Timestamp:", contentX + 6, card2Y + 9, TEXT_LABEL, false);
+
+            int descLabelY = panelTop + 160;
+            guiGraphics.drawString(this.font, "Timeline Label / Note (Optional):", contentX, descLabelY, TEXT_LABEL, false);
+        } else if (isDisable) {
+            drawInputFrame(guiGraphics, contentX, card1Y, contentW, 54, false, false);
+            guiGraphics.drawString(this.font, "Blend-Out (ms):", contentX + 6, card1Y + 10, TEXT_LABEL, false);
+
+            int card2Y = panelTop + 120;
+            int card2H = 28;
+            drawInputFrame(guiGraphics, contentX, card2Y, contentW, card2H, false, false);
+            guiGraphics.drawString(this.font, "Timestamp:", contentX + 6, card2Y + 9, TEXT_LABEL, false);
+
+            int descLabelY = panelTop + 160;
+            guiGraphics.drawString(this.font, "Timeline Label / Note (Optional):", contentX, descLabelY, TEXT_LABEL, false);
+        } else {
+            if ("FOLLOW".equalsIgnoreCase(activeCameraMode)) {
+                int y1 = card1Y + 5;
+                guiGraphics.drawString(this.font, "Target:", contentX + 6, y1 + 5, TEXT_LABEL, false);
+                guiGraphics.drawString(this.font, "Height:", contentX + 210, y1 + 5, TEXT_LABEL, false);
+                guiGraphics.drawString(this.font, "FOV:", contentX + 310, y1 + 5, TEXT_LABEL, false);
+
+                int y2 = card1Y + 31;
+                guiGraphics.drawString(this.font, "Pitch:", contentX + 6, y2 + 5, TEXT_LABEL, false);
+                guiGraphics.drawString(this.font, "Tracks player/entity from above (Height offset: 5.5)", contentX + 106, y2 + 5, TEXT_MUTED, false);
+            } else if ("OVER_THE_SHOULDER".equalsIgnoreCase(activeCameraMode)) {
+                int y1 = card1Y + 5;
+                guiGraphics.drawString(this.font, "Target:", contentX + 6, y1 + 5, TEXT_LABEL, false);
+                guiGraphics.drawString(this.font, "Back:", contentX + 170, y1 + 5, TEXT_LABEL, false);
+                guiGraphics.drawString(this.font, "Side:", contentX + 256, y1 + 5, TEXT_LABEL, false);
+                guiGraphics.drawString(this.font, "FOV:", contentX + 340, y1 + 5, TEXT_LABEL, false);
+
+                int y2 = card1Y + 31;
+                guiGraphics.drawString(this.font, "Height:", contentX + 6, y2 + 5, TEXT_LABEL, false);
+                guiGraphics.drawString(this.font, "Pitch:", contentX + 104, y2 + 5, TEXT_LABEL, false);
+                guiGraphics.drawString(this.font, "Cinematic 3rd-person shoulder tracking", contentX + 196, y2 + 5, TEXT_MUTED, false);
+            }
+
+            // 3. Timing Section Card (Height = 28)
+            int card2Y = panelTop + 120;
+            int card2H = 28;
+            drawInputFrame(guiGraphics, contentX, card2Y, contentW, card2H, false, false);
+            guiGraphics.drawString(this.font, "Timestamp:", contentX + 6, card2Y + 9, TEXT_LABEL, false);
+
+            // 4. Description Label
+            int descLabelY = panelTop + 160;
+            guiGraphics.drawString(this.font, "Timeline Label / Note (Optional):", contentX, descLabelY, TEXT_LABEL, false);
         }
-
-        // 3. Timing & Interpolation Section Card (Height = 50)
-        int card2Y = panelTop + 120;
-        int card2H = 50;
-        drawInputFrame(guiGraphics, contentX, card2Y, contentW, card2H, false, false);
-
-        int ty1 = card2Y + 5;
-        guiGraphics.drawString(this.font, "Time (ms):", contentX + 6, ty1 + 5, TEXT_LABEL, false);
-        guiGraphics.drawString(this.font, "Duration:", contentX + 138, ty1 + 5, TEXT_LABEL, false);
-
-        long curTs = entry.getTimestampMs();
-        if (this.timestampBox != null) {
-            try { curTs = Math.max(0L, Long.parseLong(this.timestampBox.getValue().trim())); } catch (Exception ignored) {}
-        }
-        long durMs = 3000L;
-        if (this.cameraDurationBox != null) {
-            try { durMs = Math.max(50L, Long.parseLong(this.cameraDurationBox.getValue().trim())); } catch (Exception ignored) {}
-        }
-
-        int ty2 = card2Y + 31;
-        String timingStr = String.format(Locale.ROOT, "Start: %s  |  Duration: %dms  |  End: %s",
-                formatTimestamp(curTs), durMs, formatTimestamp(curTs + durMs));
-        guiGraphics.drawString(this.font, timingStr, contentX + 8, ty2 + 4, 0xFF00FFCC, false);
-
-        // 4. Description Label
-        int descLabelY = panelTop + 176;
-        guiGraphics.drawString(this.font, "Timeline Label / Note (Optional):", contentX, descLabelY, TEXT_LABEL, false);
 
         // 5. Render All Widgets, Buttons, and Inputs
         super.render(guiGraphics, mouseX, mouseY, partialTick);
@@ -2750,6 +3238,9 @@ public class EditMusicEntryModalScreen extends Screen {
             guiGraphics.drawString(this.font, "X:", contentX + 4, spawnY + 18, 0xFFAABBCC, false);
             guiGraphics.drawString(this.font, "Y:", contentX + 16 + 56 + 6, spawnY + 18, 0xFFAABBCC, false);
             guiGraphics.drawString(this.font, "Z:", contentX + 16 + (56 + 18) * 2 - 12, spawnY + 18, 0xFFAABBCC, false);
+
+            guiGraphics.drawString(this.font, "Yaw:", contentX + 4, spawnY + 42, 0xFFAABBCC, false);
+            guiGraphics.drawString(this.font, "Pitch:", contentX + 82, spawnY + 42, 0xFFAABBCC, false);
         } else if (activePuppetMode == PuppetSubAction.DESPAWN) {
             int despawnY = panelTop + 76;
             guiGraphics.fill(contentX, despawnY, contentX + contentW, despawnY + 48, 0x33FF3355);

@@ -94,7 +94,7 @@ public class CameraShot {
         }
 
         CameraTransform base = evaluateBaseTransform(timeMs, partialTick, mc);
-        return base;
+        return applyBlending(base, timeMs, partialTick, mc);
     }
 
     private CameraTransform evaluateBaseTransform(double timeMs, float partialTick, Minecraft mc) {
@@ -106,11 +106,12 @@ public class CameraShot {
             CameraTransform firstTr = evaluateKeyframeOrThirdPerson(first, partialTick, mc);
             long firstTs = first.getTimestampMs();
             if (firstTs > startMs && timeMs < firstTs) {
+                CameraTransform playerTr = getPlayerTransform(partialTick, mc, firstTr);
                 long blendDuration = (blendInMs > 0 && blendInMs < (firstTs - startMs)) ? blendInMs : (firstTs - startMs);
-                long blendStart = firstTs - blendDuration;
-                if (timeMs < blendStart) {
-                    CameraTransform playerTr = getPlayerTransform(partialTick, mc, firstTr);
-                    return playerTr;
+                long blendStart = startMs;
+                long blendEnd = startMs + blendDuration;
+                if (timeMs >= blendEnd) {
+                    return firstTr;
                 }
                 CameraEasing easing = (enableKeyframe != null && enableKeyframe.getEasing() != null)
                         ? enableKeyframe.getEasing()
@@ -119,7 +120,6 @@ public class CameraShot {
                 if (easing == CameraEasing.INSTANT) smooth = false;
                 double rawT = Mth.clamp((timeMs - blendStart) / (double) blendDuration, 0.0, 1.0);
                 double easedT = smooth ? easing.ease(rawT) : (rawT >= 1.0 ? 1.0 : 0.0);
-                CameraTransform playerTr = getPlayerTransform(partialTick, mc, firstTr);
                 return playerTr.interpolate(firstTr, easedT);
             }
             return firstTr;
@@ -131,10 +131,10 @@ public class CameraShot {
             CameraTransform lastTr = evaluateKeyframeOrThirdPerson(last, partialTick, mc);
             long lastTs = last.getTimestampMs();
             if (disableKeyframe != null && endMs > lastTs && timeMs > lastTs) {
+                CameraTransform playerTr = getPlayerTransform(partialTick, mc, lastTr);
                 long blendDuration = (blendOutMs > 0 && blendOutMs < (endMs - lastTs)) ? blendOutMs : (endMs - lastTs);
                 long blendEnd = lastTs + blendDuration;
                 if (timeMs >= blendEnd) {
-                    CameraTransform playerTr = getPlayerTransform(partialTick, mc, lastTr);
                     return playerTr;
                 }
                 CameraEasing easing = disableKeyframe.getEasing() != null ? disableKeyframe.getEasing() : CameraEasing.EASE_IN_OUT_CUBIC;
@@ -142,7 +142,6 @@ public class CameraShot {
                 if (easing == CameraEasing.INSTANT) smooth = false;
                 double rawT = Mth.clamp((timeMs - lastTs) / (double) blendDuration, 0.0, 1.0);
                 double easedT = smooth ? easing.ease(rawT) : (rawT >= 1.0 ? 1.0 : 0.0);
-                CameraTransform playerTr = getPlayerTransform(partialTick, mc, lastTr);
                 return lastTr.interpolate(playerTr, easedT);
             }
             return lastTr;
@@ -266,7 +265,10 @@ public class CameraShot {
         CameraTransform result = base;
 
         // 1. Blend in from player's view at start of shot
-        if (blendInMs > 0 && timeMs < startMs + blendInMs) {
+        // Only apply if there was no pre-keyframe lead-in (i.e. first keyframe timestamp <= startMs)
+        long firstTs = !keyframes.isEmpty() ? keyframes.get(0).getTimestampMs() : startMs;
+        if (firstTs <= startMs && blendInMs > 0 && timeMs < startMs + blendInMs) {
+            CameraTransform playerTr = getPlayerTransform(partialTick, mc, base);
             CameraEasing easing = (enableKeyframe != null && enableKeyframe.getEasing() != null)
                     ? enableKeyframe.getEasing()
                     : CameraEasing.EASE_IN_OUT_CUBIC;
@@ -274,20 +276,21 @@ public class CameraShot {
             if (easing == CameraEasing.INSTANT) smooth = false;
             double rawT = Mth.clamp((timeMs - startMs) / (double) blendInMs, 0.0, 1.0);
             double easedT = smooth ? easing.ease(rawT) : (rawT >= 1.0 ? 1.0 : 0.0);
-            CameraTransform playerTr = getPlayerTransform(partialTick, mc, base);
             result = playerTr.interpolate(result, easedT);
         }
 
         // 2. Blend out back to player's view at end of shot
-        if (blendOutMs > 0 && timeMs > endMs - blendOutMs) {
-            CameraEasing easing = (disableKeyframe != null && disableKeyframe.getEasing() != null)
+        // Only apply if there was no post-keyframe lead-out (i.e. last keyframe timestamp >= endMs)
+        long lastTs = !keyframes.isEmpty() ? keyframes.get(keyframes.size() - 1).getTimestampMs() : endMs;
+        if (disableKeyframe != null && lastTs >= endMs && blendOutMs > 0 && timeMs > endMs - blendOutMs) {
+            CameraTransform playerTr = getPlayerTransform(partialTick, mc, base);
+            CameraEasing easing = disableKeyframe.getEasing() != null
                     ? disableKeyframe.getEasing()
                     : CameraEasing.EASE_IN_OUT_CUBIC;
-            boolean smooth = disableKeyframe == null || disableKeyframe.isInterpolate();
+            boolean smooth = disableKeyframe.isInterpolate();
             if (easing == CameraEasing.INSTANT) smooth = false;
             double rawT = Mth.clamp((timeMs - (endMs - blendOutMs)) / (double) blendOutMs, 0.0, 1.0);
             double easedT = smooth ? easing.ease(rawT) : (rawT >= 1.0 ? 1.0 : 0.0);
-            CameraTransform playerTr = getPlayerTransform(partialTick, mc, base);
             result = result.interpolate(playerTr, easedT);
         }
 
@@ -322,8 +325,9 @@ public class CameraShot {
 
     private CameraTransform evaluateThirdPerson(CameraKeyframe kf, float partialTick, Minecraft mc) {
         Entity target = CameraSequenceTrack.resolveTargetEntity(kf.getCameraTarget(), mc);
-        if (target == null && mc != null) target = mc.player;
-        if (target == null) return kf.getTransform();
+        if (target == null) {
+            return kf.getTransform();
+        }
 
         double targetX = Mth.lerp(partialTick, target.xo, target.getX());
         double targetY = Mth.lerp(partialTick, target.yo, target.getY());

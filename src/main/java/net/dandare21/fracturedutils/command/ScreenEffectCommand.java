@@ -39,7 +39,17 @@ public class ScreenEffectCommand {
                         .then(Commands.literal("invert")
                                 .executes(ctx -> playInvert(ctx.getSource(), getSelf(ctx.getSource()), 300))
                                 .then(Commands.argument("durationMs", IntegerArgumentType.integer(50, 10000))
-                                        .executes(ctx -> playInvert(ctx.getSource(), getSelf(ctx.getSource()), IntegerArgumentType.getInteger(ctx, "durationMs"))))))
+                                        .executes(ctx -> playInvert(ctx.getSource(), getSelf(ctx.getSource()), IntegerArgumentType.getInteger(ctx, "durationMs")))))
+                        .then(Commands.literal("cinematic_bars")
+                                .executes(ctx -> playCinematicBars(ctx.getSource(), getSelf(ctx.getSource()), 3000, 500, 500, 0.125f, 0xFF000000))
+                                .then(Commands.argument("durationMs", IntegerArgumentType.integer(50, 600000))
+                                        .executes(ctx -> playCinematicBars(ctx.getSource(), getSelf(ctx.getSource()), IntegerArgumentType.getInteger(ctx, "durationMs"), 500, 500, 0.125f, 0xFF000000))
+                                        .then(Commands.argument("transitionInMs", IntegerArgumentType.integer(0, 10000))
+                                                .executes(ctx -> playCinematicBars(ctx.getSource(), getSelf(ctx.getSource()), IntegerArgumentType.getInteger(ctx, "durationMs"), IntegerArgumentType.getInteger(ctx, "transitionInMs"), IntegerArgumentType.getInteger(ctx, "transitionInMs"), 0.125f, 0xFF000000))
+                                                .then(Commands.argument("transitionOutMs", IntegerArgumentType.integer(0, 10000))
+                                                        .executes(ctx -> playCinematicBars(ctx.getSource(), getSelf(ctx.getSource()), IntegerArgumentType.getInteger(ctx, "durationMs"), IntegerArgumentType.getInteger(ctx, "transitionInMs"), IntegerArgumentType.getInteger(ctx, "transitionOutMs"), 0.125f, 0xFF000000))
+                                                        .then(Commands.argument("targets", EntityArgument.players())
+                                                                .executes(ctx -> playCinematicBars(ctx.getSource(), EntityArgument.getPlayers(ctx, "targets"), IntegerArgumentType.getInteger(ctx, "durationMs"), IntegerArgumentType.getInteger(ctx, "transitionInMs"), IntegerArgumentType.getInteger(ctx, "transitionOutMs"), 0.125f, 0xFF000000))))))))
                 // /screeneffect stop ...
                 .then(Commands.literal("stop")
                         .executes(ctx -> stopAll(ctx.getSource(), getSelf(ctx.getSource())))
@@ -73,6 +83,13 @@ public class ScreenEffectCommand {
         var effect = ScreenEffects.invert(durationMs);
         ScreenEffectManager.playEffect(targets, effect);
         source.sendSuccess(() -> Component.literal("Triggered Invert Colors (" + durationMs + "ms) on " + targets.size() + " player(s)").withStyle(ChatFormatting.LIGHT_PURPLE), true);
+        return targets.size();
+    }
+
+    private static int playCinematicBars(CommandSourceStack source, Collection<ServerPlayer> targets, int durationMs, int inMs, int outMs, float barHeightRatio, int color) {
+        var effect = ScreenEffects.cinematicBars(durationMs, inMs, outMs, barHeightRatio, color);
+        ScreenEffectManager.playEffect(targets, effect);
+        source.sendSuccess(() -> Component.literal("Triggered Cinematic Bars (" + durationMs + "ms, in=" + inMs + "ms, out=" + outMs + "ms) on " + targets.size() + " player(s)").withStyle(ChatFormatting.DARK_PURPLE), true);
         return targets.size();
     }
 

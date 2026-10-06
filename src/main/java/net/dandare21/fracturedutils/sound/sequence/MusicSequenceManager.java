@@ -20,6 +20,7 @@ import net.dandare21.fracturedutils.network.packet.S2CCameraOverridePacket;
 import net.dandare21.fracturedutils.network.packet.S2CPlayCameraTrackPacket;
 import net.dandare21.fracturedutils.screeneffect.ScreenEffectInstance;
 import net.dandare21.fracturedutils.screeneffect.ScreenEffectManager;
+import net.dandare21.fracturedutils.screeneffect.effects.CinematicBarsEffect;
 import net.dandare21.fracturedutils.screeneffect.effects.HueShiftEffect;
 import net.dandare21.fracturedutils.screeneffect.effects.ImpactFrameEffect;
 import net.dandare21.fracturedutils.screeneffect.effects.InvertColorsEffect;
@@ -524,16 +525,50 @@ public class MusicSequenceManager {
                     fileName, activeSeq.getStartTimeMs(), sequence.isLooping(),
                     activeSeq.getInMarkerMs(), activeSeq.getOutMarkerMs(), cameraEntries
             );
-            for (ServerPlayer player : targets) {
+            Collection<ServerPlayer> effectiveTargets = activeSeq.getTargets(server);
+            for (ServerPlayer player : effectiveTargets) {
                 ModMessages.sendToPlayer(cameraPacket, player);
             }
             FracturedUtils.LOGGER.info("[MusicSequenceManager] Dispatched 6-DOF camera track ({} keyframes) to {} players",
-                    cameraEntries.size(), targets.size());
+                    cameraEntries.size(), effectiveTargets.size());
         }
 
         FracturedUtils.LOGGER.info("[MusicSequenceManager] Started music sequence '{}' with {} entries (expected duration: {}ms, in: {}ms, out: {}ms).",
                 fileName, sequence.getEntries().size(), activeSeq.getExpectedDurationMs(), activeSeq.getInMarkerMs(), activeSeq.getOutMarkerMs());
         return true;
+    }
+
+    public void onPlayerJoin(ServerPlayer player) {
+        if (player == null) return;
+        MinecraftServer server = player.getServer();
+        for (ActiveMusicSequence activeSeq : activeSequences) {
+            if (activeSeq.isFinished()) continue;
+            // Check if player is a target of this sequence
+            if (!activeSeq.getTargets(server).contains(player)) continue;
+
+            List<MusicSequenceEntry> cameraEntries = new ArrayList<>();
+            for (MusicSequenceEntry entry : activeSeq.getSequence().getEntries()) {
+                MusicSequenceChannel matchedChannel = null;
+                for (MusicSequenceChannel ch : activeSeq.getSequence().getChannels()) {
+                    if (ch.getId().equalsIgnoreCase(entry.getChannelId())) {
+                        matchedChannel = ch;
+                        break;
+                    }
+                }
+                boolean isCameraChannel = (matchedChannel != null && MusicSequenceChannel.TYPE_CAMERA.equalsIgnoreCase(matchedChannel.getType()));
+                boolean isCameraEntry = isCameraChannel || entry.isUseCamera() || "CAMERA".equalsIgnoreCase(entry.getActionType());
+                if (isCameraEntry) {
+                    cameraEntries.add(entry);
+                }
+            }
+            if (!cameraEntries.isEmpty()) {
+                S2CPlayCameraTrackPacket cameraPacket = new S2CPlayCameraTrackPacket(
+                        activeSeq.getFileName(), activeSeq.getStartTimeMs(), activeSeq.getSequence().isLooping(),
+                        activeSeq.getInMarkerMs(), activeSeq.getOutMarkerMs(), cameraEntries
+                );
+                ModMessages.sendToPlayer(cameraPacket, player);
+            }
+        }
     }
 
     public void stopAllSequences(MinecraftServer server) {
@@ -842,6 +877,12 @@ public class MusicSequenceManager {
             String style = entry.getScreenEffectStyle();
             if (style == null || style.isBlank()) style = "DRAW";
             instance = new ImpactFrameEffect.ImpactFrameInstance(durationMs, pColor, sColor, frameInterval, entry.isScreenEffectPulse(), style);
+        } else if (effectId.equalsIgnoreCase("fractured_utils:cinematic_bars") || effectId.equalsIgnoreCase("cinematic_bars") || effectId.equalsIgnoreCase("cinematic") || effectId.equalsIgnoreCase("bars")) {
+            int inMs = entry.getScreenEffectTransitionInMs();
+            int outMs = entry.getScreenEffectTransitionOutMs();
+            float barHeight = entry.getScreenEffectBarHeight();
+            int color = entry.getScreenEffectColor() != 0 ? entry.getScreenEffectColor() : 0xFF000000;
+            instance = new CinematicBarsEffect.CinematicBarsInstance(durationMs, inMs, outMs, barHeight, color);
         } else {
             // Default: screen shake
             instance = new ScreenShakeEffect.ScreenShakeInstance(durationMs, entry.getScreenEffectIntensity(), entry.getScreenEffectFrequency(), entry.isScreenEffectDecay());

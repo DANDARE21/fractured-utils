@@ -88,6 +88,9 @@ public class EditMusicEntryModalScreen extends Screen {
     private String screenEffectStyle = "DRAW";
     private boolean impactEditingSecondary = false;
     private CyberpunkColorPicker screenEffectColorPicker;
+    private EditBox screenEffectSlideInBox;
+    private EditBox screenEffectSlideOutBox;
+    private EditBox screenEffectBarHeightBox;
 
     // Camera state & inputs
     private String activeCameraMode = "STATIC";
@@ -233,12 +236,14 @@ public class EditMusicEntryModalScreen extends Screen {
             this.activeScreenEffectMode = "HUE_SHIFT";
         } else if (eff != null && (eff.contains("impact") || eff.contains("flash"))) {
             this.activeScreenEffectMode = "IMPACT_FRAME";
+        } else if (eff != null && (eff.contains("cinematic") || eff.contains("bars"))) {
+            this.activeScreenEffectMode = "CINEMATIC_BARS";
         } else {
             this.activeScreenEffectMode = "SCREEN_SHAKE";
         }
         if (entry.getSubAction() != null && !entry.getSubAction().isBlank()) {
             String sub = entry.getSubAction().toUpperCase(Locale.ROOT);
-            if (sub.equals("INVERT_COLORS") || sub.equals("STROBE") || sub.equals("SCREEN_SHAKE") || sub.equals("HUE_SHIFT") || sub.equals("IMPACT_FRAME")) {
+            if (sub.equals("INVERT_COLORS") || sub.equals("STROBE") || sub.equals("SCREEN_SHAKE") || sub.equals("HUE_SHIFT") || sub.equals("IMPACT_FRAME") || sub.equals("CINEMATIC_BARS")) {
                 this.activeScreenEffectMode = sub;
             }
         }
@@ -253,7 +258,7 @@ public class EditMusicEntryModalScreen extends Screen {
             this.screenEffectStyle = "DRAW";
         }
         if (entry.getScreenEffectColor() == 0) {
-            entry.setScreenEffectColor(0xFFFFFFFF);
+            entry.setScreenEffectColor("CINEMATIC_BARS".equalsIgnoreCase(activeScreenEffectMode) ? 0xFF000000 : 0xFFFFFFFF);
         }
         if (entry.getDurationMs() <= 0 && entry.getTotalDurationMs() <= 0) {
             entry.setDurationMs(1000);
@@ -534,8 +539,8 @@ public class EditMusicEntryModalScreen extends Screen {
         int contentW = panelWidth - 28;
         int currentY = panelTop + 30;
 
-        // 1. Five Mode Tabs
-        int tabW = (contentW - 12) / 5;
+        // 1. Six Mode Tabs
+        int tabW = (contentW - 15) / 6;
         CyberpunkButton shakeTab = new CyberpunkButton(contentX, currentY, tabW, 20, Component.literal("⚡ SHAKE"),
                 b -> switchScreenEffectMode("SCREEN_SHAKE"),
                 MusicSequenceChannel.COLOR_SCREEN_EFFECT, "SCREEN_SHAKE".equalsIgnoreCase(activeScreenEffectMode), Component.literal("Camera shake & rotational tremor"));
@@ -556,11 +561,16 @@ public class EditMusicEntryModalScreen extends Screen {
                 b -> switchScreenEffectMode("IMPACT_FRAME"),
                 0xFFFF2255, "IMPACT_FRAME".equalsIgnoreCase(activeScreenEffectMode), Component.literal("Action cuts, shock frames & silhouettes"));
 
+        CyberpunkButton barsTab = new CyberpunkButton(contentX + (tabW + 3) * 5, currentY, tabW, 20, Component.literal("🎬 BARS"),
+                b -> switchScreenEffectMode("CINEMATIC_BARS"),
+                0xFFAA55FF, "CINEMATIC_BARS".equalsIgnoreCase(activeScreenEffectMode), Component.literal("Cinematic letterbox bars with slide-in animation"));
+
         this.addRenderableWidget(shakeTab);
         this.addRenderableWidget(invertTab);
         this.addRenderableWidget(strobeTab);
         this.addRenderableWidget(hueTab);
         this.addRenderableWidget(impactTab);
+        this.addRenderableWidget(barsTab);
 
         // 2. Mode-Specific Content Area Card (Height = 68)
         int card1Y = panelTop + 54;
@@ -572,6 +582,8 @@ public class EditMusicEntryModalScreen extends Screen {
             initHueShiftControls(contentX, card1Y, contentW);
         } else if ("IMPACT_FRAME".equalsIgnoreCase(activeScreenEffectMode)) {
             initImpactFrameControls(contentX, card1Y, contentW);
+        } else if ("CINEMATIC_BARS".equalsIgnoreCase(activeScreenEffectMode)) {
+            initCinematicBarsControls(contentX, card1Y, contentW);
         } else {
             initShakeControls(contentX, card1Y, contentW);
         }
@@ -817,6 +829,34 @@ public class EditMusicEntryModalScreen extends Screen {
         this.addRenderableWidget(this.screenEffectColorPicker);
     }
 
+    private void initCinematicBarsControls(int contentX, int card1Y, int contentW) {
+        int y1 = card1Y + 8;
+        int y2 = card1Y + 36;
+
+        this.screenEffectSlideInBox = new EditBox(this.font, contentX + 50, y1, 46, 18, Component.literal("Slide In"));
+        this.screenEffectSlideInBox.setValue(String.valueOf(entry.getScreenEffectTransitionInMs()));
+        this.addRenderableWidget(this.screenEffectSlideInBox);
+
+        this.screenEffectSlideOutBox = new EditBox(this.font, contentX + 154, y1, 46, 18, Component.literal("Slide Out"));
+        this.screenEffectSlideOutBox.setValue(String.valueOf(entry.getScreenEffectTransitionOutMs()));
+        this.addRenderableWidget(this.screenEffectSlideOutBox);
+
+        this.screenEffectBarHeightBox = new EditBox(this.font, contentX + 56, y2, 40, 18, Component.literal("Height %"));
+        this.screenEffectBarHeightBox.setValue(String.format(Locale.US, "%.1f", entry.getScreenEffectBarHeight() * 100.0f));
+        this.addRenderableWidget(this.screenEffectBarHeightBox);
+
+        this.screenEffectColorBox = new EditBox(this.font, contentX + 132, y2, 68, 18, Component.literal("Hex"));
+        int curColor = entry.getScreenEffectColor() != 0 ? entry.getScreenEffectColor() : 0xFF000000;
+        this.screenEffectColorBox.setValue(String.format("#%06X", curColor & 0x00FFFFFF));
+        this.addRenderableWidget(this.screenEffectColorBox);
+
+        this.screenEffectColorPicker = new CyberpunkColorPicker(contentX + 245, card1Y + 6, curColor, c -> {
+            entry.setScreenEffectColor(c);
+        });
+        this.screenEffectColorPicker.bindHexBox(this.screenEffectColorBox);
+        this.addRenderableWidget(this.screenEffectColorPicker);
+    }
+
     private void saveScreenEffectEntry() {
         long ts = 0L;
         try {
@@ -912,6 +952,33 @@ public class EditMusicEntryModalScreen extends Screen {
                 entry.setDescription(descriptionBox.getValue().trim());
             } else {
                 entry.setDescription("Impact Frame: " + st + " (" + duration + "ms)");
+            }
+        } else if ("CINEMATIC_BARS".equalsIgnoreCase(activeScreenEffectMode)) {
+            entry.setScreenEffectId("fractured_utils:cinematic_bars");
+            int inMs = parseInt(screenEffectSlideInBox, 500);
+            int outMs = parseInt(screenEffectSlideOutBox, 500);
+            entry.setScreenEffectTransitionInMs(inMs);
+            entry.setScreenEffectTransitionOutMs(outMs);
+            float heightPercent = parseFloat(screenEffectBarHeightBox, 12.5f);
+            entry.setScreenEffectBarHeight(heightPercent / 100.0f);
+            int clr = 0xFF000000;
+            if (screenEffectColorPicker != null) {
+                clr = screenEffectColorPicker.getColor();
+            } else if (screenEffectColorBox != null) {
+                String cStr = screenEffectColorBox.getValue().trim().replace("#", "");
+                try {
+                    clr = (int) Long.parseLong(cStr, 16);
+                    if (cStr.length() <= 6) {
+                        clr = 0xFF000000 | clr;
+                    }
+                } catch (Exception ignored) {}
+            }
+            entry.setScreenEffectColor(clr);
+            entry.setCommand("screeneffect cinematic_bars " + duration + " " + inMs + " " + outMs);
+            if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
+                entry.setDescription(descriptionBox.getValue().trim());
+            } else {
+                entry.setDescription("Cinematic Bars (" + (int) heightPercent + "% height, in=" + inMs + "ms, out=" + outMs + "ms)");
             }
         } else {
             // SCREEN_SHAKE
@@ -3092,6 +3159,11 @@ public class EditMusicEntryModalScreen extends Screen {
             if (impactEditingSecondary) {
                 guiGraphics.renderOutline(contentX + 240, card1Y + 35, 36, 20, 0xFFFF00CC);
             }
+        } else if ("CINEMATIC_BARS".equalsIgnoreCase(activeScreenEffectMode)) {
+            guiGraphics.drawString(this.font, "IN (ms):", contentX + 6, card1Y + 12, TEXT_LABEL, false);
+            guiGraphics.drawString(this.font, "OUT (ms):", contentX + 104, card1Y + 12, TEXT_LABEL, false);
+            guiGraphics.drawString(this.font, "HEIGHT %:", contentX + 6, card1Y + 40, TEXT_LABEL, false);
+            guiGraphics.drawString(this.font, "HEX:", contentX + 104, card1Y + 40, TEXT_LABEL, false);
         } else {
             // SCREEN_SHAKE
             guiGraphics.drawString(this.font, "INTENSITY:", contentX + 6, card1Y + 12, TEXT_LABEL, false);

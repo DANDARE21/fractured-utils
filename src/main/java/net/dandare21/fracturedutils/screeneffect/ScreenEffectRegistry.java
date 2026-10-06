@@ -1,6 +1,7 @@
 package net.dandare21.fracturedutils.screeneffect;
 
 import net.dandare21.fracturedutils.FracturedUtils;
+import net.dandare21.fracturedutils.screeneffect.effects.CinematicBarsEffect;
 import net.dandare21.fracturedutils.screeneffect.effects.HueShiftEffect;
 import net.dandare21.fracturedutils.screeneffect.effects.ImpactFrameEffect;
 import net.dandare21.fracturedutils.screeneffect.effects.InvertColorsEffect;
@@ -26,6 +27,7 @@ public class ScreenEffectRegistry {
         register(StrobeEffect.TYPE);
         register(HueShiftEffect.TYPE);
         register(ImpactFrameEffect.TYPE);
+        register(CinematicBarsEffect.TYPE);
     }
 
     public static synchronized void register(ScreenEffectType<?> type) {

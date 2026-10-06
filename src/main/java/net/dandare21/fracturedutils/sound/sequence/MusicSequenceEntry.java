@@ -64,6 +64,9 @@ public class MusicSequenceEntry {
     private boolean screenEffectContinuous = true;
     private float screenEffectAngle = 0.0f;
     private String screenEffectStyle = "MONOCHROME_CUT";
+    private int screenEffectTransitionInMs = 500;
+    private int screenEffectTransitionOutMs = 500;
+    private float screenEffectBarHeight = 0.125f;
 
     // Custom Puppet Action Parameters
     private java.util.Map<String, String> puppetParams = new java.util.LinkedHashMap<>();
@@ -560,6 +563,30 @@ public class MusicSequenceEntry {
         this.screenEffectStyle = (screenEffectStyle != null && !screenEffectStyle.isBlank()) ? screenEffectStyle : "MONOCHROME_CUT";
     }
 
+    public int getScreenEffectTransitionInMs() {
+        return screenEffectTransitionInMs;
+    }
+
+    public void setScreenEffectTransitionInMs(int screenEffectTransitionInMs) {
+        this.screenEffectTransitionInMs = Math.max(0, screenEffectTransitionInMs);
+    }
+
+    public int getScreenEffectTransitionOutMs() {
+        return screenEffectTransitionOutMs;
+    }
+
+    public void setScreenEffectTransitionOutMs(int screenEffectTransitionOutMs) {
+        this.screenEffectTransitionOutMs = Math.max(0, screenEffectTransitionOutMs);
+    }
+
+    public float getScreenEffectBarHeight() {
+        return screenEffectBarHeight > 0.0f ? screenEffectBarHeight : 0.125f;
+    }
+
+    public void setScreenEffectBarHeight(float screenEffectBarHeight) {
+        this.screenEffectBarHeight = Math.max(0.01f, Math.min(0.49f, screenEffectBarHeight));
+    }
+
     public java.util.Map<String, String> getPuppetParams() {
         if (this.puppetParams == null) {
             this.puppetParams = new java.util.LinkedHashMap<>();
@@ -640,6 +667,9 @@ public class MusicSequenceEntry {
         entry.setScreenEffectContinuous(this.screenEffectContinuous);
         entry.setScreenEffectAngle(this.screenEffectAngle);
         entry.setScreenEffectStyle(this.screenEffectStyle);
+        entry.setScreenEffectTransitionInMs(this.screenEffectTransitionInMs);
+        entry.setScreenEffectTransitionOutMs(this.screenEffectTransitionOutMs);
+        entry.setScreenEffectBarHeight(this.screenEffectBarHeight);
         if (this.puppetParams != null) {
             entry.setPuppetParams(new java.util.LinkedHashMap<>(this.puppetParams));
         }

@@ -261,13 +261,14 @@ public class CameraSequenceTrack {
             }
         }
 
-        return mc.player;
+        return null;
     }
 
     private CameraTransform evaluateThirdPerson(CameraKeyframe kf, float partialTick, Minecraft mc) {
         Entity target = resolveTargetEntity(kf.getCameraTarget(), mc);
-        if (target == null) target = mc.player;
-        if (target == null) return kf.getTransform();
+        if (target == null) {
+            return kf.getTransform();
+        }
 
         double targetX = Mth.lerp(partialTick, target.xo, target.getX());
         double targetY = Mth.lerp(partialTick, target.yo, target.getY());

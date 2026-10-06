@@ -5,6 +5,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import net.dandare21.fracturedutils.FracturedUtils;
 import net.dandare21.fracturedutils.screeneffect.ScreenEffectInstance;
 import net.dandare21.fracturedutils.screeneffect.ScreenEffectType;
+import net.dandare21.fracturedutils.screeneffect.effects.CinematicBarsEffect;
 import net.dandare21.fracturedutils.screeneffect.effects.HueShiftEffect;
 import net.dandare21.fracturedutils.screeneffect.effects.ImpactFrameEffect;
 import net.dandare21.fracturedutils.screeneffect.effects.InvertColorsEffect;
@@ -335,6 +336,25 @@ public class ClientScreenEffectHandler {
                 shutdownInvertShader();
                 shutdownColorConvolveShader();
                 shutdownSobelShader();
+            }
+        });
+
+        // 6. Cinematic Bars Renderer
+        registerRenderer(CinematicBarsEffect.TYPE, new ScreenEffectRenderer<CinematicBarsEffect.CinematicBarsInstance>() {
+            @Override
+            public void onRenderOverlay(CinematicBarsEffect.CinematicBarsInstance instance, GuiGraphics graphics, float partialTicks, int screenWidth, int screenHeight) {
+                float progress = instance.getCurrentHeightFraction(System.currentTimeMillis());
+                if (progress <= 0.0001f) return;
+
+                int barHeight = Math.round(screenHeight * instance.getBarHeightRatio() * progress);
+                if (barHeight <= 0) return;
+
+                int color = instance.getColor();
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
+                graphics.fill(0, 0, screenWidth, barHeight, color);
+                graphics.fill(0, screenHeight - barHeight, screenWidth, screenHeight, color);
+                RenderSystem.disableBlend();
             }
         });
     }

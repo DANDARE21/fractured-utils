@@ -66,6 +66,14 @@ public class CameraSetupScreen extends Screen {
 
     private boolean updatingBoxes = false;
 
+    // Spectator flight momentum & smoothing
+    private Vec3 moveVelocity = Vec3.ZERO;
+    private float rollVelocity = 0.0f;
+    private double speedMultiplier = 1.0;
+    private int speedFeedbackTimer = 0;
+    private long lastFrameNanoTime = 0L;
+    private boolean wasMoving = false;
+
     public CameraSetupScreen(Screen parentScreen, DialogLine line, Consumer<DialogLine> onSave) {
         this(parentScreen,
                 line != null ? line.getCameraX() : 0.0,
@@ -147,6 +155,9 @@ public class CameraSetupScreen extends Screen {
     @Override
     protected void init() {
         this.clearWidgets();
+        this.lastFrameNanoTime = 0L;
+        this.moveVelocity = Vec3.ZERO;
+        this.rollVelocity = 0.0f;
 
         // Responsive dock sizing
         int maxDockW = 460;
@@ -317,7 +328,13 @@ public class CameraSetupScreen extends Screen {
     }
 
     private void onSave() {
-        parseCoordInputs();
+        if (isAnyBoxFocused()) {
+            parseCoordInputs();
+        } else {
+            syncBoxesOnly();
+        }
+        this.moveVelocity = Vec3.ZERO;
+        this.rollVelocity = 0.0f;
         if (onGenericSave != null) {
             onGenericSave.accept(new CameraResult(this.useCamera, this.cameraX, this.cameraY, this.cameraZ, this.cameraYaw, this.cameraPitch, this.cameraRoll, this.cameraFov));
         }
@@ -328,6 +345,8 @@ public class CameraSetupScreen extends Screen {
     }
 
     private void onCancel() {
+        this.moveVelocity = Vec3.ZERO;
+        this.rollVelocity = 0.0f;
         CustomCameraManager.clearCustomCamera();
         if (this.minecraft != null) {
             this.minecraft.setScreen(parentScreen);
@@ -336,6 +355,7 @@ public class CameraSetupScreen extends Screen {
 
     private void resetRoll() {
         this.cameraRoll = 0.0f;
+        this.rollVelocity = 0.0f;
         syncBoxesAndPreview();
         Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.get(), 1.4f));
     }
@@ -350,6 +370,8 @@ public class CameraSetupScreen extends Screen {
             this.cameraYaw = mc.player.getYRot();
             this.cameraPitch = mc.player.getXRot();
             this.cameraRoll = 0.0f;
+            this.moveVelocity = Vec3.ZERO;
+            this.rollVelocity = 0.0f;
 
             syncBoxesAndPreview();
             mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.get(), 1.3f));
@@ -421,7 +443,31 @@ public class CameraSetupScreen extends Screen {
         if (button == 1 && this.useCamera) {
             this.cameraYaw += (float) (dragX * 0.2);
             this.cameraPitch = Mth.clamp(this.cameraPitch + (float) (dragY * 0.2), -89.0f, 89.0f);
-            syncBoxesAndPreview();
+            syncBoxesOnly();
+            updatePreview();
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (super.mouseScrolled(mouseX, mouseY, delta)) {
+            return true;
+        }
+        if (this.fovSlider != null && this.fovSlider.visible && this.fovSlider.isMouseOver(mouseX, mouseY)) {
+            this.cameraFov = Mth.clamp(this.cameraFov - delta * 2.0, 10.0, 140.0);
+            this.fovSlider.setValue((this.cameraFov - 10.0) / 130.0);
+            updatePreview();
+            return true;
+        }
+        if (this.useCamera && !isAnyBoxFocused()) {
+            if (delta > 0) {
+                this.speedMultiplier = Math.min(5.0, this.speedMultiplier + 0.15);
+            } else if (delta < 0) {
+                this.speedMultiplier = Math.max(0.15, this.speedMultiplier - 0.15);
+            }
+            this.speedFeedbackTimer = 50;
             return true;
         }
         return false;
@@ -430,12 +476,32 @@ public class CameraSetupScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
+        if (this.speedFeedbackTimer > 0) {
+            this.speedFeedbackTimer--;
+        }
+        // Smoothly sync coordinate boxes when not actively typing in them
+        if (!isAnyBoxFocused()) {
+            boolean isMoving = this.moveVelocity.lengthSqr() > 1e-6 || Math.abs(this.rollVelocity) > 0.0f;
+            if (isMoving || wasMoving) {
+                syncBoxesOnly();
+            }
+            wasMoving = isMoving;
+        }
+    }
+
+    private void updateMovement(float dt) {
         if (!this.useCamera) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.getWindow() == null) return;
 
-        // If an edit box is focused for typing, skip flight controls
+        // If an edit box is focused for typing, smoothly decelerate flight momentum
         if (isAnyBoxFocused()) {
+            float friction = 8.0f;
+            float blend = 1.0f - (float) Math.exp(-friction * dt);
+            this.moveVelocity = this.moveVelocity.lerp(Vec3.ZERO, blend);
+            this.rollVelocity = Mth.lerp(blend, this.rollVelocity, 0.0f);
+            if (this.moveVelocity.lengthSqr() < 1e-6) this.moveVelocity = Vec3.ZERO;
+            if (Math.abs(this.rollVelocity) < 0.01f) this.rollVelocity = 0.0f;
             return;
         }
 
@@ -447,9 +513,21 @@ public class CameraSetupScreen extends Screen {
         boolean space = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_SPACE);
         boolean ctrl = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_CONTROL) ||
                        InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_CONTROL);
-
         boolean q = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_Q);
         boolean e = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_E);
+
+        if (mc.options != null) {
+            if (mc.options.keyUp != null && mc.options.keyUp.getKey().getValue() > 0)
+                w |= InputConstants.isKeyDown(window, mc.options.keyUp.getKey().getValue());
+            if (mc.options.keyDown != null && mc.options.keyDown.getKey().getValue() > 0)
+                s |= InputConstants.isKeyDown(window, mc.options.keyDown.getKey().getValue());
+            if (mc.options.keyLeft != null && mc.options.keyLeft.getKey().getValue() > 0)
+                a |= InputConstants.isKeyDown(window, mc.options.keyLeft.getKey().getValue());
+            if (mc.options.keyRight != null && mc.options.keyRight.getKey().getValue() > 0)
+                d |= InputConstants.isKeyDown(window, mc.options.keyRight.getKey().getValue());
+            if (mc.options.keyJump != null && mc.options.keyJump.getKey().getValue() > 0)
+                space |= InputConstants.isKeyDown(window, mc.options.keyJump.getKey().getValue());
+        }
 
         boolean isSprinting = false;
         if (mc.options != null && mc.options.keySprint != null && mc.options.keySprint.getKey() != null) {
@@ -462,73 +540,73 @@ public class CameraSetupScreen extends Screen {
             isSprinting = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_SHIFT) || InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_SHIFT);
         }
 
-        boolean changed = false;
+        // 1. Translation Movement (WASD + Space/Ctrl)
+        double inputFwd = (w ? 1.0 : 0.0) - (s ? 1.0 : 0.0);
+        double inputStrafe = (d ? 1.0 : 0.0) - (a ? 1.0 : 0.0);
+        double inputUp = (space ? 1.0 : 0.0) - (ctrl ? 1.0 : 0.0);
 
-        // Roll adjustments (Q = CCW, E = CW)
-        if (q) {
-            this.cameraRoll -= isSprinting ? 1.5f : 0.4f;
-            changed = true;
-        }
-        if (e) {
-            this.cameraRoll += isSprinting ? 1.5f : 0.4f;
-            changed = true;
-        }
+        Vec3 fwd = CameraMath.getForwardVector(this.cameraYaw, this.cameraPitch);
+        Vec3 right = CameraMath.getRightVector(this.cameraYaw, this.cameraPitch, this.cameraRoll);
+        Vec3 up = CameraMath.getUpVector(this.cameraYaw, this.cameraPitch, this.cameraRoll);
 
-        if (w || s || a || d || space || ctrl) {
-            double speed = isSprinting ? 0.20 : 0.04;
-
-            Vec3 fwd = CameraMath.getForwardVector(this.cameraYaw, this.cameraPitch);
-            Vec3 right = CameraMath.getRightVector(this.cameraYaw, this.cameraPitch, this.cameraRoll);
-            Vec3 up = CameraMath.getUpVector(this.cameraYaw, this.cameraPitch, this.cameraRoll);
-
-            if (w) {
-                this.cameraX += fwd.x * speed;
-                this.cameraY += fwd.y * speed;
-                this.cameraZ += fwd.z * speed;
+        Vec3 targetDir = Vec3.ZERO;
+        if (inputFwd != 0.0 || inputStrafe != 0.0 || inputUp != 0.0) {
+            targetDir = fwd.scale(inputFwd).add(right.scale(inputStrafe)).add(up.scale(inputUp));
+            if (targetDir.lengthSqr() > 1e-4) {
+                targetDir = targetDir.normalize();
             }
-            if (s) {
-                this.cameraX -= fwd.x * speed;
-                this.cameraY -= fwd.y * speed;
-                this.cameraZ -= fwd.z * speed;
-            }
-            if (d) {
-                this.cameraX += right.x * speed;
-                this.cameraY += right.y * speed;
-                this.cameraZ += right.z * speed;
-            }
-            if (a) {
-                this.cameraX -= right.x * speed;
-                this.cameraY -= right.y * speed;
-                this.cameraZ -= right.z * speed;
-            }
-            if (space) {
-                this.cameraX += up.x * speed;
-                this.cameraY += up.y * speed;
-                this.cameraZ += up.z * speed;
-            }
-            if (ctrl) {
-                this.cameraX -= up.x * speed;
-                this.cameraY -= up.y * speed;
-                this.cameraZ -= up.z * speed;
-            }
-
-            changed = true;
         }
 
-        if (changed) {
-            syncBoxesAndPreview();
+        double baseSpeed = 4.0 * this.speedMultiplier; // 4.0 blocks/sec base
+        double targetSpeed = isSprinting ? (baseSpeed * 3.0) : baseSpeed;
+        Vec3 targetVel = targetDir.scale(targetSpeed);
+
+        // Spectator mode momentum smoothing:
+        // Exponential drag (friction = 6.5) gives silky acceleration ramp and smooth gliding deceleration
+        float friction = 6.5f;
+        float blend = 1.0f - (float) Math.exp(-friction * dt);
+        this.moveVelocity = this.moveVelocity.lerp(targetVel, blend);
+        if (targetDir.lengthSqr() < 1e-6 && this.moveVelocity.lengthSqr() < 1e-6) {
+            this.moveVelocity = Vec3.ZERO;
+        }
+
+        if (this.moveVelocity.lengthSqr() > 1e-7) {
+            this.cameraX += this.moveVelocity.x * dt;
+            this.cameraY += this.moveVelocity.y * dt;
+            this.cameraZ += this.moveVelocity.z * dt;
+            updatePreview();
+        }
+
+        // 2. Roll Movement (Q/E)
+        float inputRoll = (e ? 1.0f : 0.0f) - (q ? 1.0f : 0.0f);
+        float targetRollSpeed = (isSprinting ? 65.0f : 25.0f) * (float) this.speedMultiplier; // deg/sec
+        float targetRollVel = inputRoll * targetRollSpeed;
+        float rollFriction = 7.5f;
+        float rollBlend = 1.0f - (float) Math.exp(-rollFriction * dt);
+        this.rollVelocity = Mth.lerp(rollBlend, this.rollVelocity, targetRollVel);
+        if (inputRoll == 0.0f && Math.abs(this.rollVelocity) < 0.05f) {
+            this.rollVelocity = 0.0f;
+        }
+
+        if (Math.abs(this.rollVelocity) > 0.0f) {
+            this.cameraRoll += this.rollVelocity * dt;
+            updatePreview();
         }
     }
 
-    private void syncBoxesAndPreview() {
+    private void syncBoxesOnly() {
         updatingBoxes = true;
-        if (posXBox != null) posXBox.setValue(String.format(Locale.US, "%.1f", this.cameraX));
-        if (posYBox != null) posYBox.setValue(String.format(Locale.US, "%.1f", this.cameraY));
-        if (posZBox != null) posZBox.setValue(String.format(Locale.US, "%.1f", this.cameraZ));
-        if (yawBox != null) yawBox.setValue(String.format(Locale.US, "%.0f", this.cameraYaw));
-        if (pitchBox != null) pitchBox.setValue(String.format(Locale.US, "%.0f", this.cameraPitch));
-        if (rollBox != null) rollBox.setValue(String.format(Locale.US, "%.0f", this.cameraRoll));
+        if (posXBox != null && !posXBox.isFocused()) posXBox.setValue(String.format(Locale.US, "%.1f", this.cameraX));
+        if (posYBox != null && !posYBox.isFocused()) posYBox.setValue(String.format(Locale.US, "%.1f", this.cameraY));
+        if (posZBox != null && !posZBox.isFocused()) posZBox.setValue(String.format(Locale.US, "%.1f", this.cameraZ));
+        if (yawBox != null && !yawBox.isFocused()) yawBox.setValue(String.format(Locale.US, "%.0f", this.cameraYaw));
+        if (pitchBox != null && !pitchBox.isFocused()) pitchBox.setValue(String.format(Locale.US, "%.0f", this.cameraPitch));
+        if (rollBox != null && !rollBox.isFocused()) rollBox.setValue(String.format(Locale.US, "%.0f", this.cameraRoll));
         updatingBoxes = false;
+    }
+
+    private void syncBoxesAndPreview() {
+        syncBoxesOnly();
         updatePreview();
     }
 
@@ -554,6 +632,15 @@ public class CameraSetupScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        // --- 0. SMOOTH FRAME-RATE INDEPENDENT FLIGHT PHYSICS ---
+        long now = System.nanoTime();
+        if (this.lastFrameNanoTime > 0L) {
+            float dt = (float) ((now - this.lastFrameNanoTime) / 1_000_000_000.0);
+            dt = Mth.clamp(dt, 0.0001f, 0.05f);
+            updateMovement(dt);
+        }
+        this.lastFrameNanoTime = now;
+
         // --- 1. MULTI-COLORED COMPOSITION GUIDES & SCREEN RULERS ---
         if (guidesVisible) {
             renderGuides(guiGraphics);
@@ -561,9 +648,9 @@ public class CameraSetupScreen extends Screen {
 
         // When HUD is hidden, render minimal floating chip hint at top center
         if (!hudVisible) {
-            guiGraphics.fill(this.width / 2 - 145, 8, this.width / 2 + 145, 24, 0x99000000);
-            guiGraphics.fill(this.width / 2 - 145, 8, this.width / 2 + 145, 9, 0x6600E5FF);
-            String tip = "🎥 Flight Mode | 'G' Guides | 'H' UI | 'Enter' Save";
+            guiGraphics.fill(this.width / 2 - 155, 8, this.width / 2 + 155, 24, 0x99000000);
+            guiGraphics.fill(this.width / 2 - 155, 8, this.width / 2 + 155, 9, 0x6600E5FF);
+            String tip = String.format(Locale.US, "🎥 Flight (%.1fx) | Scroll: Speed | 'G' Guides | 'H' UI | 'Enter' Save", this.speedMultiplier);
             guiGraphics.drawCenteredString(this.font, Component.literal(tip).withStyle(ChatFormatting.BOLD), this.width / 2, 12, 0xFF00E5FF);
             super.render(guiGraphics, mouseX, mouseY, partialTick);
             return;
@@ -605,8 +692,9 @@ public class CameraSetupScreen extends Screen {
 
         // Row 3: Cheatsheet Bar
         guiGraphics.fill(dockLeft + 8, dockTop + 64, dockLeft + dockW - 8, dockTop + 80, 0x66000000);
-        String cheatsheet = "🖱 Aim: Right-Drag | ⌨ Move: WASD | ␣/Ctrl: Elevate | Q/E: Roll | G: Guides | H: Hide UI";
-        guiGraphics.drawCenteredString(this.font, Component.literal(cheatsheet), dockLeft + dockW / 2, dockTop + 68, 0xCCFFFFFF);
+        String cheatsheet = String.format(Locale.US, "🖱 Aim: Right-Drag | ⌨ WASD (%.1fx) | ␣/Ctrl: Elevate | Q/E: Roll | ⚙ Scroll: Speed", this.speedMultiplier);
+        int cheatsheetColor = this.speedFeedbackTimer > 0 ? GREEN_ACCENT : 0xCCFFFFFF;
+        guiGraphics.drawCenteredString(this.font, Component.literal(cheatsheet), dockLeft + dockW / 2, dockTop + 68, cheatsheetColor);
 
         // Row 4: Live Coordinate Summary
         String liveReadout = String.format(Locale.US, "(%.1f, %.1f, %.1f) | (%.0f°, %.0f°, %.0f°) | FOV: %.0f°",

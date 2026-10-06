@@ -1,5 +1,6 @@
 package net.dandare21.fracturedutils.screeneffect;
 
+import net.dandare21.fracturedutils.screeneffect.effects.CinematicBarsEffect;
 import net.dandare21.fracturedutils.screeneffect.effects.HueShiftEffect;
 import net.dandare21.fracturedutils.screeneffect.effects.ImpactFrameEffect;
 import net.dandare21.fracturedutils.screeneffect.effects.InvertColorsEffect;
@@ -123,5 +124,39 @@ public final class ScreenEffects {
      */
     public static ImpactFrameEffect.ImpactFrameInstance impactFrame(int durationMs, int primaryColor, int secondaryColor, int frameIntervalMs, boolean invertWorld, String style) {
         return new ImpactFrameEffect.ImpactFrameInstance(durationMs, primaryColor, secondaryColor, frameIntervalMs, invertWorld, style);
+    }
+
+    /**
+     * Creates a cinematic bars effect with slide-in/slide-out transitions.
+     *
+     * @param durationMs      Total duration in milliseconds.
+     * @param transitionInMs  Slide-in transition duration in milliseconds (0 = instant pop).
+     * @param transitionOutMs Slide-out transition duration in milliseconds (0 = instant pop).
+     * @param barHeightRatio  Height fraction of each bar (0.0 to 0.5, e.g. 0.125f for 12.5% letterbox).
+     * @param color           ARGB hex color of the bars (e.g. 0xFF000000 for black).
+     */
+    public static CinematicBarsEffect.CinematicBarsInstance cinematicBars(int durationMs, int transitionInMs, int transitionOutMs, float barHeightRatio, int color) {
+        return new CinematicBarsEffect.CinematicBarsInstance(durationMs, transitionInMs, transitionOutMs, barHeightRatio, color);
+    }
+
+    /**
+     * Creates standard black cinematic bars with slide-in and slide-out transitions.
+     */
+    public static CinematicBarsEffect.CinematicBarsInstance cinematicBars(int durationMs, int transitionInMs, int transitionOutMs) {
+        return new CinematicBarsEffect.CinematicBarsInstance(durationMs, transitionInMs, transitionOutMs, 0.125f, 0xFF000000);
+    }
+
+    /**
+     * Creates standard black cinematic bars with matching slide-in and slide-out transitions.
+     */
+    public static CinematicBarsEffect.CinematicBarsInstance cinematicBars(int durationMs, int transitionInMs) {
+        return new CinematicBarsEffect.CinematicBarsInstance(durationMs, transitionInMs, transitionInMs, 0.125f, 0xFF000000);
+    }
+
+    /**
+     * Creates standard black cinematic bars that pop in instantly.
+     */
+    public static CinematicBarsEffect.CinematicBarsInstance cinematicBars(int durationMs) {
+        return new CinematicBarsEffect.CinematicBarsInstance(durationMs, 0, 0, 0.125f, 0xFF000000);
     }
 }

@@ -225,6 +225,7 @@ public class ServerEventHandler {
             MaintenanceManager.getInstance().checkAndKickOnJoin(player);
             net.dandare21.fracturedutils.ping.PingManager.getInstance().syncToPlayer(player);
             net.dandare21.fracturedutils.sound.event.EventAudioManager.getInstance().onPlayerJoin(player);
+            net.dandare21.fracturedutils.sound.sequence.MusicSequenceManager.getInstance().onPlayerJoin(player);
             net.dandare21.fracturedutils.bossbar.BossHealthBarManager.getInstance().onPlayerJoin(player);
 
             WaitingRoomManager mgr = WaitingRoomManager.getInstance();

@@ -875,7 +875,7 @@ public class MusicSequenceManager {
             int pColor = entry.getScreenEffectColor() != 0 ? entry.getScreenEffectColor() : 0xFFFFFFFF;
             int sColor = entry.getScreenEffectSecondaryColor() != 0 ? entry.getScreenEffectSecondaryColor() : 0xFF000000;
             String style = entry.getScreenEffectStyle();
-            if (style == null || style.isBlank()) style = "DRAW";
+            if (style == null || style.isBlank()) style = "NOIR";
             instance = new ImpactFrameEffect.ImpactFrameInstance(durationMs, pColor, sColor, frameInterval, entry.isScreenEffectPulse(), style);
         } else if (effectId.equalsIgnoreCase("fractured_utils:cinematic_bars") || effectId.equalsIgnoreCase("cinematic_bars") || effectId.equalsIgnoreCase("cinematic") || effectId.equalsIgnoreCase("bars")) {
             int inMs = entry.getScreenEffectTransitionInMs();

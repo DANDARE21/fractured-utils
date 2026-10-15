@@ -81,17 +81,11 @@ public class WaveformRenderer {
             return;
         }
 
-        // 2. Setup Screen-Space Scissor Clipping
         Matrix4f matrix = guiGraphics.pose().last().pose();
-        float scaleX = matrix.m00();
-        float scaleY = matrix.m11();
-        float transX = matrix.m30();
-        float transY = matrix.m31();
-
-        int scissorMinX = (int) Math.floor(channelX * scaleX + transX);
-        int scissorMinY = (int) Math.floor(channelY * scaleY + transY);
-        int scissorMaxX = (int) Math.ceil((channelX + channelWidth) * scaleX + transX);
-        int scissorMaxY = (int) Math.ceil((channelY + channelHeight) * scaleY + transY);
+        int scissorMinX = channelX;
+        int scissorMinY = channelY;
+        int scissorMaxX = channelX + channelWidth;
+        int scissorMaxY = channelY + channelHeight;
 
         guiGraphics.enableScissor(scissorMinX, scissorMinY, scissorMaxX, scissorMaxY);
 

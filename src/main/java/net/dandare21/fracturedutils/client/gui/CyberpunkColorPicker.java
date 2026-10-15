@@ -7,16 +7,19 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundEvents;
 
 import java.awt.Color;
 import java.util.function.Consumer;
 
 /**
- * Cyberpunk interactive HSB Color Disc Picker with preset chips and hex synchronization.
+ * Cyberpunk interactive HSB Color Disc Picker with Value/Brightness bar,
+ * preset chips, invert button, and bidirectional hex synchronization.
  */
 public class CyberpunkColorPicker extends AbstractWidget {
-    private static final int DISC_RADIUS = 24;
+    private static final int DISC_RADIUS = 22;
     private static final int[] PRESETS = {
             0xFFFFFFFF, // Pure White
             0xFF00E5FF, // Cyber Cyan
@@ -32,13 +35,20 @@ public class CyberpunkColorPicker extends AbstractWidget {
     private float currentHue = 0.0f;
     private float currentSat = 0.0f;
     private float currentBri = 1.0f;
+
     private boolean isDraggingDisc = false;
+    private boolean isDraggingBri = false;
+
     private Consumer<Integer> onColorChanged;
     private EditBox boundHexBox;
     private boolean updatingFromHex = false;
 
     public CyberpunkColorPicker(int x, int y, int initialColor, Consumer<Integer> onColorChanged) {
-        super(x, y, 174, 56, Component.literal("Color Picker"));
+        this(x, y, 174, initialColor, onColorChanged);
+    }
+
+    public CyberpunkColorPicker(int x, int y, int width, int initialColor, Consumer<Integer> onColorChanged) {
+        super(x, y, Math.max(135, width), 56, Component.literal("Color Picker"));
         this.onColorChanged = onColorChanged;
         setColor(initialColor);
     }
@@ -79,7 +89,7 @@ public class CyberpunkColorPicker extends AbstractWidget {
         float[] hsb = Color.RGBtoHSB(r, g, b, null);
         this.currentHue = hsb[0];
         this.currentSat = hsb[1];
-        this.currentBri = hsb[2] > 0.05f ? hsb[2] : 1.0f;
+        this.currentBri = Math.max(0.0f, Math.min(1.0f, hsb[2]));
 
         if (syncHexBox && boundHexBox != null) {
             updateHexBox();
@@ -97,13 +107,17 @@ public class CyberpunkColorPicker extends AbstractWidget {
         }
     }
 
+    public boolean isDraggingActive() {
+        return isDraggingDisc || isDraggingBri;
+    }
+
     @Override
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         int discCenterX = getX() + DISC_RADIUS + 4;
-        int discCenterY = getY() + DISC_RADIUS + 4;
+        int discCenterY = getY() + DISC_RADIUS + 5;
 
         // 1. Draw outer glowing disc frame
-        int discBorderColor = isHoveredOrFocused() ? 0xFF00E5FF : 0xFF334455;
+        int discBorderColor = (isDraggingDisc || isHoveredOrFocused()) ? 0xFF00E5FF : 0xFF334455;
         drawCircleOutline(graphics, discCenterX, discCenterY, DISC_RADIUS + 2, discBorderColor);
 
         // 2. Render HSB Disc Pixels
@@ -120,35 +134,89 @@ public class CyberpunkColorPicker extends AbstractWidget {
         graphics.fill(retX - 2, retY, retX + 3, retY + 1, 0xFFFFFFFF);
         graphics.fill(retX, retY - 2, retX + 1, retY + 3, 0xFFFFFFFF);
 
-        // 4. Color Swatch & Preview
-        int swatchX = getX() + DISC_RADIUS * 2 + 14;
-        int swatchY = getY() + 4;
-        int swatchW = 26;
-        int swatchH = 26;
+        // 4. Vertical Brightness / Value Slider Bar
+        int briBarX = getX() + DISC_RADIUS * 2 + 11;
+        int briBarY = getY() + 5;
+        int briBarW = 6;
+        int briBarH = 46;
+
+        // Border around Brightness bar
+        int briBorderColor = (isDraggingBri) ? 0xFF00E5FF : 0xFF223344;
+        graphics.fill(briBarX - 1, briBarY - 1, briBarX + briBarW + 1, briBarY + briBarH + 1, briBorderColor);
+
+        // Render vertical brightness gradient (top = 1.0, bottom = 0.0)
+        for (int py = 0; py < briBarH; py++) {
+            float b = 1.0f - ((float) py / (float) (briBarH - 1));
+            int rgb = Color.HSBtoRGB(currentHue, currentSat, b);
+            graphics.fill(briBarX, briBarY + py, briBarX + briBarW, briBarY + py + 1, 0xFF000000 | rgb);
+        }
+
+        // Indicator needle for current brightness
+        int needleY = briBarY + Math.round((1.0f - currentBri) * (briBarH - 1));
+        graphics.fill(briBarX - 2, needleY - 1, briBarX + briBarW + 2, needleY + 2, 0xFFFFFFFF);
+        graphics.fill(briBarX - 1, needleY, briBarX + briBarW + 1, needleY + 1, 0xFF000000);
+
+        // 5. Color Swatch & Preview
+        int swatchX = briBarX + briBarW + 6;
+        int swatchY = getY() + 5;
+        int swatchW = 20;
+        int swatchH = 20;
 
         // Swatch background & border
         graphics.fill(swatchX - 1, swatchY - 1, swatchX + swatchW + 1, swatchY + swatchH + 1, 0xFF00E5FF);
         graphics.fill(swatchX, swatchY, swatchX + swatchW, swatchY + swatchH, currentColor | 0xFF000000);
 
-        Font font = Minecraft.getInstance().font;
-        String hexLabel = String.format("#%06X", currentColor & 0x00FFFFFF);
-        graphics.drawString(font, hexLabel, swatchX + swatchW + 6, swatchY + 4, 0xFFFFFFFF, false);
-        graphics.drawString(font, "PRESETS:", swatchX + swatchW + 6, swatchY + 16, 0xFF8899AA, false);
+        // Invert Button (⇄) right next to swatch
+        int invBtnX = swatchX + swatchW + 4;
+        int invBtnY = swatchY;
+        int invBtnW = 16;
+        int invBtnH = 20;
+        boolean invHovered = mouseX >= invBtnX && mouseX < invBtnX + invBtnW && mouseY >= invBtnY && mouseY < invBtnY + invBtnH;
+        graphics.fill(invBtnX, invBtnY, invBtnX + invBtnW, invBtnY + invBtnH, invHovered ? 0xFF1B3B50 : 0xFF0B1924);
+        graphics.fill(invBtnX, invBtnY, invBtnX + invBtnW, invBtnY + 1, invHovered ? 0xFF00E5FF : 0xFF224455);
+        graphics.fill(invBtnX, invBtnY + invBtnH - 1, invBtnX + invBtnW, invBtnY + invBtnH, invHovered ? 0xFF00E5FF : 0xFF224455);
+        graphics.fill(invBtnX, invBtnY, invBtnX + 1, invBtnY + invBtnH, invHovered ? 0xFF00E5FF : 0xFF224455);
+        graphics.fill(invBtnX + invBtnW - 1, invBtnY, invBtnX + invBtnW, invBtnY + invBtnH, invHovered ? 0xFF00E5FF : 0xFF224455);
 
-        // 5. Render Preset Chips
+        Font font = Minecraft.getInstance().font;
+        graphics.drawCenteredString(font, "⇄", invBtnX + (invBtnW / 2), invBtnY + 5, invHovered ? 0xFF00E5FF : 0xFFAABBCC);
+
+        // Hex Label
+        String hexLabel = String.format("#%06X", currentColor & 0x00FFFFFF);
+        int hexX = invBtnX + invBtnW + 5;
+        if (hexX + font.width(hexLabel) <= getX() + width) {
+            graphics.drawString(font, hexLabel, hexX, swatchY + 6, 0xFFFFFFFF, false);
+        }
+
+        // 6. Preset Chips
         int chipsStartX = swatchX;
-        int chipsY = getY() + 34;
-        int chipSize = 10;
+        int chipsY = getY() + 32;
+        int chipSize = 9;
         int chipGap = 3;
 
+        int availChipsW = (getX() + width) - chipsStartX - 2;
+        boolean multiRow = availChipsW < (PRESETS.length * (chipSize + chipGap));
+
         for (int i = 0; i < PRESETS.length; i++) {
-            int cx = chipsStartX + i * (chipSize + chipGap);
+            int cx;
+            int cy;
+            if (multiRow) {
+                int col = i % 4;
+                int row = i / 4;
+                cx = chipsStartX + col * (chipSize + chipGap);
+                cy = chipsY + row * (chipSize + 2);
+            } else {
+                cx = chipsStartX + i * (chipSize + chipGap);
+                cy = chipsY;
+            }
+
             int color = PRESETS[i];
             boolean isSelected = (color & 0x00FFFFFF) == (currentColor & 0x00FFFFFF);
-            int border = isSelected ? 0xFF00E5FF : 0xFF445566;
+            boolean isChipHovered = mouseX >= cx && mouseX <= cx + chipSize && mouseY >= cy && mouseY <= cy + chipSize;
 
-            graphics.fill(cx - 1, chipsY - 1, cx + chipSize + 1, chipsY + chipSize + 1, border);
-            graphics.fill(cx, chipsY, cx + chipSize, chipsY + chipSize, color | 0xFF000000);
+            int border = isSelected ? 0xFF00E5FF : (isChipHovered ? 0xFFFFFFFF : 0xFF334455);
+            graphics.fill(cx - 1, cy - 1, cx + chipSize + 1, cy + chipSize + 1, border);
+            graphics.fill(cx, cy, cx + chipSize, cy + chipSize, color | 0xFF000000);
         }
     }
 
@@ -187,27 +255,66 @@ public class CyberpunkColorPicker extends AbstractWidget {
         if (!this.visible || !this.active) return false;
         if (button == 0) {
             int discCenterX = getX() + DISC_RADIUS + 4;
-            int discCenterY = getY() + DISC_RADIUS + 4;
+            int discCenterY = getY() + DISC_RADIUS + 5;
             double dx = mouseX - discCenterX;
             double dy = mouseY - discCenterY;
             double dist = Math.sqrt(dx * dx + dy * dy);
 
-            // Clicked inside disc
+            // 1. Clicked inside disc
             if (dist <= DISC_RADIUS + 2) {
                 this.isDraggingDisc = true;
                 updateColorFromDisc(dx, dy, dist);
                 return true;
             }
 
-            // Clicked preset chips
-            int swatchX = getX() + DISC_RADIUS * 2 + 14;
-            int chipsY = getY() + 34;
-            int chipSize = 10;
+            // 2. Clicked on Brightness bar
+            int briBarX = getX() + DISC_RADIUS * 2 + 11;
+            int briBarY = getY() + 5;
+            int briBarW = 6;
+            int briBarH = 46;
+            if (mouseX >= briBarX - 3 && mouseX <= briBarX + briBarW + 3 && mouseY >= briBarY && mouseY <= briBarY + briBarH) {
+                this.isDraggingBri = true;
+                updateColorFromBri(mouseY - briBarY, briBarH);
+                return true;
+            }
+
+            // 3. Clicked Invert Button
+            int swatchX = briBarX + briBarW + 6;
+            int swatchW = 20;
+            int invBtnX = swatchX + swatchW + 4;
+            int invBtnY = getY() + 5;
+            int invBtnW = 16;
+            int invBtnH = 20;
+            if (mouseX >= invBtnX && mouseX <= invBtnX + invBtnW && mouseY >= invBtnY && mouseY <= invBtnY + invBtnH) {
+                int inverted = 0xFF000000 | ((~currentColor) & 0x00FFFFFF);
+                setColor(inverted);
+                Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.2f));
+                return true;
+            }
+
+            // 4. Clicked preset chips
+            int chipsStartX = swatchX;
+            int chipsY = getY() + 32;
+            int chipSize = 9;
             int chipGap = 3;
 
+            int availChipsW = (getX() + width) - chipsStartX - 2;
+            boolean multiRow = availChipsW < (PRESETS.length * (chipSize + chipGap));
+
             for (int i = 0; i < PRESETS.length; i++) {
-                int cx = swatchX + i * (chipSize + chipGap);
-                if (mouseX >= cx && mouseX <= cx + chipSize && mouseY >= chipsY && mouseY <= chipsY + chipSize) {
+                int cx;
+                int cy;
+                if (multiRow) {
+                    int col = i % 4;
+                    int row = i / 4;
+                    cx = chipsStartX + col * (chipSize + chipGap);
+                    cy = chipsY + row * (chipSize + 2);
+                } else {
+                    cx = chipsStartX + i * (chipSize + chipGap);
+                    cy = chipsY;
+                }
+
+                if (mouseX >= cx && mouseX <= cx + chipSize && mouseY >= cy && mouseY <= cy + chipSize) {
                     setColor(PRESETS[i]);
                     playDownSound(Minecraft.getInstance().getSoundManager());
                     return true;
@@ -219,22 +326,32 @@ public class CyberpunkColorPicker extends AbstractWidget {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (isDraggingDisc && button == 0) {
-            int discCenterX = getX() + DISC_RADIUS + 4;
-            int discCenterY = getY() + DISC_RADIUS + 4;
-            double dx = mouseX - discCenterX;
-            double dy = mouseY - discCenterY;
-            double dist = Math.sqrt(dx * dx + dy * dy);
-            updateColorFromDisc(dx, dy, dist);
-            return true;
+        if (button == 0) {
+            if (isDraggingDisc) {
+                int discCenterX = getX() + DISC_RADIUS + 4;
+                int discCenterY = getY() + DISC_RADIUS + 5;
+                double dx = mouseX - discCenterX;
+                double dy = mouseY - discCenterY;
+                double dist = Math.sqrt(dx * dx + dy * dy);
+                updateColorFromDisc(dx, dy, dist);
+                return true;
+            }
+
+            if (isDraggingBri) {
+                int briBarY = getY() + 5;
+                int briBarH = 46;
+                updateColorFromBri(mouseY - briBarY, briBarH);
+                return true;
+            }
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0 && isDraggingDisc) {
+        if (button == 0 && (isDraggingDisc || isDraggingBri)) {
             isDraggingDisc = false;
+            isDraggingBri = false;
             return true;
         }
         return super.mouseReleased(mouseX, mouseY, button);
@@ -244,6 +361,17 @@ public class CyberpunkColorPicker extends AbstractWidget {
         double angle = Math.atan2(dy, dx);
         this.currentHue = (float) ((angle / (Math.PI * 2.0) + 1.0) % 1.0);
         this.currentSat = (float) Math.max(0.0, Math.min(1.0, dist / DISC_RADIUS));
+        int rgb = Color.HSBtoRGB(currentHue, currentSat, currentBri);
+        this.currentColor = 0xFF000000 | rgb;
+        updateHexBox();
+        if (onColorChanged != null) {
+            onColorChanged.accept(this.currentColor);
+        }
+    }
+
+    private void updateColorFromBri(double relY, int height) {
+        float b = 1.0f - (float) Math.max(0.0, Math.min(1.0, relY / (double) height));
+        this.currentBri = b;
         int rgb = Color.HSBtoRGB(currentHue, currentSat, currentBri);
         this.currentColor = 0xFF000000 | rgb;
         updateHexBox();

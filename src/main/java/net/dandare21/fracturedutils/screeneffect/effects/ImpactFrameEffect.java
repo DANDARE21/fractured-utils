@@ -21,10 +21,10 @@ public class ImpactFrameEffect {
         private int secondaryColor = 0xFF000000;  // Secondary negative/cut color (default pitch black)
         private int frameIntervalMs = 35;         // Milliseconds per cut frame (alternating speed)
         private boolean invertWorld = true;       // Inverts world colors during impact
-        private String style = "DRAW";            // DRAW (Manga sketch with pixel rays/stars), MONOCHROME_CUT, COLOR_FLASH, RADIAL_SHOCK
+        private String style = "NOIR";            // NOIR (Anime Inversion), CHROMATIC (RGB Glitch Burst), THERMAL (Negative Speedlines), HYBRID, DRAW
 
         public ImpactFrameInstance(int durationMs) {
-            this(durationMs, 0xFFFFFFFF, 0xFF000000, 35, true, "DRAW");
+            this(durationMs, 0xFFFFFFFF, 0xFF000000, 35, true, "NOIR");
         }
 
         public ImpactFrameInstance(int durationMs, int primaryColor, int secondaryColor, int frameIntervalMs, boolean invertWorld, String style) {
@@ -33,7 +33,7 @@ public class ImpactFrameEffect {
             this.secondaryColor = secondaryColor;
             this.frameIntervalMs = Math.max(10, frameIntervalMs);
             this.invertWorld = invertWorld;
-            this.style = (style != null && !style.isBlank()) ? style : "DRAW";
+            this.style = (style != null && !style.isBlank()) ? style : "NOIR";
         }
 
         public int getPrimaryColor() { return primaryColor; }
@@ -88,7 +88,7 @@ public class ImpactFrameEffect {
             int sColor = tag.contains("SecondaryColor") ? tag.getInt("SecondaryColor") : 0xFF000000;
             int interval = tag.contains("FrameIntervalMs") ? tag.getInt("FrameIntervalMs") : 35;
             boolean invert = !tag.contains("InvertWorld") || tag.getBoolean("InvertWorld");
-            String style = tag.contains("Style") ? tag.getString("Style") : "MONOCHROME_CUT";
+            String style = tag.contains("Style") ? tag.getString("Style") : "NOIR";
             return new ImpactFrameInstance(duration, pColor, sColor, interval, invert, style);
         }
     }

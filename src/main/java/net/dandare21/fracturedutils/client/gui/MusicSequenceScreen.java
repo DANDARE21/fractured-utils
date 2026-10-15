@@ -16,6 +16,17 @@ import net.dandare21.fracturedutils.client.camera.CustomCameraManager;
 import net.dandare21.fracturedutils.client.camera.CameraSequenceTrack;
 import net.dandare21.fracturedutils.client.camera.CameraTransform;
 import net.dandare21.fracturedutils.client.camera.CameraPathRenderer;
+import net.dandare21.fracturedutils.client.camera.SequencerViewportManager;
+import net.dandare21.fracturedutils.screeneffect.ScreenEffectInstance;
+import net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler;
+import net.dandare21.fracturedutils.screeneffect.effects.CinematicBarsEffect;
+import net.dandare21.fracturedutils.screeneffect.effects.HueShiftEffect;
+import net.dandare21.fracturedutils.screeneffect.effects.ImpactFrameEffect;
+import net.dandare21.fracturedutils.screeneffect.effects.InvertColorsEffect;
+import net.dandare21.fracturedutils.screeneffect.effects.ScreenShakeEffect;
+import net.dandare21.fracturedutils.screeneffect.effects.StrobeEffect;
+import com.mojang.blaze3d.platform.InputConstants;
+import org.lwjgl.glfw.GLFW;
 import net.dandare21.fracturedutils.network.ModMessages;
 import net.dandare21.fracturedutils.network.packet.C2SDeleteMusicSequencePacket;
 import net.dandare21.fracturedutils.network.packet.C2SSaveMusicSequencePacket;
@@ -34,6 +45,7 @@ import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -52,6 +64,7 @@ public class MusicSequenceScreen extends Screen {
     private static final int CYAN_BG = 0xFF05090C;
     private static final int CARD_BORDER = 0xAA00E5FF;
     private static final int PLAYHEAD_COLOR = 0xFFFF3355;
+    private static final int TEXT_MUTED = 0xFF7A9BB0;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -142,12 +155,36 @@ public class MusicSequenceScreen extends Screen {
     private MusicSequenceEntry stretchingEntry = null;
     private int stretchingEntryIndex = -1;
 
+    // Puppet Phase Dragging ("Time Zones")
+    private boolean isDraggingPuppetPhase = false;
+    private MusicSequenceEntry puppetDraggingEntry = null;
+    private int puppetDraggingEntryIndex = -1;
+    private int puppetDraggingPhaseIndex = -1;
+    private int puppetOriginalPhaseMs = 0;
+    private int puppetOriginalNextPhaseMs = 0;
+    private long puppetPhaseDragStartMs = 0;
+
     // Channel Layout & Premiere-Style Track Header Definitions
     public static final int TRACK_HEADER_WIDTH = 135;
     private double channelScrollY = 0.0;
 
     private String saveFeedbackMessage = null;
     private long saveFeedbackTime = 0;
+
+    // Mine-imator / Axiom Style Viewport & Inspector State
+    private SequencerRightPanel rightPanel;
+    private boolean isRightPanelCollapsed = false;
+    private CyberpunkButton inspectorToggleBtn;
+    private int lastTransportEndX = 460;
+    private boolean isViewportNavigating = false;
+    private double lastViewportMouseX = 0;
+    private double lastViewportMouseY = 0;
+    private long lastFrameNanoTime = 0L;
+    private boolean showCompositionGuides = false;
+    private boolean isPreviewScreenEffects = true;
+    private CyberpunkButton screenEffectsToggleBtn;
+    private CyberpunkButton cameraModeBtn;
+    private CyberpunkButton guidesToggleBtn;
 
     public MusicSequenceScreen(Map<String, String> serverSequenceFiles, List<String> availableTracks) {
         super(Component.literal("Timeline Music Sequence Orchestrator"));
@@ -272,7 +309,7 @@ public class MusicSequenceScreen extends Screen {
         this.currentSequence.getChannels();
     }
 
-    private void saveCurrentSequenceToWorkingMap() {
+    public void saveCurrentSequenceToWorkingMap() {
         if (currentFileName != null && currentSequence != null) {
             currentSequence.sortEntriesByTimestamp();
             if (currentSequence.getEndMs() <= 0) {
@@ -301,60 +338,437 @@ public class MusicSequenceScreen extends Screen {
         return false;
     }
 
+    public int getRightPanelWidth() {
+        if (isRightPanelCollapsed) return 0;
+        if (this.width < 520) {
+            return Math.max(160, Math.min(200, (int) (this.width * 0.40)));
+        } else if (this.width < 720) {
+            return Math.max(180, Math.min(240, (int) (this.width * 0.32)));
+        } else {
+            return Math.max(220, Math.min(320, (int) (this.width * 0.28)));
+        }
+    }
+
+    public int getMainAreaWidth() {
+        return this.width - getRightPanelWidth();
+    }
+
+    public int getTimelineHeight() {
+        int topBarH = 32;
+        int maxAllowedH = Math.max(80, this.height - topBarH - 65);
+        int desired;
+        if (this.height < 280) {
+            desired = (int) (this.height * 0.40);
+        } else if (this.height < 400) {
+            desired = (int) (this.height * 0.42);
+        } else {
+            desired = (int) (this.height * 0.44);
+        }
+        return Math.max(85, Math.min(maxAllowedH, desired));
+    }
+
+    public int getTimelineTop() {
+        return this.height - getTimelineHeight();
+    }
+
+    public int getTimelineToolbarHeight() {
+        return this.height < 320 ? 20 : 24;
+    }
+
+    public int getRulerHeight() {
+        return this.height < 320 ? 16 : 20;
+    }
+
+    public int getWaveformHeight() {
+        return this.height < 320 ? 22 : 32;
+    }
+
+    public int getChannelHeight() {
+        return this.height < 320 ? 22 : 26;
+    }
+
+    public int getTrackHeaderWidth() {
+        int tw = getTimelineWidth();
+        if (tw < 300) {
+            return Math.max(65, (int) (tw * 0.26));
+        } else if (tw < 480) {
+            return Math.max(85, Math.min(110, (int) (tw * 0.25)));
+        } else {
+            return TRACK_HEADER_WIDTH;
+        }
+    }
+
+    public void toggleRightPanel() {
+        this.isRightPanelCollapsed = !this.isRightPanelCollapsed;
+        this.init();
+    }
+
+    public boolean isRightPanelCollapsed() {
+        return this.isRightPanelCollapsed;
+    }
+
     private double getLayoutScale() {
-        int targetW = 740;
-        int targetH = 380;
         if (this.width <= 0 || this.height <= 0) return 1.0;
+        int targetW = 500;
+        int targetH = 350;
         double scaleX = (double) this.width / targetW;
         double scaleY = (double) this.height / targetH;
         return Math.min(1.0, Math.min(scaleX, scaleY));
+    }
+
+    public MusicSequence getCurrentSequence() {
+        return this.currentSequence;
+    }
+
+    public String getCurrentFileName() {
+        return this.currentFileName;
+    }
+
+    public int getSelectedEntryIndex() {
+        return this.selectedEntryIndex;
+    }
+
+    public MusicSequenceEntry getSelectedEntry() {
+        if (selectedEntryIndex >= 0 && selectedEntryIndex < currentSequence.getEntries().size()) {
+            return currentSequence.getEntries().get(selectedEntryIndex);
+        }
+        return null;
+    }
+
+    public MusicSequenceChannel getSelectedChannel() {
+        MusicSequenceEntry sel = getSelectedEntry();
+        if (sel != null && sel.getChannelId() != null) {
+            MusicSequenceChannel ch = getChannelById(sel.getChannelId());
+            if (ch != null) return ch;
+        }
+        if (!currentSequence.getChannels().isEmpty()) {
+            return currentSequence.getChannels().get(0);
+        }
+        return null;
+    }
+
+    public MusicSequenceChannel getChannelById(String channelId) {
+        if (channelId == null) return null;
+        for (MusicSequenceChannel ch : currentSequence.getChannels()) {
+            if (channelId.equalsIgnoreCase(ch.getId())) {
+                return ch;
+            }
+        }
+        return null;
+    }
+
+    public boolean isChannelType(MusicSequenceEntry entry, String type) {
+        if (entry == null || entry.getChannelId() == null) return false;
+        MusicSequenceChannel ch = getChannelById(entry.getChannelId());
+        return ch != null && type.equalsIgnoreCase(ch.getType());
+    }
+
+    public String getPuppetActorTag(MusicSequenceEntry entry) {
+        if (entry.getPuppetParams() != null && entry.getPuppetParams().containsKey("actorTag") && !entry.getPuppetParams().get("actorTag").isBlank()) {
+            return entry.getPuppetParams().get("actorTag");
+        }
+        if (entry.getChannelId() != null) {
+            MusicSequenceChannel ch = getChannelById(entry.getChannelId());
+            if (ch != null) {
+                if (ch.getActorTag() != null && !ch.getActorTag().isBlank()) {
+                    return ch.getActorTag();
+                }
+                if (ch.getName() != null && !ch.getName().isBlank()) {
+                    return ch.getName().toLowerCase(Locale.ROOT).replace(" ", "_");
+                }
+            }
+        }
+        return "puppet";
+    }
+
+    public String getPuppetActionId(MusicSequenceEntry entry) {
+        if (entry.getPuppetParams() != null && entry.getPuppetParams().containsKey("action")) {
+            return entry.getPuppetParams().get("action");
+        }
+        String cmd = entry.getCommand();
+        if (cmd != null) {
+            String q = cmd.trim();
+            if (q.startsWith("puppet_action")) {
+                for (String part : q.split("\\s+")) {
+                    if (part.startsWith("action:")) {
+                        return part.substring(7).trim();
+                    }
+                }
+            } else if (!q.isBlank() && !q.startsWith("summon") && !q.startsWith("kill") && !q.startsWith("puppet_")) {
+                return q;
+            }
+        }
+        return ModPuppetActions.LEAP_SLAM.getId().toString();
+    }
+
+    public void updatePuppetEntryCommand(MusicSequenceEntry entry) {
+        if ("EXECUTE_ACTION".equalsIgnoreCase(entry.getSubAction()) || entry.getSubAction() == null || entry.getSubAction().isEmpty()) {
+            String actId = getPuppetActionId(entry);
+            String tag = getPuppetActorTag(entry);
+            String target = entry.getPuppetParam("target", "@p");
+            PuppetActionType<?> act = ModPuppetActions.resolve(actId);
+            List<ActionTimingPhase> phases = act.getTimingPhases();
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("puppet_action tag:").append(tag).append(" action:").append(actId).append(" target:").append(target);
+            for (int i = 0; i < phases.size(); i++) {
+                ActionTimingPhase phase = phases.get(i);
+                int ms = entry.getPhaseMs(phase, i);
+                sb.append(" ").append(phase.id()).append(":").append(ms);
+            }
+            if (entry.getPuppetParams() != null) {
+                for (Map.Entry<String, String> pe : entry.getPuppetParams().entrySet()) {
+                    String k = pe.getKey();
+                    if ("action".equals(k) || "target".equals(k) || "actorTag".equals(k)) continue;
+                    if ("windup".equals(k) || "jump".equals(k) || "duration".equals(k) || "recovery".equals(k)) continue;
+                    sb.append(" ").append(k).append(":").append(pe.getValue());
+                }
+            }
+            entry.setCommand(sb.toString());
+        }
+    }
+
+    public void updateScreenEffectEntryCommand(MusicSequenceEntry entry) {
+        if (entry == null) return;
+        int duration = entry.getTotalDurationMs() > 0 ? entry.getTotalDurationMs() : (entry.getDurationMs() > 0 ? entry.getDurationMs() : 1000);
+        String mode = entry.getSubAction();
+        if (mode == null || mode.isBlank()) mode = "SCREEN_SHAKE";
+
+        if ("INVERT_COLORS".equalsIgnoreCase(mode)) {
+            entry.setScreenEffectId("fractured_utils:invert_colors");
+            entry.setCommand("screeneffect invert " + duration + (entry.isScreenEffectPulse() ? " pulse " + entry.getScreenEffectFrequency() : ""));
+            entry.setDescription("Invert Colors (" + duration + "ms" + (entry.isScreenEffectPulse() ? ", pulse" : "") + ")");
+        } else if ("STROBE".equalsIgnoreCase(mode)) {
+            entry.setScreenEffectId("fractured_utils:strobe");
+            float freq = entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 10.0f;
+            entry.setCommand("screeneffect strobe " + duration + " " + freq);
+            entry.setDescription("Strobe Flash (" + freq + "Hz, " + duration + "ms)");
+        } else if ("HUE_SHIFT".equalsIgnoreCase(mode)) {
+            entry.setScreenEffectId("fractured_utils:hue_shift");
+            entry.setCommand("screeneffect hue_shift " + duration + (entry.isScreenEffectContinuous() ? " cycle " + entry.getScreenEffectFrequency() : " angle " + (int)entry.getScreenEffectAngle()));
+            entry.setDescription("Hue Shift (" + (entry.isScreenEffectContinuous() ? entry.getScreenEffectFrequency() + " rot/s" : (int)entry.getScreenEffectAngle() + "°") + ", " + duration + "ms)");
+        } else if ("IMPACT_FRAME".equalsIgnoreCase(mode)) {
+            entry.setScreenEffectId("fractured_utils:impact_frame");
+            int primary = entry.getScreenEffectColor() != 0 ? entry.getScreenEffectColor() : 0xFFFFFFFF;
+            int secondary = entry.getScreenEffectSecondaryColor() != 0 ? entry.getScreenEffectSecondaryColor() : 0xFF000000;
+            String st = (entry.getScreenEffectStyle() != null && !entry.getScreenEffectStyle().isBlank()) ? entry.getScreenEffectStyle() : "DRAW";
+            entry.setCommand("screeneffect impact_frame " + duration + " " + String.format(Locale.ROOT, "#%06X", primary & 0x00FFFFFF) + " " + String.format(Locale.ROOT, "#%06X", secondary & 0x00FFFFFF));
+            entry.setDescription("Impact Frame: " + st + " (" + duration + "ms)");
+        } else if ("CINEMATIC_BARS".equalsIgnoreCase(mode)) {
+            entry.setScreenEffectId("fractured_utils:cinematic_bars");
+            int inMs = entry.getScreenEffectTransitionInMs() > 0 ? entry.getScreenEffectTransitionInMs() : 500;
+            int outMs = entry.getScreenEffectTransitionOutMs() > 0 ? entry.getScreenEffectTransitionOutMs() : 500;
+            entry.setCommand("screeneffect cinematic_bars " + duration + " " + inMs + " " + outMs);
+            int pct = (int)(entry.getScreenEffectBarHeight() * 100.0f);
+            if (pct <= 0) pct = 12;
+            entry.setDescription("Cinematic Bars (" + pct + "%, " + duration + "ms)");
+        } else {
+            // SCREEN_SHAKE
+            entry.setScreenEffectId("fractured_utils:screen_shake");
+            float intensity = entry.getScreenEffectIntensity() > 0 ? entry.getScreenEffectIntensity() : 2.0f;
+            entry.setCommand(String.format(Locale.ROOT, "screeneffect shake %d %.1f", duration, intensity));
+            entry.setDescription("Screen Shake (" + String.format(Locale.ROOT, "%.1f", intensity) + " amp, " + duration + "ms)");
+        }
+    }
+
+    public double getPlayheadMs() {
+        return this.playheadMs;
+    }
+
+    public void setPlayheadMs(double ms) {
+        this.playheadMs = Math.max(0.0, ms);
+        if (isPreviewPlaying) {
+            relocatePlaybackAudio((long) this.playheadMs);
+        }
+        updatePreviewCamera();
+        updatePreviewScreenEffects();
+    }
+
+    public void duplicateSelectedEntry() {
+        if (selectedEntryIndex >= 0 && selectedEntryIndex < currentSequence.getEntries().size()) {
+            duplicateEntry(selectedEntryIndex);
+            if (rightPanel != null) {
+                rightPanel.updateSelection(selectedEntryIndex, getSelectedEntry());
+            }
+        }
+    }
+
+    public void deleteSelectedEntry() {
+        if (selectedEntryIndex >= 0 && selectedEntryIndex < currentSequence.getEntries().size()) {
+            deleteEntry(selectedEntryIndex);
+            this.selectedEntryIndex = -1;
+            if (rightPanel != null) {
+                rightPanel.updateSelection(-1, null);
+            }
+        }
     }
 
     @Override
     protected void init() {
         this.clearWidgets();
 
-        double scale = getLayoutScale();
-        int effWidth = (int) (this.width / scale);
-        int effHeight = (int) (this.height / scale);
+        int mainAreaW = getMainAreaWidth();
+        int rightPanelW = getRightPanelWidth();
+        int topBarH = 32;
+        int timelineTop = getTimelineTop();
+        int viewportH = Math.max(10, timelineTop - topBarH);
 
-        int topY = 36;
-        int leftX = 14;
+        // Configure Axiom-style 3D camera viewport
+        SequencerViewportManager.setViewportBounds(0, topBarH, mainAreaW, viewportH);
+        SequencerViewportManager.setActive(true);
+        SequencerViewportManager.initWorkCameraFromCurrent();
 
-        // 1. Sequence File Selector Dropdown
+        int topY = 6;
+        int leftX = 8;
+
+        // --- Responsive Right-Side Top Bar Controls ---
+        int rX = this.width - 4;
+
+        // 1. Close Button
+        rX -= 18;
+        CyberpunkButton closeBtn = new CyberpunkButton(rX, topY, 18, 20, Component.literal("✕"), b -> this.onClose(), 0xFFFF3355, false);
+        closeBtn.setTooltip(Tooltip.create(Component.literal("Close Sequencer")));
+        this.addRenderableWidget(closeBtn);
+        rX -= 4;
+
+        // 2. Save Button
+        boolean isSmallWidth = this.width < 560;
+        int saveW = isSmallWidth ? 26 : 46;
+        rX -= saveW;
+        CyberpunkButton saveBtn = new CyberpunkButton(rX, topY, saveW, 20, Component.literal(isSmallWidth ? "💾" : "SAVE"), b -> saveCurrentFile(), CYAN_MAIN, false);
+        saveBtn.setTooltip(Tooltip.create(Component.literal("Save sequence to disk [CTRL+S]")));
+        this.addRenderableWidget(saveBtn);
+        rX -= 4;
+
+        // 3. Inspector Panel Toggle Button
+        int panelBtnW = isSmallWidth ? 22 : 26;
+        rX -= panelBtnW;
+        this.inspectorToggleBtn = new CyberpunkButton(rX, topY, panelBtnW, 20,
+                Component.literal(isRightPanelCollapsed ? "◀" : "▶"),
+                b -> toggleRightPanel(),
+                isRightPanelCollapsed ? 0xFF00FF88 : 0xFF7A9BB0,
+                false
+        );
+        this.inspectorToggleBtn.setTooltip(Tooltip.create(Component.literal(isRightPanelCollapsed ? "Expand Inspector Panel [P]" : "Collapse Inspector Panel [P]")));
+        this.addRenderableWidget(this.inspectorToggleBtn);
+        rX -= 4;
+
+        // 4. Composition Guides Toggle Button
+        int guidesW = this.width < 520 ? 22 : (this.width < 680 ? 44 : 62);
+        rX -= guidesW;
+        String guidesText = this.width < 520 ? "📐" : (this.width < 680 ? (showCompositionGuides ? "G:ON" : "G:OFF") : (showCompositionGuides ? "GUIDES: ON" : "GUIDES: OFF"));
+        this.guidesToggleBtn = new CyberpunkButton(rX, topY, guidesW, 20,
+                Component.literal(guidesText),
+                b -> {
+                    this.showCompositionGuides = !this.showCompositionGuides;
+                    this.init();
+                },
+                showCompositionGuides ? 0xFF00FF88 : 0xFF7A9BB0,
+                false
+        );
+        this.guidesToggleBtn.setTooltip(Tooltip.create(Component.literal("Toggle Rule-of-Thirds & Reticle guides in Viewport [G]")));
+        this.addRenderableWidget(this.guidesToggleBtn);
+        rX -= 4;
+
+        // 5. Screen Effects Live Preview Toggle Button
+        int fxW = this.width < 520 ? 22 : (this.width < 680 ? 46 : 64);
+        rX -= fxW;
+        String fxText = this.width < 520 ? "⚡" : (this.width < 680 ? (isPreviewScreenEffects ? "FX:ON" : "FX:OFF") : (isPreviewScreenEffects ? "⚡ FX: ON" : "⚡ FX: OFF"));
+        this.screenEffectsToggleBtn = new CyberpunkButton(rX, topY, fxW, 20,
+                Component.literal(fxText),
+                b -> {
+                    this.isPreviewScreenEffects = !this.isPreviewScreenEffects;
+                    if (!this.isPreviewScreenEffects) {
+                        ClientScreenEffectHandler.clearAllEffects();
+                    } else {
+                        updatePreviewScreenEffects();
+                    }
+                    this.init();
+                },
+                isPreviewScreenEffects ? 0xFFFF00CC : 0xFF7A9BB0,
+                false
+        );
+        this.screenEffectsToggleBtn.setTooltip(Tooltip.create(Component.literal("Toggle live Screen Effects preview when playhead is on top [X]")));
+        this.addRenderableWidget(this.screenEffectsToggleBtn);
+        rX -= 4;
+
+        // 6. Camera Mode Toggle Button
+        boolean isWorkCam = (SequencerViewportManager.getCurrentMode() == SequencerViewportManager.CameraMode.WORK_CAMERA);
+        int camModeW = this.width < 520 ? 24 : (this.width < 680 ? 62 : 110);
+        rX -= camModeW;
+        String camText = this.width < 520 ? (isWorkCam ? "🎥" : "🎬") : (this.width < 680 ? (isWorkCam ? "🎥 WORK" : "🎬 SEQ") : (isWorkCam ? "🎥 WORK CAM" : "🎬 SEQUENCE CAM"));
+        this.cameraModeBtn = new CyberpunkButton(rX, topY, camModeW, 20,
+                Component.literal(camText),
+                b -> toggleCameraMode(),
+                isWorkCam ? 0xFFFFD700 : CYAN_MAIN,
+                false
+        );
+        this.cameraModeBtn.setTooltip(Tooltip.create(Component.literal("Switch between Sequence keyframe camera and Interactive Work camera [Tab]")));
+        this.addRenderableWidget(this.cameraModeBtn);
+
+        // --- Responsive Left-Side Top Bar Controls (File, Song, BPM, Loop) ---
+        int availLeft = rX - leftX - 8;
+        int fileW;
+        int newBtnW;
+        int trackW;
+        int bpmW;
+        int loopW;
+
+        if (availLeft < 260) {
+            fileW = Math.max(55, (int) (availLeft * 0.32));
+            newBtnW = 20;
+            trackW = Math.max(60, (int) (availLeft * 0.36));
+            bpmW = 28;
+            loopW = 24;
+        } else if (availLeft < 360) {
+            fileW = 85;
+            newBtnW = 34;
+            trackW = 95;
+            bpmW = 32;
+            loopW = 44;
+        } else {
+            fileW = 115;
+            newBtnW = 44;
+            trackW = 125;
+            bpmW = 36;
+            loopW = 55;
+        }
+
+        int curLeftX = leftX;
+
+        // File dropdown
         List<CyberpunkDropdown.DropdownEntry<String>> fileEntries = new ArrayList<>();
         List<String> sortedFiles = new ArrayList<>(getActiveSequenceMap().keySet());
         Collections.sort(sortedFiles);
         for (String f : sortedFiles) {
             fileEntries.add(new CyberpunkDropdown.DropdownEntry<>(f, Component.literal(f)));
         }
-
-        this.fileDropdown = new CyberpunkDropdown<>(leftX, topY, 150, 20, Component.literal("Sequence File"));
+        this.fileDropdown = new CyberpunkDropdown<>(curLeftX, topY, fileW, 20, Component.literal("Sequence"));
         this.fileDropdown.setOptions(fileEntries);
         this.fileDropdown.selectByValue(currentFileName);
         this.fileDropdown.setOnSelect(entry -> selectSequenceFile(entry.getValue()));
         this.addRenderableWidget(this.fileDropdown);
+        curLeftX += fileW + 3;
 
-        CyberpunkButton addFileBtn = new CyberpunkButton(leftX + 155, topY, 55, 20, Component.literal("+ NEW"), b -> openCreateSequenceModal(), CYAN_MAIN, false);
-        addFileBtn.setTooltip(Tooltip.create(Component.literal("Create a new music sequence (select song first)")));
+        // + NEW button
+        CyberpunkButton addFileBtn = new CyberpunkButton(curLeftX, topY, newBtnW, 20, Component.literal(newBtnW <= 22 ? "+" : "+ NEW"), b -> openCreateSequenceModal(), CYAN_MAIN, false);
+        addFileBtn.setTooltip(Tooltip.create(Component.literal("Create a new music sequence")));
         this.addRenderableWidget(addFileBtn);
+        curLeftX += newBtnW + 3;
 
-        // 2. Resourcepack Song Selector Dropdown
+        // Track dropdown
         Set<String> dynamicTracks = new LinkedHashSet<>(availableTracks);
         dynamicTracks.addAll(net.dandare21.fracturedutils.sound.event.AudioTrackDiscovery.getAllAvailableTracks());
         if (currentSequence.getSongTrack() != null && !currentSequence.getSongTrack().isEmpty()) {
             dynamicTracks.add(currentSequence.getSongTrack());
         }
-
         List<CyberpunkDropdown.DropdownEntry<String>> songEntries = new ArrayList<>();
-        songEntries.add(new CyberpunkDropdown.DropdownEntry<>("", Component.literal("[None / No Song]"), Component.literal("Sequence runs timed actions without audio track")));
-
+        songEntries.add(new CyberpunkDropdown.DropdownEntry<>("", Component.literal("[No Audio]")));
         for (String track : dynamicTracks) {
             String label = net.dandare21.fracturedutils.sound.event.AudioTrackDiscovery.formatTrackLabel(track);
             songEntries.add(new CyberpunkDropdown.DropdownEntry<>(track, Component.literal(label), Component.literal(track)));
         }
-
-        this.trackDropdown = new CyberpunkDropdown<>(leftX + 215, topY, 190, 20, Component.literal("Song Track"));
+        this.trackDropdown = new CyberpunkDropdown<>(curLeftX, topY, trackW, 20, Component.literal("Song Track"));
         this.trackDropdown.setMaxVisibleItems(8);
         this.trackDropdown.setOptions(songEntries);
         this.trackDropdown.selectByValue(currentSequence.getSongTrack());
@@ -363,13 +777,14 @@ public class MusicSequenceScreen extends Screen {
             saveCurrentSequenceToWorkingMap();
         });
         this.addRenderableWidget(this.trackDropdown);
+        curLeftX += trackW + 3;
 
-        // BPM Input Box
-        this.bpmEditBox = new EditBox(this.font, leftX + 410, topY, 45, 20, Component.literal("BPM"));
+        // BPM box
+        this.bpmEditBox = new EditBox(this.font, curLeftX, topY, bpmW, 20, Component.literal("BPM"));
         this.bpmEditBox.setMaxLength(3);
         this.bpmEditBox.setValue(String.valueOf(currentSequence.getBpm()));
-        this.bpmEditBox.setHint(Component.literal("120"));
-        this.bpmEditBox.setTooltip(Tooltip.create(Component.literal("Song Tempo in BPM (Beats Per Minute)")));
+        this.bpmEditBox.setHint(Component.literal("BPM"));
+        this.bpmEditBox.setTooltip(Tooltip.create(Component.literal("Song Tempo in BPM")));
         this.bpmEditBox.setResponder(val -> {
             try {
                 int bpm = Integer.parseInt(val.trim());
@@ -380,129 +795,139 @@ public class MusicSequenceScreen extends Screen {
             } catch (Exception ignored) {}
         });
         this.addRenderableWidget(this.bpmEditBox);
+        curLeftX += bpmW + 3;
 
-        // Looping Checkbox
+        // Loop checkbox
+        String loopLabel = loopW <= 28 ? "🔁" : "Loop";
         this.loopingCheckbox = new CyberpunkCheckbox(
-                leftX + 460, topY, 75, 20,
-                Component.literal("Loop Song"),
+                curLeftX, topY, loopW, 20,
+                Component.literal(loopLabel),
                 currentSequence.isLooping(),
                 checked -> {
                     currentSequence.setLooping(checked);
                     saveCurrentSequenceToWorkingMap();
                 }
         );
+        this.loopingCheckbox.setTooltip(Tooltip.create(Component.literal("Toggle loop playback")));
         this.addRenderableWidget(this.loopingCheckbox);
 
-        // Storage Mode Toggle (if in multiplayer)
-        boolean isMultiplayer = Minecraft.getInstance().getCurrentServer() != null || !Minecraft.getInstance().isSingleplayer();
-        if (isMultiplayer) {
-            CyberpunkButton modeBtn = new CyberpunkButton(effWidth - 160, topY, 145, 20,
-                    Component.literal(isClientMode ? "LOCAL STORAGE" : "SERVER STORAGE"),
-                    b -> {
-                        saveCurrentSequenceToWorkingMap();
-                        this.isClientMode = !this.isClientMode;
-                        Map<String, String> activeMap = getActiveSequenceMap();
-                        if (!activeMap.containsKey(currentFileName)) {
-                            this.currentFileName = activeMap.isEmpty() ? "new_music_sequence.json" : activeMap.keySet().iterator().next();
-                        }
-                        loadCurrentFileSequence();
-                        this.init();
-                    },
-                    isClientMode ? 0xFFFFD700 : CYAN_MAIN,
-                    false
-            );
-            this.addRenderableWidget(modeBtn);
-        }
+        // 3. Timeline Transport Controls Bar (Positioned directly above the timeline canvas)
+        int toolbarHeight = getTimelineToolbarHeight();
+        int toolbarY = timelineTop + 2;
+        int btnH = Math.min(20, toolbarHeight - 2);
+        int tX = 4;
+        int tw = getTimelineWidth();
+        boolean isCompactTb = tw < 480;
 
-        // 3. Timeline Control Toolbar (Play/Pause, Zoom, Camera tools, Time position)
-        int toolbarY = topY + 26;
-
-        this.playPreviewBtn = new CyberpunkButton(leftX, toolbarY, 90, 20,
-                Component.literal(isPreviewPlaying ? "⏸ PAUSE" : "▶ PREVIEW"),
+        int playW = isCompactTb ? 26 : 58;
+        String playLabel = isCompactTb ? (isPreviewPlaying ? "⏸" : "▶") : (isPreviewPlaying ? "⏸ PAUSE" : "▶ PLAY");
+        this.playPreviewBtn = new CyberpunkButton(tX, toolbarY, playW, btnH,
+                Component.literal(playLabel),
                 b -> togglePreviewPlayback(),
                 isPreviewPlaying ? 0xFFFFD700 : 0xFF00FF88,
-                false
+                false,
+                Component.literal("Play / Pause [Space]")
         );
         this.addRenderableWidget(this.playPreviewBtn);
+        tX += playW + 3;
 
-        CyberpunkButton zoomInBtn = new CyberpunkButton(leftX + 95, toolbarY, 45, 20, Component.literal("Z+"), b -> adjustZoom(1.25));
-        zoomInBtn.setTooltip(Tooltip.create(Component.literal("Zoom In Timeline")));
-        CyberpunkButton zoomOutBtn = new CyberpunkButton(leftX + 143, toolbarY, 45, 20, Component.literal("Z-"), b -> adjustZoom(0.8));
-        zoomOutBtn.setTooltip(Tooltip.create(Component.literal("Zoom Out Timeline")));
-        this.addRenderableWidget(zoomInBtn);
-        this.addRenderableWidget(zoomOutBtn);
+        int stepW = isCompactTb ? 18 : 20;
+        int dStepW = isCompactTb ? 18 : 22;
 
-        CyberpunkButton addKeyframeBtn = new CyberpunkButton(leftX + 193, toolbarY, 80, 20, Component.literal("+ ENTRY"), b -> openEditEntryModal(-1, (long) playheadMs), CYAN_MAIN, false);
-        this.addRenderableWidget(addKeyframeBtn);
+        CyberpunkButton rewindBtn = new CyberpunkButton(tX, toolbarY, stepW, btnH, Component.literal("|◄"), b -> setPlayheadMs(0.0), CYAN_MAIN, false, Component.literal("Jump to Start [Home]"));
+        this.addRenderableWidget(rewindBtn);
+        tX += stepW + 2;
 
-        CyberpunkButton stampCameraBtn = new CyberpunkButton(leftX + 278, toolbarY, 110, 20, Component.literal("📷 STAMP (K)"), b -> stampCameraKeyframeAtPlayhead(), 0xFF00FF88, false);
-        stampCameraBtn.setTooltip(Tooltip.create(Component.literal("Capture current view as camera keyframe at playhead [K]")));
-        this.addRenderableWidget(stampCameraBtn);
+        CyberpunkButton stepBackBtn = new CyberpunkButton(tX, toolbarY, dStepW, btnH, Component.literal("◄◄"), b -> setPlayheadMs(Math.max(0.0, playheadMs - 100.0)), CYAN_MAIN, false, Component.literal("Step Back 100ms [,]"));
+        this.addRenderableWidget(stepBackBtn);
+        tX += dStepW + 2;
 
-        CyberpunkButton camPreviewBtn = new CyberpunkButton(leftX + 393, toolbarY, 105, 20,
-                Component.literal(cameraPreviewEnabled ? "🎥 CAM: ON" : "👁 CAM: OFF"),
-                b -> {
-                    this.cameraPreviewEnabled = !this.cameraPreviewEnabled;
-                    if (!this.cameraPreviewEnabled) {
-                        CustomCameraManager.clearCustomCamera();
-                        this.isPreviewCameraActive = false;
-                        saveFeedbackMessage = "Camera Preview: OFF (Freecam Mode)";
-                    } else {
-                        saveFeedbackMessage = "Camera Preview: ON";
-                        updatePreviewCamera();
-                    }
-                    saveFeedbackTime = System.currentTimeMillis();
-                    this.init();
-                },
-                cameraPreviewEnabled ? 0xFF00FF88 : 0xFF8899AA,
-                false
-        );
-        camPreviewBtn.setTooltip(Tooltip.create(Component.literal("Toggle Camera Viewport vs Freecam View [C]")));
-        this.addRenderableWidget(camPreviewBtn);
+        CyberpunkButton stepFwdBtn = new CyberpunkButton(tX, toolbarY, dStepW, btnH, Component.literal("►►"), b -> setPlayheadMs(playheadMs + 100.0), CYAN_MAIN, false, Component.literal("Step Forward 100ms [.]"));
+        this.addRenderableWidget(stepFwdBtn);
+        tX += dStepW + 2;
 
-        CyberpunkButton pathPreviewBtn = new CyberpunkButton(leftX + 503, toolbarY, 95, 20,
-                Component.literal(CameraPathRenderer.isPathPreviewEnabled() ? "🌐 PATH: ON" : "🌐 PATH: OFF"),
-                b -> {
-                    CameraPathRenderer.togglePathPreview();
-                    this.init();
-                },
-                CameraPathRenderer.isPathPreviewEnabled() ? MusicSequenceChannel.COLOR_CAMERA : 0xFF8899AA,
-                false
-        );
-        pathPreviewBtn.setTooltip(Tooltip.create(Component.literal("Toggle in-world 3D motion path spline and camera frustum rendering")));
-        this.addRenderableWidget(pathPreviewBtn);
+        CyberpunkButton jumpEndBtn = new CyberpunkButton(tX, toolbarY, stepW, btnH, Component.literal("►|"), b -> setPlayheadMs(getEffectiveEndMs()), CYAN_MAIN, false, Component.literal("Jump to End [End]"));
+        this.addRenderableWidget(jumpEndBtn);
+        tX += stepW + 3;
 
-        CyberpunkButton sortBtn = new CyberpunkButton(leftX + 603, toolbarY, 65, 20, Component.literal("SORT"), b -> sortEntries(), 0xFFFFD700, false);
-        this.addRenderableWidget(sortBtn);
-
-        CyberpunkButton autoFollowBtn = new CyberpunkButton(leftX + 673, toolbarY, 95, 20,
-                Component.literal(autoFollowPlayhead ? "FOLLOW: ON" : "FOLLOW: OFF"),
+        int followW = isCompactTb ? 20 : 24;
+        CyberpunkButton followBtn = new CyberpunkButton(tX, toolbarY, followW, btnH,
+                Component.literal(autoFollowPlayhead ? "🎯" : "⚪"),
                 b -> {
                     this.autoFollowPlayhead = !this.autoFollowPlayhead;
                     this.init();
                 },
-                autoFollowPlayhead ? 0xFF00FF88 : 0xFF8899AA,
-                false
+                autoFollowPlayhead ? 0xFF00FF88 : 0xFF7A9BB0,
+                false,
+                Component.literal("Toggle auto-follow timeline playhead")
         );
-        autoFollowBtn.setTooltip(Tooltip.create(Component.literal("Auto-scroll timeline to follow playhead during playback")));
-        this.addRenderableWidget(autoFollowBtn);
+        this.addRenderableWidget(followBtn);
+        tX += followW + 3;
 
-        // 4. Footer Action Buttons
-        int footerY = effHeight - 30;
+        int zoomW = isCompactTb ? 18 : 20;
+        CyberpunkButton zoomOutBtn = new CyberpunkButton(tX, toolbarY, zoomW, btnH, Component.literal("-"), b -> adjustZoom(0.8), CYAN_MAIN, false, Component.literal("Zoom Out Timeline"));
+        this.addRenderableWidget(zoomOutBtn);
+        tX += zoomW + 2;
 
-        CyberpunkButton saveBtn = new CyberpunkButton(effWidth - 115, footerY, 100, 22, Component.literal("SAVE FILE"), b -> saveCurrentFile(), CYAN_MAIN, false);
-        CyberpunkButton runBtn = new CyberpunkButton(effWidth - 225, footerY, 100, 22, Component.literal("▶ RUN SERVER"), b -> startSequencePlayback(currentFileName), 0xFF00FF88, false);
-        CyberpunkButton stopBtn = new CyberpunkButton(effWidth - 325, footerY, 90, 22, Component.literal("⏹ STOP MUSIC"), b -> MusicSequenceManager.getInstance().stopAllSequences(Minecraft.getInstance().getSingleplayerServer()), 0xFFFF3366, false);
-        
-        CyberpunkButton hubBtn = new CyberpunkButton(leftX, footerY, 125, 22, Component.literal("← ALL SEQUENCES"), b -> returnToSelectScreen(), CYAN_MAIN, false);
-        hubBtn.setTooltip(Tooltip.create(Component.literal("Return to Music Sequence Hub selection menu")));
-        CyberpunkButton closeBtn = new CyberpunkButton(leftX + 130, footerY, 70, 22, Component.literal("CLOSE"), b -> this.onClose(), 0xFF8899AA, false);
+        CyberpunkButton zoomInBtn = new CyberpunkButton(tX, toolbarY, zoomW, btnH, Component.literal("+"), b -> adjustZoom(1.25), CYAN_MAIN, false, Component.literal("Zoom In Timeline"));
+        this.addRenderableWidget(zoomInBtn);
+        tX += zoomW + 3;
 
-        this.addRenderableWidget(saveBtn);
-        this.addRenderableWidget(runBtn);
-        this.addRenderableWidget(stopBtn);
-        this.addRenderableWidget(hubBtn);
-        this.addRenderableWidget(closeBtn);
+        int addKeyW = isCompactTb ? 26 : 58;
+        CyberpunkButton addKeyframeBtn = new CyberpunkButton(tX, toolbarY, addKeyW, btnH,
+                Component.literal(isCompactTb ? "+E" : "+ ENTRY"),
+                b -> createAndSelectNewEntryAtPlayhead(),
+                CYAN_MAIN,
+                false,
+                Component.literal("Add keyframe at current playhead")
+        );
+        this.addRenderableWidget(addKeyframeBtn);
+        tX += addKeyW + 3;
+
+        int stampW = isCompactTb ? 26 : 68;
+        CyberpunkButton stampCameraBtn = new CyberpunkButton(tX, toolbarY, stampW, btnH,
+                Component.literal(isCompactTb ? "📷" : "📷 STAMP"),
+                b -> stampCameraKeyframeAtPlayhead(),
+                0xFF00FF88,
+                false,
+                Component.literal("Stamp current 3D view as camera keyframe at playhead [C]")
+        );
+        this.addRenderableWidget(stampCameraBtn);
+        tX += stampW + 3;
+
+        int pathW = isCompactTb ? 26 : 58;
+        String pathLabel = isCompactTb
+                ? (CameraPathRenderer.isPathPreviewEnabled() ? "🌐" : "⚪")
+                : (CameraPathRenderer.isPathPreviewEnabled() ? "🌐 PATH" : "⚪ PATH");
+        CyberpunkButton pathPreviewBtn = new CyberpunkButton(tX, toolbarY, pathW, btnH,
+                Component.literal(pathLabel),
+                b -> {
+                    CameraPathRenderer.togglePathPreview();
+                    this.init();
+                },
+                CameraPathRenderer.isPathPreviewEnabled() ? MusicSequenceChannel.COLOR_CAMERA : 0xFF7A9BB0,
+                false,
+                Component.literal("Toggle in-world 3D camera spline & frustum visualization")
+        );
+        this.addRenderableWidget(pathPreviewBtn);
+        tX += pathW;
+        this.lastTransportEndX = tX;
+
+        // 4. Initialize Right Inspector Panel
+        if (!isRightPanelCollapsed) {
+            if (this.rightPanel == null) {
+                this.rightPanel = new SequencerRightPanel(this, mainAreaW, topBarH, rightPanelW, this.height - topBarH);
+            } else {
+                this.rightPanel.setBounds(mainAreaW, topBarH, rightPanelW, this.height - topBarH);
+            }
+            if (selectedEntryIndex >= 0 && selectedEntryIndex < currentSequence.getEntries().size()) {
+                this.rightPanel.updateSelection(selectedEntryIndex, currentSequence.getEntries().get(selectedEntryIndex));
+            } else {
+                this.rightPanel.rebuildWidgets();
+            }
+        } else if (this.rightPanel != null) {
+            this.rightPanel.setBounds(this.width, topBarH, 0, this.height - topBarH);
+        }
 
         if (activeModal == ModalType.ADD_CHANNEL) {
             updateModalWidgetsPosition();
@@ -587,14 +1012,14 @@ public class MusicSequenceScreen extends Screen {
     }
 
     private void onCloseDirect() {
+        SequencerViewportManager.setActive(false);
         if (isPreviewPlaying) {
             EventAudioClientController.getInstance().stopAudio(0);
             this.isPreviewPlaying = false;
         }
-        if (isPreviewCameraActive) {
-            CustomCameraManager.clearCustomCamera();
-            this.isPreviewCameraActive = false;
-        }
+        CustomCameraManager.clearCustomCamera();
+        this.isPreviewCameraActive = false;
+        ClientScreenEffectHandler.clearAllEffects();
         if (this.parentSelectScreen != null && this.minecraft != null) {
             this.parentSelectScreen.getWorkingServerSequenceFiles().clear();
             this.parentSelectScreen.getWorkingServerSequenceFiles().putAll(this.workingServerSequenceFiles);
@@ -645,84 +1070,92 @@ public class MusicSequenceScreen extends Screen {
         }
     }
 
-    public double getPlayheadMs() {
-        return this.playheadMs;
+    public void setSelectedEntryIndex(int index) {
+        this.selectedEntryIndex = index;
+        if (this.isRightPanelCollapsed) {
+            this.isRightPanelCollapsed = false;
+            this.init();
+        }
+        if (this.rightPanel != null) {
+            this.rightPanel.setTab(SequencerRightPanel.InspectorTab.ACTION);
+            MusicSequenceEntry entry = (index >= 0 && currentSequence != null && index < currentSequence.getEntries().size())
+                    ? currentSequence.getEntries().get(index)
+                    : null;
+            this.rightPanel.updateSelection(index, entry);
+        }
+    }
+
+    public void createAndSelectNewEntryAtPlayhead() {
+        createAndSelectNewEntryAt(snapTimestamp((long) playheadMs, hasShiftDown()));
+    }
+
+    public void createAndSelectNewEntryAt(long targetTimestampMs) {
+        if (currentSequence == null) return;
+        saveCurrentSequenceToWorkingMap();
+
+        String actionType = "COMMAND";
+        String channelId = "";
+
+        MusicSequenceEntry template = (selectedEntryIndex >= 0 && selectedEntryIndex < currentSequence.getEntries().size())
+                ? currentSequence.getEntries().get(selectedEntryIndex)
+                : null;
+
+        MusicSequenceEntry newEntry;
+        if (template != null) {
+            newEntry = template.copy();
+            newEntry.setTimestampMs(targetTimestampMs);
+        } else {
+            if (!currentSequence.getChannels().isEmpty()) {
+                MusicSequenceChannel firstCh = currentSequence.getChannels().get(0);
+                channelId = firstCh.getId();
+                actionType = firstCh.getType();
+            }
+            newEntry = new MusicSequenceEntry(targetTimestampMs, actionType, channelId, "", "");
+            if ("CAMERA".equalsIgnoreCase(actionType)) {
+                newEntry.setUseCamera(true);
+                boolean isWorkCam = (SequencerViewportManager.getCurrentMode() == SequencerViewportManager.CameraMode.WORK_CAMERA);
+                Vec3 camPos = isWorkCam ? SequencerViewportManager.getWorkCameraPos() : (minecraft != null && minecraft.player != null ? minecraft.player.getEyePosition() : Vec3.ZERO);
+                float camYaw = isWorkCam ? SequencerViewportManager.getWorkCameraYaw() : (minecraft != null && minecraft.player != null ? minecraft.player.getYRot() : 0.0f);
+                float camPitch = isWorkCam ? SequencerViewportManager.getWorkCameraPitch() : (minecraft != null && minecraft.player != null ? minecraft.player.getXRot() : 0.0f);
+                float camRoll = isWorkCam ? SequencerViewportManager.getWorkCameraRoll() : 0.0f;
+                double camFov = isWorkCam ? SequencerViewportManager.getWorkCameraFov() : 70.0;
+
+                newEntry.setCameraX(camPos.x);
+                newEntry.setCameraY(camPos.y);
+                newEntry.setCameraZ(camPos.z);
+                newEntry.setCameraYaw(camYaw);
+                newEntry.setCameraPitch(camPitch);
+                newEntry.setCameraRoll(camRoll);
+                newEntry.setCameraFov(camFov);
+                newEntry.setCameraMode("KEYFRAME");
+                newEntry.setSplineMode("CATMULL_ROM");
+                newEntry.setCameraEasing("EASE_IN_OUT_CUBIC");
+                newEntry.setCameraInterpolate(true);
+            }
+        }
+
+        currentSequence.getEntries().add(newEntry);
+        currentSequence.sortEntriesByTimestamp();
+        int newIdx = currentSequence.getEntries().indexOf(newEntry);
+        setSelectedEntryIndex(newIdx);
+        saveCurrentSequenceToWorkingMap();
+        playButtonSound();
     }
 
     public void openEditEntryModal(int index) {
-        long defaultTs = (index >= 0 && index < currentSequence.getEntries().size()) ? currentSequence.getEntries().get(index).getTimestampMs() : (long) playheadMs;
-        openEditEntryModal(index, defaultTs);
+        if (index >= 0 && currentSequence != null && index < currentSequence.getEntries().size()) {
+            setSelectedEntryIndex(index);
+        } else {
+            createAndSelectNewEntryAt((long) playheadMs);
+        }
     }
 
     public void openEditEntryModal(int index, long defaultTimestampMs) {
-        saveCurrentSequenceToWorkingMap();
-        MusicSequenceEntry entryCandidate = (index >= 0 && index < currentSequence.getEntries().size())
-                ? currentSequence.getEntries().get(index)
-                : null;
-        if (entryCandidate == null) {
-            entryCandidate = new MusicSequenceEntry(defaultTimestampMs, "COMMAND", "", "");
-            if (selectedEntryIndex >= 0 && selectedEntryIndex < currentSequence.getEntries().size()) {
-                MusicSequenceEntry sel = currentSequence.getEntries().get(selectedEntryIndex);
-                if (MusicSequenceChannel.TYPE_CAMERA.equalsIgnoreCase(sel.getActionType()) || sel.isUseCamera()) {
-                    entryCandidate.setActionType(MusicSequenceChannel.TYPE_CAMERA);
-                    entryCandidate.setChannelId(sel.getChannelId());
-                    entryCandidate.setUseCamera(true);
-                    entryCandidate.setCameraX(sel.getCameraX());
-                    entryCandidate.setCameraY(sel.getCameraY());
-                    entryCandidate.setCameraZ(sel.getCameraZ());
-                    entryCandidate.setCameraYaw(sel.getCameraYaw());
-                    entryCandidate.setCameraPitch(sel.getCameraPitch());
-                    entryCandidate.setCameraRoll(sel.getCameraRoll());
-                    entryCandidate.setCameraFov(sel.getCameraFov() > 0 ? sel.getCameraFov() : 70.0);
-                    entryCandidate.setCameraMode(sel.getCameraMode());
-                    entryCandidate.setSplineMode(sel.getSplineMode());
-                    entryCandidate.setCameraEasing(sel.getCameraEasing());
-                    entryCandidate.setCameraInterpolate(sel.isCameraInterpolate());
-                    entryCandidate.setCameraTarget(sel.getCameraTarget());
-                    entryCandidate.setCameraHeightOffset(sel.getCameraHeightOffset());
-                    entryCandidate.setCameraBackDistance(sel.getCameraBackDistance());
-                    entryCandidate.setCameraShoulderOffset(sel.getCameraShoulderOffset());
-                    entryCandidate.setInHandleX(sel.getInHandleX());
-                    entryCandidate.setInHandleY(sel.getInHandleY());
-                    entryCandidate.setInHandleZ(sel.getInHandleZ());
-                    entryCandidate.setOutHandleX(sel.getOutHandleX());
-                    entryCandidate.setOutHandleY(sel.getOutHandleY());
-                    entryCandidate.setOutHandleZ(sel.getOutHandleZ());
-                    entryCandidate.setLookAtEnabled(sel.isLookAtEnabled());
-                    entryCandidate.setLookAtMode(sel.getLookAtMode());
-                    entryCandidate.setLookAtX(sel.getLookAtX());
-                    entryCandidate.setLookAtY(sel.getLookAtY());
-                    entryCandidate.setLookAtZ(sel.getLookAtZ());
-                    entryCandidate.setLookAtTarget(sel.getLookAtTarget());
-                    entryCandidate.setLookAtWeight(sel.getLookAtWeight());
-                }
-            }
+        if (index >= 0 && currentSequence != null && index < currentSequence.getEntries().size()) {
+            setSelectedEntryIndex(index);
+        } else {
+            createAndSelectNewEntryAt(defaultTimestampMs);
         }
-        final MusicSequenceEntry targetEntry = entryCandidate;
-        int chIdx = getChannelIndex(targetEntry);
-        MusicSequenceChannel channel = (chIdx >= 0 && chIdx < currentSequence.getChannels().size()) ? currentSequence.getChannels().get(chIdx) : null;
-        Runnable deleteAction = index >= 0 ? () -> {
-            int existingIdx = currentSequence.getEntries().indexOf(targetEntry);
-            if (existingIdx >= 0) {
-                deleteEntry(existingIdx);
-            } else if (index < currentSequence.getEntries().size()) {
-                deleteEntry(index);
-            }
-        } : null;
-
-        this.minecraft.setScreen(new EditMusicEntryModalScreen(this, targetEntry, channel, updated -> {
-            int existingIdx = currentSequence.getEntries().indexOf(targetEntry);
-            if (existingIdx >= 0) {
-                currentSequence.getEntries().set(existingIdx, updated);
-            } else if (index >= 0 && index < currentSequence.getEntries().size()) {
-                currentSequence.getEntries().set(index, updated);
-            } else {
-                currentSequence.getEntries().add(updated);
-            }
-            currentSequence.sortEntriesByTimestamp();
-            saveCurrentSequenceToWorkingMap();
-            this.init();
-        }, deleteAction));
     }
 
     public void moveEntry(int fromIndex, int toIndex) {
@@ -738,14 +1171,16 @@ public class MusicSequenceScreen extends Screen {
     public void deleteEntry(int index) {
         if (index >= 0 && index < currentSequence.getEntries().size()) {
             currentSequence.getEntries().remove(index);
+            if (this.selectedEntryIndex == index) {
+                this.selectedEntryIndex = -1;
+                if (this.rightPanel != null) {
+                    this.rightPanel.updateSelection(-1, null);
+                }
+            } else if (this.selectedEntryIndex > index) {
+                this.selectedEntryIndex--;
+            }
             saveCurrentSequenceToWorkingMap();
             this.init();
-        }
-    }
-
-    public void duplicateSelectedEntry() {
-        if (selectedEntryIndex >= 0 && selectedEntryIndex < currentSequence.getEntries().size()) {
-            duplicateEntry(selectedEntryIndex);
         }
     }
 
@@ -759,8 +1194,25 @@ public class MusicSequenceScreen extends Screen {
             currentSequence.sortEntriesByTimestamp();
             this.selectedEntryIndex = currentSequence.getEntries().indexOf(copy);
             saveCurrentSequenceToWorkingMap();
+            if (this.rightPanel != null) {
+                this.rightPanel.updateSelection(this.selectedEntryIndex, copy);
+            }
             playButtonSound();
             this.init();
+        }
+    }
+
+    public void openConfirmDeleteChannelModal(int channelIndex) {
+        this.modalDeleteChannelIndex = channelIndex;
+        this.activeModal = ModalType.CONFIRM_DELETE_CHANNEL;
+    }
+
+    public void openConfirmDeleteChannelModal(MusicSequenceChannel channel) {
+        if (channel != null) {
+            int idx = currentSequence.getChannels().indexOf(channel);
+            if (idx >= 0) {
+                openConfirmDeleteChannelModal(idx);
+            }
         }
     }
 
@@ -901,7 +1353,7 @@ public class MusicSequenceScreen extends Screen {
         }
     }
 
-    private long snapTimestamp(long rawMs, boolean bypassSnap) {
+    public long snapTimestamp(long rawMs, boolean bypassSnap) {
         if (bypassSnap) return Math.max(0L, rawMs);
 
         // 1. Check Beat Snap
@@ -938,13 +1390,11 @@ public class MusicSequenceScreen extends Screen {
     }
 
     private int getTimelineWidth() {
-        double scale = getLayoutScale();
-        int effWidth = (int) (this.width / scale);
-        return effWidth - 28;
+        return Math.max(100, getMainAreaWidth());
     }
 
     private int getTimelineTrackWidth() {
-        return Math.max(100, getTimelineWidth() - TRACK_HEADER_WIDTH);
+        return Math.max(80, getTimelineWidth() - getTrackHeaderWidth());
     }
 
     private void clampTimeScroll() {
@@ -1015,29 +1465,72 @@ public class MusicSequenceScreen extends Screen {
             return true;
         }
 
-        double scale = getLayoutScale();
-        int timelineLeft = 14;
+        int mainAreaW = getMainAreaWidth();
+
+        // Priority Check: Right Inspector Panel Open Dropdowns or Command Suggestions Scrolling
+        if (!isRightPanelCollapsed && rightPanel != null && (rightPanel.hasOpenDropdown() || rightPanel.hasCommandSuggestions())) {
+            if (rightPanel.mouseScrolled(mouseX, mouseY, delta)) {
+                return true;
+            }
+        }
+
+        // 1. Right Inspector Panel
+        if (!isRightPanelCollapsed && mouseX >= mainAreaW) {
+            if (rightPanel != null && rightPanel.mouseScrolled(mouseX, mouseY, delta)) {
+                return true;
+            }
+            return super.mouseScrolled(mouseX, mouseY, delta);
+        }
+
+        int topBarH = 32;
+        int timelineTop = getTimelineTop();
+
+        // 2. 3D Viewport Navigation Zoom / Flight Speed
+        if (mouseY >= topBarH && mouseY < timelineTop) {
+            if (SequencerViewportManager.getCurrentMode() == SequencerViewportManager.CameraMode.WORK_CAMERA) {
+                if (hasControlDown()) {
+                    double curFov = SequencerViewportManager.getWorkCameraFov();
+                    curFov = Mth.clamp(curFov - delta * 2.0, 10.0, 130.0);
+                    SequencerViewportManager.setWorkCamera(
+                            SequencerViewportManager.getWorkCameraPos(),
+                            SequencerViewportManager.getWorkCameraYaw(),
+                            SequencerViewportManager.getWorkCameraPitch(),
+                            SequencerViewportManager.getWorkCameraRoll(),
+                            curFov
+                    );
+                    return true;
+                } else {
+                    double curSpeed = SequencerViewportManager.getSpeedMultiplier();
+                    double factor = delta > 0 ? 1.2 : 0.8333;
+                    SequencerViewportManager.setSpeedMultiplier(curSpeed * factor);
+                    return true;
+                }
+            }
+        }
+
+        // 3. Timeline Area Scrolling & Zooming
+        int timelineLeft = 0;
+        int trackHeaderWidth = getTrackHeaderWidth();
         int trackHeaderLeft = timelineLeft;
-        int timelineTrackLeft = timelineLeft + TRACK_HEADER_WIDTH;
+        int timelineTrackLeft = timelineLeft + trackHeaderWidth;
         int timelineTrackWidth = getTimelineTrackWidth();
-        double scaledMouseX = scale < 1.0 ? mouseX / scale : mouseX;
 
         // Vertical Track Scrolling over Left Track Headers
-        if (scaledMouseX >= trackHeaderLeft && scaledMouseX < timelineTrackLeft) {
+        if (mouseX >= trackHeaderLeft && mouseX < timelineTrackLeft) {
             channelScrollY = Math.max(0.0, channelScrollY - (delta * 24.0));
             return true;
         }
 
-        if (scaledMouseX >= timelineTrackLeft && scaledMouseX <= timelineTrackLeft + timelineTrackWidth) {
+        if (mouseX >= timelineTrackLeft && mouseX <= timelineTrackLeft + timelineTrackWidth) {
             if (hasControlDown()) {
                 // Modern DAW: Ctrl + Mouse Wheel = Mouse-Centered Zoom
                 double oldPixelsPerSecond = this.pixelsPerSecond;
                 double zoomFactor = delta > 0 ? 1.25 : 0.8;
                 double newPixelsPerSecond = Math.max(10.0, Math.min(400.0, oldPixelsPerSecond * zoomFactor));
 
-                double mouseTimeMs = timeScrollMs + ((scaledMouseX - timelineTrackLeft) / oldPixelsPerSecond) * 1000.0;
+                double mouseTimeMs = timeScrollMs + ((mouseX - timelineTrackLeft) / oldPixelsPerSecond) * 1000.0;
                 this.pixelsPerSecond = newPixelsPerSecond;
-                this.timeScrollMs = Math.max(0.0, mouseTimeMs - ((scaledMouseX - timelineTrackLeft) / newPixelsPerSecond) * 1000.0);
+                this.timeScrollMs = Math.max(0.0, mouseTimeMs - ((mouseX - timelineTrackLeft) / newPixelsPerSecond) * 1000.0);
                 clampTimeScroll();
                 return true;
             } else if (hasShiftDown()) {
@@ -1058,18 +1551,12 @@ public class MusicSequenceScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        double scale = getLayoutScale();
-        int smX = (int) (mouseX / scale);
-        int smY = (int) (mouseY / scale);
-
         if (activeModal != ModalType.NONE) {
-            handleModalClick(smX, smY, button);
+            double scale = getLayoutScale();
+            int modalMouseX = (int) (mouseX / scale);
+            int modalMouseY = (int) (mouseY / scale);
+            handleModalClick(modalMouseX, modalMouseY, button);
             return true;
-        }
-
-        if (scale < 1.0) {
-            mouseX /= scale;
-            mouseY /= scale;
         }
 
         if (fileDropdown != null && fileDropdown.isOpen() && fileDropdown.isMouseOverMenu(mouseX, mouseY)) {
@@ -1079,57 +1566,85 @@ public class MusicSequenceScreen extends Screen {
             return trackDropdown.mouseClicked(mouseX, mouseY, button);
         }
 
-        int timelineLeft = 14;
-        int effWidth = (int) (this.width / scale);
-        int timelineWidth = effWidth - 28;
-        int trackHeaderLeft = timelineLeft;
-        int timelineTrackLeft = timelineLeft + TRACK_HEADER_WIDTH;
-        int timelineTrackWidth = getTimelineTrackWidth();
-        int timelineTop = 90;
-        int rulerHeight = 24;
-        int waveformHeight = 45;
-        int channelHeight = 28;
-
-        List<MusicSequenceChannel> channels = currentSequence.getChannels();
-        int channelCount = channels.size();
-        int contentHeight = rulerHeight + waveformHeight + (channelCount * channelHeight) + 32;
-        int maxTimelineHeight = Math.max(160, (int)(this.height / scale) - 30 - timelineTop - 8);
-        int totalHeight = Math.min(maxTimelineHeight, contentHeight);
-        int canvasY = timelineTop + rulerHeight;
-        int trackAreaY = canvasY + waveformHeight;
-
-        // 0. Check Click on Header Inspector [⧉ DUP] or [🗑 DEL] Button
-        if (selectedEntryIndex >= 0 && selectedEntryIndex < currentSequence.getEntries().size()) {
-            int statusX = effWidth - 250;
-            int dupBtnX = statusX + 125;
-            if (mouseX >= dupBtnX && mouseX <= dupBtnX + 45 && mouseY >= 6 && mouseY <= 20) {
-                duplicateSelectedEntry();
-                return true;
-            }
-            int delBtnX = statusX + 175;
-            if (mouseX >= delBtnX && mouseX <= delBtnX + 45 && mouseY >= 6 && mouseY <= 20) {
-                deleteEntry(selectedEntryIndex);
-                selectedEntryIndex = -1;
+        // Priority Check: Right Inspector Panel Open Dropdowns or Command Suggestions
+        if (!isRightPanelCollapsed && rightPanel != null && (rightPanel.hasOpenDropdown() || rightPanel.hasCommandSuggestions())) {
+            if (rightPanel.mouseClicked(mouseX, mouseY, button)) {
                 return true;
             }
         }
 
-        // 1. Check Click on Left Track Header Column (Premiere Preset Space)
+        int mainAreaW = getMainAreaWidth();
+        int topBarH = 32;
+        int timelineTop = getTimelineTop();
+
+        // 1. Check Click on Right Inspector Panel
+        if (!isRightPanelCollapsed && mouseX >= mainAreaW) {
+            if (rightPanel != null && rightPanel.mouseClicked(mouseX, mouseY, button)) {
+                return true;
+            }
+            return true;
+        }
+
+        // Defocus inspector fields when clicking outside right inspector panel
+        if (rightPanel != null) {
+            rightPanel.unfocusAll();
+        }
+
+        // 2. Check Click on 3D Viewport (32 <= mouseY < timelineTop)
+        if (mouseY >= topBarH && mouseY < timelineTop) {
+            if (button == 1 || button == 2) {
+                if (SequencerViewportManager.getCurrentMode() != SequencerViewportManager.CameraMode.WORK_CAMERA) {
+                    SequencerViewportManager.setCurrentMode(SequencerViewportManager.CameraMode.WORK_CAMERA);
+                    updatePreviewCamera();
+                    this.init();
+                }
+                this.isViewportNavigating = true;
+                this.lastViewportMouseX = mouseX;
+                this.lastViewportMouseY = mouseY;
+                return true;
+            }
+            return false;
+        }
+
+        // 3. Timeline Area Coordinates
+        int timelineLeft = 0;
+        int timelineWidth = mainAreaW;
+        int trackHeaderWidth = getTrackHeaderWidth();
+        int trackHeaderLeft = timelineLeft;
+        int timelineTrackLeft = timelineLeft + trackHeaderWidth;
+        int timelineTrackWidth = getTimelineTrackWidth();
+        int rulerHeight = getRulerHeight();
+        int waveformHeight = getWaveformHeight();
+        int channelHeight = getChannelHeight();
+
+        List<MusicSequenceChannel> channels = currentSequence.getChannels();
+        int channelCount = channels.size();
+        int toolbarHeight = getTimelineToolbarHeight();
+        int canvasY = timelineTop + toolbarHeight;
+        int canvasBottom = this.height;
+        int waveTopY = canvasY + rulerHeight;
+        int trackAreaY = waveTopY + waveformHeight;
+
+        // Check Click on Left Track Header Column
         if (mouseX >= trackHeaderLeft && mouseX < timelineTrackLeft) {
+            int delL = trackHeaderWidth < 90 ? (timelineTrackLeft - 18) : (timelineTrackLeft - 22);
+            int delR = trackHeaderWidth < 90 ? (timelineTrackLeft - 4) : (timelineTrackLeft - 6);
+            int subL = trackHeaderWidth < 90 ? (timelineTrackLeft - 38) : (timelineTrackLeft - 50);
+            int subR = trackHeaderWidth < 90 ? (timelineTrackLeft - 20) : (timelineTrackLeft - 25);
+
             // Check delete button [✕] and [+SUB] button for each channel row
             for (int c = 0; c < channels.size(); c++) {
                 int trackY = trackAreaY + (c * channelHeight) - (int) channelScrollY;
-                if (trackY >= trackAreaY && trackY + channelHeight <= timelineTop + totalHeight) {
+                if (trackY >= trackAreaY && trackY + channelHeight <= canvasBottom) {
                     MusicSequenceChannel ch = channels.get(c);
-                    // Check delete button [✕]
-                    if (mouseX >= timelineTrackLeft - 22 && mouseX <= timelineTrackLeft - 6 && mouseY >= trackY + 5 && mouseY <= trackY + 23) {
-                        this.modalDeleteChannelIndex = c;
-                        this.activeModal = ModalType.CONFIRM_DELETE_CHANNEL;
+                    // Delete button [✕]
+                    if (mouseX >= delL && mouseX <= delR && mouseY >= trackY + 4 && mouseY <= trackY + channelHeight - 4) {
+                        openConfirmDeleteChannelModal(c);
                         return true;
                     }
-                    // Check [+SUB] button on puppet channels (main or sub-channel)
+                    // [+SUB] button on puppet channels
                     if (MusicSequenceChannel.TYPE_PUPPET.equalsIgnoreCase(ch.getType())) {
-                        if (mouseX >= timelineTrackLeft - 50 && mouseX <= timelineTrackLeft - 25 && mouseY >= trackY + 5 && mouseY <= trackY + 23) {
+                        if (mouseX >= subL && mouseX <= subR && mouseY >= trackY + 4 && mouseY <= trackY + channelHeight - 4) {
                             addSubChannel(ch);
                             return true;
                         }
@@ -1137,9 +1652,9 @@ public class MusicSequenceScreen extends Screen {
                 }
             }
 
-            // Check click on "+ ADD CHANNEL" button below all channels
+            // Click on "+ ADD CHANNEL" button below all channels
             int addBtnY = trackAreaY + (channelCount * channelHeight) + 4 - (int) channelScrollY;
-            if (addBtnY >= trackAreaY && addBtnY + 22 <= timelineTop + totalHeight + 10) {
+            if (addBtnY >= trackAreaY && addBtnY + 22 <= canvasBottom + 10) {
                 if (mouseX >= trackHeaderLeft + 4 && mouseX <= timelineTrackLeft - 4 && mouseY >= addBtnY && mouseY <= addBtnY + 22) {
                     openAddChannelModal();
                     return true;
@@ -1147,10 +1662,10 @@ public class MusicSequenceScreen extends Screen {
             }
         }
 
-        // 2. Check Click on Right Timeline Tracks Canvas
+        // Check Click on Right Timeline Tracks Canvas
         if (mouseX >= timelineTrackLeft && mouseX <= timelineLeft + timelineWidth) {
             // Middle Click (button 2) or Right Click on empty canvas -> Start Timeline Panning
-            if (button == 2 || (button == 1 && mouseY >= timelineTop && mouseY <= timelineTop + totalHeight)) {
+            if (button == 2 || (button == 1 && mouseY >= canvasY && mouseY <= canvasBottom)) {
                 boolean hitKeyframe = false;
                 if (button == 1 && mouseY >= trackAreaY) {
                     List<MusicSequenceEntry> entries = currentSequence.getEntries();
@@ -1178,13 +1693,13 @@ public class MusicSequenceScreen extends Screen {
 
             // Direct Click on Playhead handle or vertical scrubber line
             double playheadX = timelineTrackLeft + ((playheadMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
-            if (Math.abs(mouseX - playheadX) <= 8 && mouseY >= timelineTop && mouseY <= timelineTop + totalHeight) {
+            if (Math.abs(mouseX - playheadX) <= 8 && mouseY >= canvasY && mouseY <= canvasBottom) {
                 this.isDraggingPlayhead = true;
                 return true;
             }
 
             // Click on Ruler -> START Marker, END Marker, or Seek Playhead
-            if (mouseY >= timelineTop && mouseY <= timelineTop + rulerHeight) {
+            if (mouseY >= canvasY && mouseY <= canvasY + rulerHeight) {
                 double startX = timelineTrackLeft + ((currentSequence.getStartMs() - timeScrollMs) / 1000.0) * pixelsPerSecond;
                 double endX = timelineTrackLeft + ((getEffectiveEndMs() - timeScrollMs) / 1000.0) * pixelsPerSecond;
 
@@ -1206,7 +1721,7 @@ public class MusicSequenceScreen extends Screen {
             }
 
             // Click on Audio Waveform Channel -> Seek and Drag Playhead
-            if (mouseY >= canvasY && mouseY < trackAreaY) {
+            if (mouseY >= waveTopY && mouseY < trackAreaY) {
                 double relX = mouseX - timelineTrackLeft;
                 double clickedTimeMs = timeScrollMs + (relX / pixelsPerSecond) * 1000.0;
                 this.playheadMs = Math.max(0.0, Math.min(getEffectiveEndMs(), clickedTimeMs));
@@ -1216,7 +1731,7 @@ public class MusicSequenceScreen extends Screen {
             }
 
             // Check Click on Keyframe Nodes, Duration Bars, or Track Canvas
-            if (mouseY >= trackAreaY && mouseY <= timelineTop + totalHeight) {
+            if (mouseY >= trackAreaY && mouseY <= canvasBottom) {
                 double relX = mouseX - timelineTrackLeft;
                 long clickedMs = snapTimestamp((long) Math.max(0.0, timeScrollMs + (relX / pixelsPerSecond) * 1000.0), hasAltDown());
 
@@ -1231,28 +1746,91 @@ public class MusicSequenceScreen extends Screen {
 
                     boolean isPuppet = "PUPPET".equalsIgnoreCase(entry.getActionType()) || (channelIndex < channels.size() && "PUPPET".equalsIgnoreCase(channels.get(channelIndex).getType()));
                     boolean isCamera = "CAMERA".equalsIgnoreCase(entry.getActionType()) || (channelIndex < channels.size() && "CAMERA".equalsIgnoreCase(channels.get(channelIndex).getType()));
+                    boolean isScreenEffect = "SCREEN_EFFECT".equalsIgnoreCase(entry.getActionType()) || "SCREEN_EFFECTS".equalsIgnoreCase(entry.getActionType()) || (channelIndex < channels.size() && MusicSequenceChannel.TYPE_SCREEN_EFFECT.equalsIgnoreCase(channels.get(channelIndex).getType()));
+                    String pSub = entry.getSubAction() != null ? entry.getSubAction().toUpperCase(Locale.ROOT) : "";
+                    boolean isPuppetNonDuration = isPuppet && ("DESPAWN".equals(pSub) || "SPAWN".equals(pSub) || "TOGGLE_AI".equals(pSub));
+
+                    if (isScreenEffect && entry.getTotalDurationMs() <= 0) {
+                        entry.setDurationMs(1000);
+                        updateScreenEffectEntryCommand(entry);
+                        totalW = (entry.getTotalDurationMs() / 1000.0) * pixelsPerSecond;
+                    }
+
+                    boolean hasDurationBar = (!isCamera && !isPuppetNonDuration && totalW > 0);
 
                     // Check clicking on right edge stretch/resize handle (all duration actions EXCEPT puppet and camera)
-                    if (button == 0 && !isPuppet && !isCamera && totalW > 0) {
+                    if (button == 0 && !isPuppet && !isCamera && hasDurationBar) {
                         double rightEdgeX = entryX + totalW;
                         if (Math.abs(mouseX - rightEdgeX) <= 6 && mouseY >= entryTrackY && mouseY <= entryTrackY + channelHeight) {
                             this.isStretchingDuration = true;
                             this.stretchingEntry = entry;
                             this.stretchingEntryIndex = i;
                             this.selectedEntryIndex = i;
+                            if (this.rightPanel != null) {
+                                this.rightPanel.updateSelection(i, entry);
+                            }
                             return true;
                         }
                     }
 
-                    boolean hit = (!isCamera && totalW > 0)
+                    // Check clicking on puppet action phase dividers to adjust individual phase durations ("time zones")
+                    if (button == 0 && isPuppet && hasDurationBar) {
+                        PuppetActionType<?> actType = ModPuppetActions.resolve(entry.getCommand());
+                        List<ActionTimingPhase> phases = actType.getTimingPhases();
+                        long cumMs = entry.getTimestampMs();
+                        for (int p = 0; p < phases.size(); p++) {
+                            ActionTimingPhase phase = phases.get(p);
+                            int pMs = entry.getPhaseMs(phase, p);
+                            cumMs += pMs;
+                            double boundaryX = timelineTrackLeft + ((cumMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
+                            if (Math.abs(mouseX - boundaryX) <= 6 && mouseY >= entryTrackY && mouseY <= entryTrackY + channelHeight) {
+                                this.isDraggingPuppetPhase = true;
+                                this.puppetDraggingEntry = entry;
+                                this.puppetDraggingEntryIndex = i;
+                                this.puppetDraggingPhaseIndex = p;
+                                this.puppetOriginalPhaseMs = pMs;
+                                this.puppetOriginalNextPhaseMs = (p < phases.size() - 1) ? entry.getPhaseMs(phases.get(p + 1), p + 1) : 0;
+                                this.puppetPhaseDragStartMs = cumMs;
+                                this.selectedEntryIndex = i;
+                                if (this.rightPanel != null) {
+                                    this.rightPanel.updateSelection(i, entry);
+                                }
+                                playButtonSound();
+                                return true;
+                            }
+                        }
+                    }
+
+                    int hitBoxW = 16;
+                    if (!hasDurationBar) {
+                        String bTxt = "";
+                        if (isPuppet) {
+                            if ("DESPAWN".equals(pSub)) bTxt = "✕ DESPAWN";
+                            else if ("SPAWN".equals(pSub)) bTxt = "★ SPAWN";
+                            else if ("TOGGLE_AI".equals(pSub)) bTxt = "⚡ TOGGLE AI";
+                        } else if (entry.getDescription() != null && !entry.getDescription().isBlank()) {
+                            bTxt = entry.getDescription();
+                        }
+                        if (!bTxt.isEmpty()) {
+                            hitBoxW = this.font.width(bTxt) + 16;
+                        }
+                    }
+
+                    boolean hit = hasDurationBar
                             ? (mouseX >= entryX - 4 && mouseX <= entryX + totalW + 4 && mouseY >= entryTrackY && mouseY <= entryTrackY + channelHeight)
-                            : (Math.abs(mouseX - entryX) <= 8 && mouseY >= entryTrackY && mouseY <= entryTrackY + channelHeight);
+                            : ((mouseX >= entryX - 8 && mouseX <= entryX + Math.max(16, hitBoxW)) && mouseY >= entryTrackY && mouseY <= entryTrackY + channelHeight);
 
                     if (hit) {
                         this.selectedEntryIndex = i;
+                        if (this.rightPanel != null) {
+                            this.rightPanel.updateSelection(i, entry);
+                        }
                         if (hasShiftDown() && (button == 0 || button == 1)) {
                             deleteEntry(i);
                             this.selectedEntryIndex = -1;
+                            if (this.rightPanel != null) {
+                                this.rightPanel.updateSelection(-1, null);
+                            }
                             return true;
                         }
                         if (button == 0) {
@@ -1263,6 +1841,9 @@ public class MusicSequenceScreen extends Screen {
                                 this.draggedEntry = copy;
                                 this.draggedEntryIndex = currentSequence.getEntries().indexOf(copy);
                                 this.selectedEntryIndex = this.draggedEntryIndex;
+                                if (this.rightPanel != null) {
+                                    this.rightPanel.updateSelection(this.selectedEntryIndex, copy);
+                                }
                                 this.lastDragMouseX = mouseX;
                                 playButtonSound();
                                 return true;
@@ -1366,7 +1947,6 @@ public class MusicSequenceScreen extends Screen {
                                     }
                                 }
                             }
-                            // If none before clickedMs, check if there are any camera keyframes in the sequence (closest one)
                             if (prevCamEntry == null) {
                                 long minDiff = Long.MAX_VALUE;
                                 for (MusicSequenceEntry e : currentSequence.getEntries()) {
@@ -1383,7 +1963,22 @@ public class MusicSequenceScreen extends Screen {
                                 }
                             }
 
-                            if (prevCamEntry != null) {
+                            boolean isWorkCam = (SequencerViewportManager.getCurrentMode() == SequencerViewportManager.CameraMode.WORK_CAMERA);
+                            Vec3 defaultCamPos = isWorkCam ? SequencerViewportManager.getWorkCameraPos() : (minecraft != null && minecraft.player != null ? minecraft.player.getEyePosition() : Vec3.ZERO);
+                            float defaultCamYaw = isWorkCam ? SequencerViewportManager.getWorkCameraYaw() : (minecraft != null && minecraft.player != null ? minecraft.player.getYRot() : 0.0f);
+                            float defaultCamPitch = isWorkCam ? SequencerViewportManager.getWorkCameraPitch() : (minecraft != null && minecraft.player != null ? minecraft.player.getXRot() : 0.0f);
+                            float defaultCamRoll = isWorkCam ? SequencerViewportManager.getWorkCameraRoll() : 0.0f;
+                            double defaultCamFov = isWorkCam ? SequencerViewportManager.getWorkCameraFov() : 70.0;
+
+                            if (isWorkCam) {
+                                newEntry.setCameraX(defaultCamPos.x);
+                                newEntry.setCameraY(defaultCamPos.y);
+                                newEntry.setCameraZ(defaultCamPos.z);
+                                newEntry.setCameraYaw(defaultCamYaw);
+                                newEntry.setCameraPitch(defaultCamPitch);
+                                newEntry.setCameraRoll(defaultCamRoll);
+                                newEntry.setCameraFov(defaultCamFov);
+                            } else if (prevCamEntry != null) {
                                 newEntry.setCameraX(prevCamEntry.getCameraX());
                                 newEntry.setCameraY(prevCamEntry.getCameraY());
                                 newEntry.setCameraZ(prevCamEntry.getCameraZ());
@@ -1391,6 +1986,17 @@ public class MusicSequenceScreen extends Screen {
                                 newEntry.setCameraPitch(prevCamEntry.getCameraPitch());
                                 newEntry.setCameraRoll(prevCamEntry.getCameraRoll());
                                 newEntry.setCameraFov(prevCamEntry.getCameraFov() > 0 ? prevCamEntry.getCameraFov() : 70.0);
+                            } else {
+                                newEntry.setCameraX(defaultCamPos.x);
+                                newEntry.setCameraY(defaultCamPos.y);
+                                newEntry.setCameraZ(defaultCamPos.z);
+                                newEntry.setCameraYaw(defaultCamYaw);
+                                newEntry.setCameraPitch(defaultCamPitch);
+                                newEntry.setCameraRoll(defaultCamRoll);
+                                newEntry.setCameraFov(defaultCamFov);
+                            }
+
+                            if (prevCamEntry != null) {
                                 newEntry.setCameraMode(prevCamEntry.getCameraMode() != null ? prevCamEntry.getCameraMode() : "KEYFRAME");
                                 newEntry.setSplineMode(prevCamEntry.getSplineMode() != null ? prevCamEntry.getSplineMode() : "CATMULL_ROM");
                                 newEntry.setCameraEasing(prevCamEntry.getCameraEasing() != null ? prevCamEntry.getCameraEasing() : "EASE_IN_OUT_CUBIC");
@@ -1412,15 +2018,7 @@ public class MusicSequenceScreen extends Screen {
                                 newEntry.setLookAtZ(prevCamEntry.getLookAtZ());
                                 newEntry.setLookAtTarget(prevCamEntry.getLookAtTarget());
                                 newEntry.setLookAtWeight(prevCamEntry.getLookAtWeight());
-                            } else if (minecraft != null && minecraft.player != null) {
-                                Vec3 eyePos = minecraft.player.getEyePosition();
-                                newEntry.setCameraX(eyePos.x);
-                                newEntry.setCameraY(eyePos.y);
-                                newEntry.setCameraZ(eyePos.z);
-                                newEntry.setCameraYaw(minecraft.player.getYRot());
-                                newEntry.setCameraPitch(minecraft.player.getXRot());
-                                newEntry.setCameraRoll(0.0f);
-                                newEntry.setCameraFov(70.0);
+                            } else {
                                 newEntry.setCameraMode("KEYFRAME");
                                 newEntry.setSplineMode("CATMULL_ROM");
                                 newEntry.setCameraEasing("EASE_IN_OUT_CUBIC");
@@ -1433,13 +2031,21 @@ public class MusicSequenceScreen extends Screen {
                             newEntry.setCommand(String.format(Locale.US, "camera keyframe %.1f %.1f %.1f %.0f %.0f 0 70",
                                     newEntry.getCameraX(), newEntry.getCameraY(), newEntry.getCameraZ(),
                                     newEntry.getCameraYaw(), newEntry.getCameraPitch()));
+                        } else if (channel.getType().equalsIgnoreCase(MusicSequenceChannel.TYPE_SCREEN_EFFECT) || channel.getType().equalsIgnoreCase("SCREEN_EFFECT") || channel.getType().equalsIgnoreCase("SCREEN_EFFECTS")) {
+                            newEntry.setActionType(MusicSequenceChannel.TYPE_SCREEN_EFFECT);
+                            newEntry.setSubAction("SCREEN_SHAKE");
+                            newEntry.setScreenEffectId("fractured_utils:screen_shake");
+                            newEntry.setDurationMs(1000);
+                            newEntry.setScreenEffectIntensity(2.0f);
+                            newEntry.setScreenEffectFrequency(20.0f);
+                            newEntry.setScreenEffectDecay(true);
+                            updateScreenEffectEntryCommand(newEntry);
                         }
                         currentSequence.getEntries().add(newEntry);
                         currentSequence.sortEntriesByTimestamp();
                         saveCurrentSequenceToWorkingMap();
                         int newIndex = currentSequence.getEntries().indexOf(newEntry);
-                        this.selectedEntryIndex = newIndex;
-                        openEditEntryModal(newIndex, clickedMs);
+                        setSelectedEntryIndex(newIndex);
                         return true;
                     }
                 }
@@ -1455,15 +2061,35 @@ public class MusicSequenceScreen extends Screen {
             return true;
         }
 
-        double scale = getLayoutScale();
-        if (scale < 1.0) {
-            mouseX /= scale;
-            mouseY /= scale;
-            dragX /= scale;
-            dragY /= scale;
+        int mainAreaW = getMainAreaWidth();
+
+        // 1. Right Inspector Panel Dragging
+        if (!isRightPanelCollapsed && mouseX >= mainAreaW) {
+            if (rightPanel != null && rightPanel.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
+                return true;
+            }
+            return true;
         }
 
-        int timelineTrackLeft = 14 + TRACK_HEADER_WIDTH;
+        // 2. Viewport Navigation Dragging
+        if (isViewportNavigating) {
+            double deltaX = mouseX - lastViewportMouseX;
+            double deltaY = mouseY - lastViewportMouseY;
+            lastViewportMouseX = mouseX;
+            lastViewportMouseY = mouseY;
+
+            if (button == 1) { // Right-Click drag -> look around
+                float sens = 0.15f;
+                SequencerViewportManager.adjustWorkCameraAngles((float) (deltaX * sens), (float) (deltaY * sens));
+                return true;
+            } else if (button == 2) { // Middle-Click drag -> pan camera
+                SequencerViewportManager.panWorkCamera(deltaX, deltaY);
+                return true;
+            }
+        }
+
+        // 3. Timeline Dragging
+        int timelineTrackLeft = getTrackHeaderWidth();
 
         if (isDraggingPlayhead) {
             double relX = mouseX - timelineTrackLeft;
@@ -1509,6 +2135,46 @@ public class MusicSequenceScreen extends Screen {
             return true;
         }
 
+        if (isDraggingPuppetPhase && puppetDraggingEntry != null && puppetDraggingPhaseIndex >= 0) {
+            double relX = mouseX - timelineTrackLeft;
+            long currentMouseMs = (long) Math.max(0.0, timeScrollMs + (relX / pixelsPerSecond) * 1000.0);
+            long snappedMouseMs = snapTimestamp(currentMouseMs, hasAltDown());
+
+            PuppetActionType<?> actType = ModPuppetActions.resolve(puppetDraggingEntry.getCommand());
+            List<ActionTimingPhase> phases = actType.getTimingPhases();
+            if (puppetDraggingPhaseIndex < phases.size()) {
+                ActionTimingPhase currentPhase = phases.get(puppetDraggingPhaseIndex);
+
+                // Calculate start timestamp of current phase
+                long startOfCurrentPhaseMs = puppetDraggingEntry.getTimestampMs();
+                for (int p = 0; p < puppetDraggingPhaseIndex; p++) {
+                    startOfCurrentPhaseMs += puppetDraggingEntry.getPhaseMs(phases.get(p), p);
+                }
+
+                if (hasShiftDown() && puppetDraggingPhaseIndex < phases.size() - 1) {
+                    // Shift + Drag: Split / Dual-roller edit (adjusts current and next phase inversely, keeping total fixed)
+                    ActionTimingPhase nextPhase = phases.get(puppetDraggingPhaseIndex + 1);
+                    long combinedMs = (long) puppetOriginalPhaseMs + puppetOriginalNextPhaseMs;
+                    long newPhaseMs = Math.max(0L, Math.min(combinedMs, snappedMouseMs - startOfCurrentPhaseMs));
+                    long newNextMs = combinedMs - newPhaseMs;
+
+                    puppetDraggingEntry.setPhaseMs(currentPhase, puppetDraggingPhaseIndex, (int) newPhaseMs);
+                    puppetDraggingEntry.setPhaseMs(nextPhase, puppetDraggingPhaseIndex + 1, (int) newNextMs);
+                } else {
+                    // Normal Drag: Ripple edit (adjusts current phase duration, shifting subsequent phases)
+                    long newPhaseMs = Math.max(0L, snappedMouseMs - startOfCurrentPhaseMs);
+                    puppetDraggingEntry.setPhaseMs(currentPhase, puppetDraggingPhaseIndex, (int) newPhaseMs);
+                }
+
+                updatePuppetEntryCommand(puppetDraggingEntry);
+
+                if (this.rightPanel != null && selectedEntryIndex >= 0) {
+                    this.rightPanel.updateSelection(selectedEntryIndex, puppetDraggingEntry);
+                }
+            }
+            return true;
+        }
+
         if (isStretchingDuration && stretchingEntry != null) {
             double relX = mouseX - timelineTrackLeft;
             long currentMouseMs = (long) Math.max(0.0, timeScrollMs + (relX / pixelsPerSecond) * 1000.0);
@@ -1522,8 +2188,14 @@ public class MusicSequenceScreen extends Screen {
                 int newDelayTicks = Math.max(0, newTotalTicks - animTicks);
                 stretchingEntry.getDialog().setDelayTicks(newDelayTicks);
                 stretchingEntry.setDurationMs((int) newDurationMs);
+            } else if ("SCREEN_EFFECT".equalsIgnoreCase(stretchingEntry.getActionType()) || "SCREEN_EFFECTS".equalsIgnoreCase(stretchingEntry.getActionType()) || isChannelType(stretchingEntry, MusicSequenceChannel.TYPE_SCREEN_EFFECT)) {
+                stretchingEntry.setDurationMs((int) newDurationMs);
+                updateScreenEffectEntryCommand(stretchingEntry);
             } else {
                 stretchingEntry.setDurationMs((int) newDurationMs);
+            }
+            if (this.rightPanel != null && selectedEntryIndex >= 0) {
+                this.rightPanel.updateSelection(selectedEntryIndex, stretchingEntry);
             }
             return true;
         }
@@ -1533,6 +2205,9 @@ public class MusicSequenceScreen extends Screen {
             long rawTs = (long) Math.max(0.0, timeScrollMs + (relX / pixelsPerSecond) * 1000.0);
             long snappedTs = snapTimestamp(rawTs, hasAltDown());
             draggedEntry.setTimestampMs(snappedTs);
+            if (this.rightPanel != null && selectedEntryIndex >= 0) {
+                this.rightPanel.updateSelection(selectedEntryIndex, draggedEntry);
+            }
             return true;
         }
 
@@ -1545,14 +2220,35 @@ public class MusicSequenceScreen extends Screen {
             return true;
         }
 
+        if (!isRightPanelCollapsed && this.rightPanel != null) {
+            this.rightPanel.mouseReleased(mouseX, mouseY, button);
+        }
+
+        if (button == 1 || button == 2) {
+            this.isViewportNavigating = false;
+        }
+
         isPanningTimeline = false;
         isDraggingStartMarker = false;
         isDraggingEndMarker = false;
+        if (isDraggingPuppetPhase) {
+            isDraggingPuppetPhase = false;
+            puppetDraggingEntry = null;
+            puppetDraggingEntryIndex = -1;
+            puppetDraggingPhaseIndex = -1;
+            saveCurrentSequenceToWorkingMap();
+            if (this.rightPanel != null && selectedEntryIndex >= 0) {
+                this.rightPanel.updateSelection(selectedEntryIndex, getSelectedEntry());
+            }
+        }
         if (isStretchingDuration) {
             isStretchingDuration = false;
             stretchingEntry = null;
             stretchingEntryIndex = -1;
             saveCurrentSequenceToWorkingMap();
+            if (this.rightPanel != null && selectedEntryIndex >= 0) {
+                this.rightPanel.updateSelection(selectedEntryIndex, getSelectedEntry());
+            }
         }
         if (draggedEntry != null) {
             currentSequence.sortEntriesByTimestamp();
@@ -1561,6 +2257,9 @@ public class MusicSequenceScreen extends Screen {
             }
             saveCurrentSequenceToWorkingMap();
             updatePreviewCamera();
+            if (this.rightPanel != null && selectedEntryIndex >= 0) {
+                this.rightPanel.updateSelection(selectedEntryIndex, getSelectedEntry());
+            }
             draggedEntry = null;
             draggedEntryIndex = -1;
         }
@@ -1598,13 +2297,74 @@ public class MusicSequenceScreen extends Screen {
             return true;
         }
 
-        if (bpmEditBox != null && bpmEditBox.isFocused()) return super.keyPressed(keyCode, scanCode, modifiers);
+        // If right inspector panel has an edit box focused, forward keystrokes there!
+        if (!isRightPanelCollapsed && this.rightPanel != null && this.rightPanel.isAnyFieldFocused()) {
+            if (this.rightPanel.keyPressed(keyCode, scanCode, modifiers)) {
+                return true;
+            }
+            if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE || keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER || keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) {
+                this.rightPanel.unfocusAll();
+                return true;
+            }
+            // Consume all other keys while an inspector edit box is focused to prevent screen hotkeys
+            // (Space, P, G, Backspace/Delete, Home, End, C, K, Tab, etc.) from triggering!
+            return true;
+        }
+
+        if (bpmEditBox != null && bpmEditBox.isFocused()) {
+            if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE || keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER || keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) {
+                bpmEditBox.setFocused(false);
+                return true;
+            }
+            if (bpmEditBox.keyPressed(keyCode, scanCode, modifiers)) {
+                return true;
+            }
+            return true;
+        }
 
         if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
             this.onClose();
             return true;
         }
 
+        // Tab: Toggle Work Camera vs Sequence Camera
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_TAB) {
+            toggleCameraMode();
+            return true;
+        }
+
+        // P: Toggle Right Inspector Panel
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_P) {
+            toggleRightPanel();
+            return true;
+        }
+
+        // G: Toggle Viewport Composition Guides
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_G) {
+            this.showCompositionGuides = !this.showCompositionGuides;
+            this.init();
+            return true;
+        }
+
+        // X: Toggle Screen Effects Live Preview
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_X) {
+            this.isPreviewScreenEffects = !this.isPreviewScreenEffects;
+            if (!this.isPreviewScreenEffects) {
+                ClientScreenEffectHandler.clearAllEffects();
+            } else {
+                updatePreviewScreenEffects();
+            }
+            this.init();
+            return true;
+        }
+
+        // Ctrl + S: Quick Save
+        if (hasControlDown() && keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_S) {
+            saveCurrentFile();
+            return true;
+        }
+
+        // Ctrl + D: Duplicate selected entry
         if (hasControlDown() && keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_D) {
             duplicateSelectedEntry();
             return true;
@@ -1615,23 +2375,16 @@ public class MusicSequenceScreen extends Screen {
             return true;
         }
 
-        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_K) {
+        // C or K: Stamp Camera Keyframe at Playhead
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_C || keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_K) {
             stampCameraKeyframeAtPlayhead();
             return true;
         }
 
-        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_C) {
-            this.cameraPreviewEnabled = !this.cameraPreviewEnabled;
-            if (!this.cameraPreviewEnabled) {
-                CustomCameraManager.clearCustomCamera();
-                this.isPreviewCameraActive = false;
-                saveFeedbackMessage = "Camera Preview: OFF (Freecam Mode)";
-            } else {
-                saveFeedbackMessage = "Camera Preview: ON";
-                updatePreviewCamera();
-            }
-            saveFeedbackTime = System.currentTimeMillis();
-            this.init();
+        // R: Reset Work Camera Dutch Roll to level 0°
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_R && SequencerViewportManager.getCurrentMode() == SequencerViewportManager.CameraMode.WORK_CAMERA) {
+            SequencerViewportManager.resetWorkCameraRoll();
+            playButtonSound();
             return true;
         }
 
@@ -1646,11 +2399,8 @@ public class MusicSequenceScreen extends Screen {
         }
 
         if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_DELETE || keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_BACKSPACE) {
-            if (selectedEntryIndex >= 0 && selectedEntryIndex < currentSequence.getEntries().size()) {
-                deleteEntry(selectedEntryIndex);
-                selectedEntryIndex = -1;
-                return true;
-            }
+            deleteSelectedEntry();
+            return true;
         }
 
         if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_HOME) {
@@ -1684,11 +2434,6 @@ public class MusicSequenceScreen extends Screen {
             return true;
         }
 
-        if (hasControlDown() && keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_S) {
-            saveCurrentFile();
-            return true;
-        }
-
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
@@ -1706,12 +2451,22 @@ public class MusicSequenceScreen extends Screen {
             }
             return true;
         }
+
+        if (!isRightPanelCollapsed && this.rightPanel != null && this.rightPanel.isAnyFieldFocused()) {
+            if (this.rightPanel.charTyped(codePoint, modifiers)) {
+                return true;
+            }
+        }
+
         return super.charTyped(codePoint, modifiers);
     }
 
     @Override
     public void tick() {
         super.tick();
+        if (!isRightPanelCollapsed && this.rightPanel != null) {
+            this.rightPanel.tick();
+        }
         if (activeModal == ModalType.ADD_CHANNEL) {
             if (modalChannelNameBox != null) modalChannelNameBox.tick();
             if (modalActorNameBox != null) modalActorNameBox.tick();
@@ -1745,41 +2500,155 @@ public class MusicSequenceScreen extends Screen {
         return getChannelIndex(entry.getActionType());
     }
 
+    private void updateViewportFlight(float dt) {
+        if (SequencerViewportManager.getCurrentMode() != SequencerViewportManager.CameraMode.WORK_CAMERA) return;
+        if (rightPanel != null && rightPanel.isAnyFieldFocused()) return;
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getWindow() == null) return;
+        long window = mc.getWindow().getWindow();
+
+        boolean rClick = GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
+        if (!rClick) return;
+
+        boolean w = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_W);
+        boolean s = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_S);
+        boolean a = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_A);
+        boolean d = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_D);
+        boolean space = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_SPACE);
+        boolean shift = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_SHIFT);
+        boolean q = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_Q);
+        boolean e = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_E);
+
+        SequencerViewportManager.updateFlight(dt, w, s, a, d, space, shift, q, e);
+    }
+
+    private void renderViewportGuides(GuiGraphics guiGraphics, int vx, int vy, int vw, int vh) {
+        int cx = vx + (vw / 2);
+        int cy = vy + (vh / 2);
+        int thirdsColor = 0x2200E5FF;
+        int tX1 = vx + (vw / 3);
+        int tX2 = vx + (vw * 2 / 3);
+        int tY1 = vy + (vh / 3);
+        int tY2 = vy + (vh * 2 / 3);
+
+        guiGraphics.fill(tX1, vy, tX1 + 1, vy + vh, thirdsColor);
+        guiGraphics.fill(tX2, vy, tX2 + 1, vy + vh, thirdsColor);
+        guiGraphics.fill(vx, tY1, vx + vw, tY1 + 1, thirdsColor);
+        guiGraphics.fill(vx, tY2, vx + vw, tY2 + 1, thirdsColor);
+
+        // Center reticle
+        int retColor = 0x4400FF88;
+        guiGraphics.fill(cx - 8, cy, cx - 2, cy + 1, retColor);
+        guiGraphics.fill(cx + 3, cy, cx + 9, cy + 1, retColor);
+        guiGraphics.fill(cx, cy - 8, cx + 1, cy - 2, retColor);
+        guiGraphics.fill(cx, cy + 3, cx + 1, cy + 9, retColor);
+        guiGraphics.fill(cx, cy, cx + 1, cy + 1, 0x8800FF88);
+    }
+
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        long nowNano = System.nanoTime();
+        if (this.lastFrameNanoTime > 0L) {
+            float dt = (float) ((nowNano - this.lastFrameNanoTime) / 1_000_000_000.0);
+            dt = Mth.clamp(dt, 0.0001f, 0.05f);
+            updateViewportFlight(dt);
+        }
+        this.lastFrameNanoTime = nowNano;
+
         double scale = getLayoutScale();
-        guiGraphics.pose().pushPose();
         int scaledMouseX = mouseX;
         int scaledMouseY = mouseY;
-        if (scale < 1.0) {
-            guiGraphics.pose().scale((float) scale, (float) scale, 1.0f);
-            scaledMouseX = (int) (mouseX / scale);
-            scaledMouseY = (int) (mouseY / scale);
+
+        int mainAreaW = getMainAreaWidth();
+        int rightPanelW = getRightPanelWidth();
+        int topBarH = 32;
+        int timelineTop = getTimelineTop();
+        int viewportH = Math.max(10, timelineTop - topBarH);
+
+        // Keep Axiom-style 3D viewport synchronized
+        SequencerViewportManager.setViewportBounds(0, topBarH, mainAreaW, viewportH);
+
+        // Non-viewport background fills
+        guiGraphics.fill(0, 0, this.width, topBarH, CYAN_BG);
+        guiGraphics.fill(0, topBarH - 1, this.width, topBarH, CYAN_MAIN);
+        guiGraphics.fill(0, timelineTop, mainAreaW, this.height, CYAN_BG);
+
+        // 3D Viewport Framing Borders
+        guiGraphics.fill(0, topBarH, mainAreaW, topBarH + 1, 0x5500E5FF);
+        guiGraphics.fill(0, timelineTop - 1, mainAreaW, timelineTop, 0x5500E5FF);
+        guiGraphics.fill(mainAreaW - 1, topBarH, mainAreaW, timelineTop, 0x8800E5FF);
+
+        // Viewport Floating Status Chip (Top-left inside viewport)
+        boolean isWorkCam = (SequencerViewportManager.getCurrentMode() == SequencerViewportManager.CameraMode.WORK_CAMERA);
+        int chipW = Math.min(215, Math.max(90, mainAreaW - 16));
+        int chipH = 18;
+        if (viewportH >= 24 && chipW >= 90) {
+            guiGraphics.fill(8, topBarH + 6, 8 + chipW, topBarH + 6 + chipH, 0xDD05090C);
+            guiGraphics.fill(8, topBarH + 6, 8 + chipW, topBarH + 7, isWorkCam ? 0xFFFFD700 : 0xFF00E5FF);
+
+            String modeBadge = isWorkCam ? (chipW > 150 ? "🎥 WORK CAM" : "🎥 WORK") : (chipW > 150 ? "🎬 SEQ CAM" : "🎬 SEQ");
+            guiGraphics.drawString(this.font, modeBadge, 14, topBarH + 11, isWorkCam ? 0xFFFFD700 : CYAN_MAIN, false);
+
+            if (chipW >= 150) {
+                long curSec = (long) (playheadMs / 1000.0);
+                long curMs = (long) (playheadMs % 1000.0);
+                String playheadTimeStr = String.format("%02d:%02d.%03d", curSec / 60, curSec % 60, curMs);
+                guiGraphics.drawString(this.font, playheadTimeStr, 14 + font.width(modeBadge) + 6, topBarH + 11, 0xFFFFFFFF, false);
+            }
+
+            if (chipW >= 200) {
+                double camFov = CustomCameraManager.isFovActive() ? CustomCameraManager.getCustomFov() : 70.0;
+                guiGraphics.drawString(this.font, String.format(Locale.US, "%.0f°", camFov), 8 + chipW - 24, topBarH + 11, TEXT_MUTED, false);
+            }
         }
 
-        int effWidth = (int) (this.width / scale);
-        int effHeight = (int) (this.height / scale);
+        if (isWorkCam && viewportH >= 36 && mainAreaW >= 220) {
+            guiGraphics.drawString(this.font, "RMB+WASD: Fly | Q/E: Roll | R: 0° | Mid: Pan | C: Stamp | Tab: Mode", 12, timelineTop - 15, 0x88AABBCC, false);
 
-        this.renderBackground(guiGraphics);
+            Vec3 wPos = SequencerViewportManager.getWorkCameraPos();
+            float wYaw = SequencerViewportManager.getWorkCameraYaw();
+            float wPitch = SequencerViewportManager.getWorkCameraPitch();
+            float wRoll = SequencerViewportManager.getWorkCameraRoll();
+            String coordsStr = String.format(Locale.US, "CAM: %.1f, %.1f, %.1f | Y:%.0f° P:%.0f° R:%.0f°", wPos.x, wPos.y, wPos.z, wYaw, wPitch, wRoll);
+            int coordsW = this.font.width(coordsStr);
+            if (mainAreaW >= coordsW + 28) {
+                guiGraphics.drawString(this.font, coordsStr, mainAreaW - coordsW - 12, topBarH + 11, 0xAA00E5FF, false);
+            }
+        }
 
-        int timelineLeft = 14;
-        int timelineWidth = effWidth - 28;
+        if (showCompositionGuides) {
+            renderViewportGuides(guiGraphics, 0, topBarH, mainAreaW, viewportH);
+        }
+
+        // Live Screen Effects Preview within Viewport
+        if (isPreviewScreenEffects) {
+            ClientScreenEffectHandler.renderScreenEffectsInArea(guiGraphics, partialTick, 0, topBarH, mainAreaW, viewportH);
+        }
+
+        int timelineLeft = 0;
+        int timelineWidth = mainAreaW;
+        int trackHeaderWidth = getTrackHeaderWidth();
         int trackHeaderLeft = timelineLeft;
-        int timelineTrackLeft = timelineLeft + TRACK_HEADER_WIDTH;
+        int timelineTrackLeft = timelineLeft + trackHeaderWidth;
         int timelineTrackWidth = getTimelineTrackWidth();
-        int timelineTop = 90;
-        int rulerHeight = 24;
-        int waveformHeight = 45;
-        int channelHeight = 28;
+        int toolbarHeight = getTimelineToolbarHeight();
+        int canvasY = timelineTop + toolbarHeight;
+        int canvasBottom = this.height;
+        int rulerHeight = getRulerHeight();
+        int rulerY = canvasY;
+        int waveformHeight = getWaveformHeight();
+        int waveTopY = rulerY + rulerHeight;
+        int trackAreaY = waveTopY + waveformHeight;
+        int channelHeight = getChannelHeight();
+        int channelAreaHeight = Math.max(10, canvasBottom - trackAreaY);
 
         List<MusicSequenceChannel> channels = currentSequence.getChannels();
         int channelCount = channels.size();
-        int contentHeight = rulerHeight + waveformHeight + (channelCount * channelHeight) + 32;
-        int maxTimelineHeight = Math.max(160, effHeight - 30 - timelineTop - 8);
-        int totalHeight = Math.min(maxTimelineHeight, contentHeight);
+        int totalChannelContentH = (channelCount * channelHeight) + 32;
 
         // Clamp channel vertical scroll
-        int maxScrollY = Math.max(0, contentHeight - totalHeight);
+        int maxScrollY = Math.max(0, totalChannelContentH - channelAreaHeight);
         this.channelScrollY = Math.max(0.0, Math.min(maxScrollY, this.channelScrollY));
 
         // Update preview playhead position if playing & Auto-Follow timeline
@@ -1804,105 +2673,89 @@ public class MusicSequenceScreen extends Screen {
         }
 
         updatePreviewCamera();
+        updatePreviewScreenEffects();
 
-        // Header Title Bar
-        guiGraphics.fill(0, 0, effWidth, 30, CYAN_BG);
-        guiGraphics.fill(0, 29, effWidth, 30, CYAN_MAIN);
-        guiGraphics.drawString(this.font, "TIMELINE MUSIC SEQUENCE ORCHESTRATOR", 16, 9, CYAN_MAIN, false);
-
-        // Playhead Time Counter & Inspector Status
-        long curSec = (long) (playheadMs / 1000.0);
-        long curMs = (long) (playheadMs % 1000.0);
-        String playheadTimeStr = String.format("%02d:%02d.%03d", curSec / 60, curSec % 60, curMs);
-        int headerPlayheadX = Math.max(260, effWidth / 2 - 50);
-        guiGraphics.drawString(this.font, "PLAYHEAD: " + playheadTimeStr, headerPlayheadX, 9, 0xFFFFD700, false);
-
-        int statusX = effWidth - 250;
-        if (selectedEntryIndex >= 0 && selectedEntryIndex < currentSequence.getEntries().size()) {
-            MusicSequenceEntry sel = currentSequence.getEntries().get(selectedEntryIndex);
-            long sec = sel.getTimestampMs() / 1000;
-            long ms = sel.getTimestampMs() % 1000;
-            int chIdx = getChannelIndex(sel);
-            String chName = (chIdx < channels.size()) ? channels.get(chIdx).getName() : sel.getActionType();
-            PuppetActionType<?> actType = ModPuppetActions.resolve(sel.getCommand());
-            String execLabel = actType.getExecutionLabel();
-            long execTotalMs = sel.getTimestampMs() + sel.getWindupMs() + sel.getJumpMs();
-            long sSec = execTotalMs / 1000;
-            long sMs = execTotalMs % 1000;
-            String selStr = (sel.getWindupMs() + sel.getJumpMs() > 0)
-                    ? String.format("CH%d (%s) @ %02d:%02d.%03d [%s %02d:%02d.%03d]", chIdx + 1, chName, sec / 60, sec % 60, ms, execLabel, sSec / 60, sSec % 60, sMs)
-                    : String.format("CH%d (%s) @ %02d:%02d.%03d", chIdx + 1, chName, sec / 60, sec % 60, ms);
-            if (this.font.width(selStr) > 230) {
-                selStr = this.font.plainSubstrByWidth(selStr, 224) + "..";
-            }
-            guiGraphics.drawString(this.font, selStr, statusX - 85, 9, CYAN_MAIN, false);
-
-            int dupBtnX = statusX + 125;
-            boolean isHoverDup = (scaledMouseX >= dupBtnX && scaledMouseX <= dupBtnX + 45 && scaledMouseY >= 6 && scaledMouseY <= 20);
-            guiGraphics.fill(dupBtnX, 6, dupBtnX + 45, 20, isHoverDup ? 0xFF00E5FF : 0x8800E5FF);
-            guiGraphics.drawCenteredString(this.font, "⧉ DUP", dupBtnX + 22, 9, isHoverDup ? 0xFF000000 : 0xFFFFFFFF);
-
-            int delBtnX = statusX + 175;
-            boolean isHoverDel = (scaledMouseX >= delBtnX && scaledMouseX <= delBtnX + 45 && scaledMouseY >= 6 && scaledMouseY <= 20);
-            guiGraphics.fill(delBtnX, 6, delBtnX + 45, 20, isHoverDel ? 0xFFFF3355 : 0x88FF3355);
-            guiGraphics.drawCenteredString(this.font, "🗑 DEL", delBtnX + 22, 9, 0xFFFFFFFF);
-        } else if (hasUnsavedChanges()) {
-            guiGraphics.drawString(this.font, "* UNSAVED CHANGES", statusX + 60, 9, 0xFFFF3366, false);
+        // Top status indicators
+        if (hasUnsavedChanges()) {
+            guiGraphics.drawString(this.font, "* UNSAVED CHANGES", this.width - 380, 11, 0xFFFF3366, false);
         } else if (saveFeedbackMessage != null && System.currentTimeMillis() - saveFeedbackTime < 3000L) {
-            String fb = saveFeedbackMessage;
-            if (this.font.width(fb) > 240) {
-                fb = this.font.plainSubstrByWidth(fb, 234) + "..";
-            }
-            guiGraphics.drawString(this.font, fb, statusX, 9, 0xFF00FF88, false);
+            guiGraphics.drawString(this.font, saveFeedbackMessage, this.width - 380, 11, 0xFF00FF88, false);
         }
 
-        // Timeline Outer Box
-        guiGraphics.fill(timelineLeft, timelineTop, timelineLeft + timelineWidth, timelineTop + totalHeight, CYAN_BG);
+        // 0. Transport Toolbar Background Strip
+        guiGraphics.fill(timelineLeft, timelineTop, timelineLeft + timelineWidth, canvasY, 0xEE081622);
         guiGraphics.fill(timelineLeft, timelineTop, timelineLeft + timelineWidth, timelineTop + 1, CARD_BORDER);
-        guiGraphics.fill(timelineLeft, timelineTop + totalHeight - 1, timelineLeft + timelineWidth, timelineTop + totalHeight, CARD_BORDER);
-        guiGraphics.fill(timelineLeft, timelineTop, timelineLeft + 1, timelineTop + totalHeight, CARD_BORDER);
-        guiGraphics.fill(timelineLeft + timelineWidth - 1, timelineTop, timelineLeft + timelineWidth, timelineTop + totalHeight, CARD_BORDER);
+        guiGraphics.fill(timelineLeft, canvasY - 1, timelineLeft + timelineWidth, canvasY, CARD_BORDER);
+        guiGraphics.fill(timelineLeft + timelineWidth - 1, timelineTop, timelineLeft + timelineWidth, canvasY, CARD_BORDER);
 
-        int waveTopY = timelineTop + rulerHeight;
-        int trackAreaY = waveTopY + waveformHeight;
+        // Timecode readout on toolbar
+        long curSec = (long) (playheadMs / 1000.0);
+        long curMs = (long) (playheadMs % 1000.0);
+        long totSec = getEffectiveEndMs() / 1000;
+        long totMsRem = getEffectiveEndMs() % 1000;
+        String timeDisplay = (timelineWidth < 400)
+                ? String.format("%02d:%02d / %02d:%02d", curSec / 60, curSec % 60, totSec / 60, totSec % 60)
+                : String.format("%02d:%02d.%03d / %02d:%02d.%03d", curSec / 60, curSec % 60, curMs, totSec / 60, totSec % 60, totMsRem);
+        int timeDisplayX = Math.max(lastTransportEndX + 6, 260);
+        int timeW = this.font.width(timeDisplay);
+        if (timeDisplayX + timeW <= timelineWidth - 4) {
+            guiGraphics.drawString(this.font, timeDisplay, timeDisplayX, timelineTop + (toolbarHeight - 8) / 2, CYAN_MAIN, false);
+        }
+
+        String statDisplay = "BPM: " + currentSequence.getBpm() + "  |  " + (int) pixelsPerSecond + " px/s";
+        int statW = this.font.width(statDisplay);
+        if (timelineWidth - statW - 12 > timeDisplayX + timeW + 12) {
+            guiGraphics.drawString(this.font, statDisplay, timelineWidth - statW - 8, timelineTop + (toolbarHeight - 8) / 2, TEXT_MUTED, false);
+        }
+
+        // Timeline Outer Canvas Box
+        guiGraphics.fill(timelineLeft, canvasY, timelineLeft + timelineWidth, canvasBottom, CYAN_BG);
+        guiGraphics.fill(timelineLeft, canvasY, timelineLeft + timelineWidth, canvasY + 1, CARD_BORDER);
+        guiGraphics.fill(timelineLeft, canvasBottom - 1, timelineLeft + timelineWidth, canvasBottom, CARD_BORDER);
+        guiGraphics.fill(timelineLeft + timelineWidth - 1, canvasY, timelineLeft + timelineWidth, canvasBottom, CARD_BORDER);
 
         // ==========================================
         // 1. LEFT COLUMN: PREMIERE-STYLE TRACK HEADERS
         // ==========================================
 
         // A. Header block for Ruler row ("TRACKS")
-        guiGraphics.fill(trackHeaderLeft, timelineTop, timelineTrackLeft, timelineTop + rulerHeight, 0xEE081622);
-        guiGraphics.fill(trackHeaderLeft, timelineTop + rulerHeight - 1, timelineTrackLeft, timelineTop + rulerHeight, 0xAA00E5FF);
-        guiGraphics.drawString(this.font, "CHANNELS", trackHeaderLeft + 10, timelineTop + 8, CYAN_MAIN, false);
+        guiGraphics.fill(trackHeaderLeft, rulerY, timelineTrackLeft, rulerY + rulerHeight, 0xEE081622);
+        guiGraphics.fill(trackHeaderLeft, rulerY + rulerHeight - 1, timelineTrackLeft, rulerY + rulerHeight, 0xAA00E5FF);
+        String headerLabel = trackHeaderWidth < 90 ? "CH" : "CHANNELS";
+        guiGraphics.drawString(this.font, headerLabel, trackHeaderLeft + (trackHeaderWidth < 90 ? 6 : 10), rulerY + 6, CYAN_MAIN, false);
 
         // B. Header block for Waveform row ("🎵 AUDIO")
         guiGraphics.fill(trackHeaderLeft, waveTopY, timelineTrackLeft, waveTopY + waveformHeight, 0xEE05101A);
         guiGraphics.fill(trackHeaderLeft, waveTopY, trackHeaderLeft + 4, waveTopY + waveformHeight, CYAN_MAIN);
         guiGraphics.fill(trackHeaderLeft, waveTopY + waveformHeight - 1, timelineTrackLeft, waveTopY + waveformHeight, 0x6600E5FF);
-        guiGraphics.drawString(this.font, "🎵 AUDIO / SONG", trackHeaderLeft + 8, waveTopY + 8, CYAN_MAIN, false);
+        String audioLabel = trackHeaderWidth < 90 ? "🎵 AUDIO" : "🎵 AUDIO / SONG";
+        guiGraphics.drawString(this.font, audioLabel, trackHeaderLeft + 8, waveTopY + 5, CYAN_MAIN, false);
 
         String trackName = currentSequence.getSongTrack();
         if (trackName != null && !trackName.isBlank()) {
             String shortSong = net.dandare21.fracturedutils.sound.event.AudioTrackDiscovery.formatTrackLabel(trackName);
-            if (this.font.width(shortSong) > TRACK_HEADER_WIDTH - 16) {
-                shortSong = this.font.plainSubstrByWidth(shortSong, TRACK_HEADER_WIDTH - 22) + "..";
+            if (this.font.width(shortSong) > trackHeaderWidth - 16) {
+                shortSong = this.font.plainSubstrByWidth(shortSong, trackHeaderWidth - 22) + "..";
             }
-            guiGraphics.drawString(this.font, shortSong, trackHeaderLeft + 8, waveTopY + 24, 0xFFAABBCC, false);
+            guiGraphics.drawString(this.font, shortSong, trackHeaderLeft + 8, waveTopY + 18, 0xFFAABBCC, false);
         } else {
-            guiGraphics.drawString(this.font, "[No Audio Track]", trackHeaderLeft + 8, waveTopY + 24, 0xFF778899, false);
+            guiGraphics.drawString(this.font, "[No Audio]", trackHeaderLeft + 8, waveTopY + 18, 0xFF778899, false);
         }
 
         // C. Scissored Channel Track Headers
         guiGraphics.enableScissor(
-                (int) (trackHeaderLeft * scale),
-                (int) (trackAreaY * scale),
-                (int) (timelineTrackLeft * scale),
-                (int) ((timelineTop + totalHeight) * scale)
+                trackHeaderLeft,
+                trackAreaY,
+                timelineTrackLeft,
+                canvasBottom
         );
 
         for (int c = 0; c < channels.size(); c++) {
             MusicSequenceChannel ch = channels.get(c);
             int trackY = trackAreaY + (c * channelHeight) - (int) channelScrollY;
+            if (trackY + channelHeight < trackAreaY || trackY > canvasBottom) {
+                continue;
+            }
 
             boolean isSub = ch.isSubChannel();
             boolean isPuppet = MusicSequenceChannel.TYPE_PUPPET.equalsIgnoreCase(ch.getType());
@@ -1919,18 +2772,22 @@ public class MusicSequenceScreen extends Screen {
             // Left accent stripe / tree connector
             int stripeColor = isSub ? MusicSequenceChannel.COLOR_PUPPET_SUB : ch.getColor();
             if (isSub) {
-                // Indented stripe with tree branch hook ↳
                 guiGraphics.fill(trackHeaderLeft + 7, trackY, trackHeaderLeft + 10, trackY + channelHeight, stripeColor);
                 guiGraphics.fill(trackHeaderLeft + 7, trackY + 11, trackHeaderLeft + 14, trackY + 13, stripeColor);
             } else {
-                // Left 4px accent stripe with channel color
                 guiGraphics.fill(trackHeaderLeft, trackY, trackHeaderLeft + 4, trackY + channelHeight, stripeColor);
             }
+
+            int delL = trackHeaderWidth < 90 ? (timelineTrackLeft - 18) : (timelineTrackLeft - 22);
+            int delR = trackHeaderWidth < 90 ? (timelineTrackLeft - 4) : (timelineTrackLeft - 6);
+            int subL = trackHeaderWidth < 90 ? (timelineTrackLeft - 38) : (timelineTrackLeft - 50);
+            int subR = trackHeaderWidth < 90 ? (timelineTrackLeft - 20) : (timelineTrackLeft - 25);
+            int reservedRight = isPuppet ? (trackHeaderWidth < 90 ? 42 : 56) : (trackHeaderWidth < 90 ? 22 : 28);
 
             // Channel Title
             String title = (isSub && !ch.getName().startsWith("↳")) ? ("↳ " + ch.getName()) : ("CH " + (c + 1) + ": " + ch.getName());
             int titleX = isSub ? (trackHeaderLeft + 16) : (trackHeaderLeft + 8);
-            int maxTitleW = isPuppet ? (TRACK_HEADER_WIDTH - (isSub ? 64 : 58)) : (TRACK_HEADER_WIDTH - 28);
+            int maxTitleW = Math.max(16, trackHeaderWidth - reservedRight - (isSub ? 16 : 8));
             if (this.font.width(title) > maxTitleW) {
                 title = this.font.plainSubstrByWidth(title, maxTitleW - 6) + "..";
             }
@@ -1958,41 +2815,43 @@ public class MusicSequenceScreen extends Screen {
                 }
             }
             int subX = isSub ? (trackHeaderLeft + 16) : (trackHeaderLeft + 8);
-            int maxSubW = isPuppet ? (TRACK_HEADER_WIDTH - (isSub ? 64 : 58)) : (TRACK_HEADER_WIDTH - 28);
+            int maxSubW = Math.max(16, trackHeaderWidth - reservedRight - (isSub ? 16 : 8));
             if (this.font.width(sub) > maxSubW) {
                 sub = this.font.plainSubstrByWidth(sub, maxSubW - 6) + "..";
             }
             guiGraphics.drawString(this.font, sub, subX, trackY + 16, isSub ? 0xFFAABBCC : 0xFF8899AA, false);
 
-            // [+SUB] Button for Puppet Channels (both root and sub-channels)
+            // [+SUB] Button for Puppet Channels
             if (isPuppet) {
-                int subBtnLeft = timelineTrackLeft - 50;
-                int subBtnRight = timelineTrackLeft - 25;
-                boolean isHoverSub = (scaledMouseX >= subBtnLeft && scaledMouseX <= subBtnRight && scaledMouseY >= trackY + 5 && scaledMouseY <= trackY + 23);
-                guiGraphics.fill(subBtnLeft, trackY + 5, subBtnRight, trackY + 21, isHoverSub ? 0xDD9944FF : 0x336622AA);
-                guiGraphics.fill(subBtnLeft, trackY + 5, subBtnRight, trackY + 6, 0x88BB77FF);
-                guiGraphics.fill(subBtnLeft, trackY + 20, subBtnRight, trackY + 21, 0x88BB77FF);
-                guiGraphics.fill(subBtnLeft, trackY + 5, subBtnLeft + 1, trackY + 21, 0x88BB77FF);
-                guiGraphics.fill(subBtnRight - 1, trackY + 5, subBtnRight, trackY + 21, 0x88BB77FF);
-                guiGraphics.drawCenteredString(this.font, "+SUB", subBtnLeft + 12, trackY + 9, isHoverSub ? 0xFFFFFFFF : 0xFFDD99FF);
+                boolean isHoverSub = (scaledMouseX >= subL && scaledMouseX <= subR && scaledMouseY >= trackY + 4 && scaledMouseY <= trackY + channelHeight - 4);
+                guiGraphics.fill(subL, trackY + 5, subR, trackY + channelHeight - 5, isHoverSub ? 0xDD9944FF : 0x336622AA);
+                guiGraphics.fill(subL, trackY + 5, subR, trackY + 6, 0x88BB77FF);
+                guiGraphics.fill(subL, trackY + channelHeight - 6, subR, trackY + channelHeight - 5, 0x88BB77FF);
+                guiGraphics.fill(subL, trackY + 5, subL + 1, trackY + channelHeight - 5, 0x88BB77FF);
+                guiGraphics.fill(subR - 1, trackY + 5, subR, trackY + channelHeight - 5, 0x88BB77FF);
+                String subTxt = trackHeaderWidth < 90 ? "+S" : "+SUB";
+                guiGraphics.drawCenteredString(this.font, subTxt, subL + ((subR - subL) / 2), trackY + 6, isHoverSub ? 0xFFFFFFFF : 0xFFDD99FF);
             }
 
             // Delete Channel Button [✕]
-            boolean isHoverDel = (scaledMouseX >= timelineTrackLeft - 22 && scaledMouseX <= timelineTrackLeft - 6 && scaledMouseY >= trackY + 5 && scaledMouseY <= trackY + 23);
-            guiGraphics.fill(timelineTrackLeft - 22, trackY + 5, timelineTrackLeft - 6, trackY + 21, isHoverDel ? 0x88FF3355 : 0x22334455);
-            guiGraphics.drawCenteredString(this.font, "✕", timelineTrackLeft - 14, trackY + 9, isHoverDel ? 0xFFFFFFFF : 0xFFAABBCC);
+            boolean isHoverDel = (scaledMouseX >= delL && scaledMouseX <= delR && scaledMouseY >= trackY + 4 && scaledMouseY <= trackY + channelHeight - 4);
+            guiGraphics.fill(delL, trackY + 5, delR, trackY + channelHeight - 5, isHoverDel ? 0x88FF3355 : 0x22334455);
+            guiGraphics.drawCenteredString(this.font, "✕", delL + ((delR - delL) / 2), trackY + 6, isHoverDel ? 0xFFFFFFFF : 0xFFAABBCC);
         }
 
         // D. "+ ADD CHANNEL" Button below all channels
         int addBtnY = trackAreaY + (channelCount * channelHeight) + 4 - (int) channelScrollY;
-        boolean isHoverAdd = (scaledMouseX >= trackHeaderLeft + 4 && scaledMouseX <= timelineTrackLeft - 4 && scaledMouseY >= addBtnY && scaledMouseY <= addBtnY + 22);
+        if (addBtnY >= trackAreaY - 20 && addBtnY <= canvasBottom) {
+            boolean isHoverAdd = (scaledMouseX >= trackHeaderLeft + 4 && scaledMouseX <= timelineTrackLeft - 4 && scaledMouseY >= addBtnY && scaledMouseY <= addBtnY + 22);
 
-        guiGraphics.fill(trackHeaderLeft + 4, addBtnY, timelineTrackLeft - 4, addBtnY + 22, isHoverAdd ? 0xDD00E5FF : 0x2200E5FF);
-        guiGraphics.fill(trackHeaderLeft + 4, addBtnY, timelineTrackLeft - 4, addBtnY + 1, CARD_BORDER);
-        guiGraphics.fill(trackHeaderLeft + 4, addBtnY + 21, timelineTrackLeft - 4, addBtnY + 22, CARD_BORDER);
-        guiGraphics.fill(trackHeaderLeft + 4, addBtnY, trackHeaderLeft + 5, addBtnY + 22, CARD_BORDER);
-        guiGraphics.fill(timelineTrackLeft - 5, addBtnY, timelineTrackLeft - 4, addBtnY + 22, CARD_BORDER);
-        guiGraphics.drawCenteredString(this.font, "+ ADD CHANNEL", trackHeaderLeft + (TRACK_HEADER_WIDTH / 2), addBtnY + 7, isHoverAdd ? 0xFF000000 : CYAN_MAIN);
+            guiGraphics.fill(trackHeaderLeft + 4, addBtnY, timelineTrackLeft - 4, addBtnY + 22, isHoverAdd ? 0xDD00E5FF : 0x2200E5FF);
+            guiGraphics.fill(trackHeaderLeft + 4, addBtnY, timelineTrackLeft - 4, addBtnY + 1, CARD_BORDER);
+            guiGraphics.fill(trackHeaderLeft + 4, addBtnY + 21, timelineTrackLeft - 4, addBtnY + 22, CARD_BORDER);
+            guiGraphics.fill(trackHeaderLeft + 4, addBtnY, trackHeaderLeft + 5, addBtnY + 22, CARD_BORDER);
+            guiGraphics.fill(timelineTrackLeft - 5, addBtnY, timelineTrackLeft - 4, addBtnY + 22, CARD_BORDER);
+            String addLabel = trackHeaderWidth < 90 ? "+ ADD" : "+ ADD CHANNEL";
+            guiGraphics.drawCenteredString(this.font, addLabel, trackHeaderLeft + (trackHeaderWidth / 2), addBtnY + 7, isHoverAdd ? 0xFF000000 : CYAN_MAIN);
+        }
 
         guiGraphics.disableScissor();
 
@@ -2000,17 +2859,10 @@ public class MusicSequenceScreen extends Screen {
         // 2. RIGHT COLUMN: TIMELINE TRACKS & GRID
         // ==========================================
 
-        // Scissor Timeline Track Area so zoom/scroll never bleeds into headers
-        guiGraphics.enableScissor(
-                (int) (timelineTrackLeft * scale),
-                (int) (timelineTop * scale),
-                (int) ((timelineLeft + timelineWidth) * scale),
-                (int) ((timelineTop + totalHeight) * scale)
-        );
-
-        // A. Time Ruler (Top Axis)
-        guiGraphics.fill(timelineTrackLeft, timelineTop, timelineLeft + timelineWidth, timelineTop + rulerHeight, 0xEE081622);
-        guiGraphics.fill(timelineTrackLeft, timelineTop + rulerHeight - 1, timelineLeft + timelineWidth, timelineTop + rulerHeight, 0xAA00E5FF);
+        // Band 1: Time Ruler (Top Axis)
+        guiGraphics.enableScissor(timelineTrackLeft, rulerY, timelineLeft + timelineWidth, rulerY + rulerHeight);
+        guiGraphics.fill(timelineTrackLeft, rulerY, timelineLeft + timelineWidth, rulerY + rulerHeight, 0xEE081622);
+        guiGraphics.fill(timelineTrackLeft, rulerY + rulerHeight - 1, timelineLeft + timelineWidth, rulerY + rulerHeight, 0xAA00E5FF);
 
         double secondsVisible = timelineTrackWidth / pixelsPerSecond;
         int stepSec = secondsVisible > 30 ? 5 : 1;
@@ -2020,73 +2872,18 @@ public class MusicSequenceScreen extends Screen {
             double tickX = timelineTrackLeft + ((tickMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
 
             if (tickX >= timelineTrackLeft && tickX <= timelineLeft + timelineWidth) {
-                int tickY2 = timelineTop + rulerHeight - (sec % 5 == 0 ? 12 : 6);
-                guiGraphics.fill((int) tickX, tickY2, (int) tickX + 1, timelineTop + rulerHeight, 0xAA00E5FF);
+                int tickY2 = rulerY + rulerHeight - (sec % 5 == 0 ? 12 : 6);
+                guiGraphics.fill((int) tickX, tickY2, (int) tickX + 1, rulerY + rulerHeight, 0xAA00E5FF);
 
                 if (sec % 5 == 0 || stepSec == 1) {
                     String timeLabel = String.format("%02d:%02d", sec / 60, sec % 60);
-                    guiGraphics.drawString(this.font, timeLabel, (int) tickX - 12, timelineTop + 4, 0xFFAABBCC, false);
+                    guiGraphics.drawString(this.font, timeLabel, (int) tickX - 12, rulerY + 4, 0xFFAABBCC, false);
                 }
             }
         }
+        guiGraphics.disableScissor();
 
-        // B. Audio & Waveform Visualization Track
-        guiGraphics.fill(timelineTrackLeft, waveTopY, timelineLeft + timelineWidth, waveTopY + waveformHeight, 0xEE05101A);
-        guiGraphics.fill(timelineTrackLeft, waveTopY + waveformHeight - 1, timelineLeft + timelineWidth, waveTopY + waveformHeight, 0x6600E5FF);
-
-        MusicWaveformRenderer.renderWaveform(guiGraphics, currentSequence.getSongTrack(), timelineTrackLeft, waveTopY, timelineTrackWidth, waveformHeight, timeScrollMs, pixelsPerSecond);
-
-        // C. Channel Tracks Backgrounds
-        for (int c = 0; c < channels.size(); c++) {
-            int trackY = trackAreaY + (c * channelHeight) - (int) channelScrollY;
-            int rowBg = (c % 2 == 0) ? 0xEE091624 : 0xEE060F1A;
-            guiGraphics.fill(timelineTrackLeft, trackY, timelineLeft + timelineWidth, trackY + channelHeight, rowBg);
-            guiGraphics.fill(timelineTrackLeft, trackY + channelHeight - 1, timelineLeft + timelineWidth, trackY + channelHeight, 0x3300E5FF);
-        }
-
-        // D. Rekordbox-Style Beat Grid & Red Bar Lines
-        int bpm = currentSequence.getBpm();
-        double beatMs = 60000.0 / (double) Math.max(20, bpm);
-        double gameTickMs = 50.0;
-        int gridTotalHeight = totalHeight - rulerHeight;
-
-        // 50ms Game Tick Grid Lines
-        double firstTick = Math.floor(timeScrollMs / gameTickMs);
-        double lastTick = Math.ceil((timeScrollMs + (timelineTrackWidth / pixelsPerSecond) * 1000.0) / gameTickMs);
-
-        for (double t = firstTick; t <= lastTick; t++) {
-            double tMs = t * gameTickMs;
-            double tickX = timelineTrackLeft + ((tMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
-            if (tickX >= timelineTrackLeft && tickX <= timelineLeft + timelineWidth) {
-                guiGraphics.fill((int) tickX, waveTopY + waveformHeight, (int) tickX + 1, timelineTop + totalHeight, 0x1500E5FF);
-            }
-        }
-
-        // Beat Lines & Rekordbox Red Bar Lines
-        double firstBeat = Math.floor(timeScrollMs / beatMs);
-        double lastBeat = Math.ceil((timeScrollMs + (timelineTrackWidth / pixelsPerSecond) * 1000.0) / beatMs);
-
-        for (double b = firstBeat; b <= lastBeat; b++) {
-            double bMs = b * beatMs;
-            double beatX = timelineTrackLeft + ((bMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
-
-            if (beatX >= timelineTrackLeft && beatX <= timelineLeft + timelineWidth) {
-                long beatIndex = Math.round(b);
-                boolean isBarStart = (beatIndex % 4 == 0);
-
-                if (isBarStart) {
-                    guiGraphics.fill((int) beatX - 1, waveTopY, (int) beatX + 1, timelineTop + totalHeight, 0xFFFF0055);
-                    long barNumber = (beatIndex / 4) + 1;
-                    if (barNumber > 0) {
-                        guiGraphics.drawString(this.font, "B" + barNumber, (int) beatX + 3, waveTopY - 10, 0xFFFF0055, false);
-                    }
-                } else {
-                    guiGraphics.fill((int) beatX, waveTopY, (int) beatX + 1, timelineTop + totalHeight, 0x3300E5FF);
-                }
-            }
-        }
-
-        // E. Sequence START & END Draggable Markers & Out-Of-Bounds Dimming
+        // Sequence START & END Marker Calculations & Loop Handling
         long startMs = currentSequence.getStartMs();
         long endMs = getEffectiveEndMs();
 
@@ -2114,7 +2911,7 @@ public class MusicSequenceScreen extends Screen {
                     isPreviewPlaying = false;
                     EventAudioClientController.getInstance().stopAudio(0);
                     if (playPreviewBtn != null) {
-                        playPreviewBtn.setMessage(Component.literal("▶ PREVIEW"));
+                        playPreviewBtn.setMessage(Component.literal("▶ PLAY"));
                         playPreviewBtn.setAccentColor(0xFF00FF88);
                     }
                 }
@@ -2124,39 +2921,69 @@ public class MusicSequenceScreen extends Screen {
         double startX = timelineTrackLeft + ((startMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
         double endX = timelineTrackLeft + ((endMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
 
-        // Dimmed Region BEFORE START
-        if (startX > timelineTrackLeft) {
-            int dimW = (int) Math.min((double) timelineTrackWidth, startX - timelineTrackLeft);
-            if (dimW > 0) {
-                guiGraphics.fill(timelineTrackLeft, timelineTop, timelineTrackLeft + dimW, timelineTop + totalHeight, 0xCC050A10);
-                guiGraphics.drawString(this.font, "BEFORE START", timelineTrackLeft + 6, timelineTop + 6, 0xAA888888, false);
+        int bpm = currentSequence.getBpm();
+        double beatMs = 60000.0 / (double) Math.max(20, bpm);
+        double gameTickMs = 50.0;
+        double firstTick = Math.floor(timeScrollMs / gameTickMs);
+        double lastTick = Math.ceil((timeScrollMs + (timelineTrackWidth / pixelsPerSecond) * 1000.0) / gameTickMs);
+        double firstBeat = Math.floor(timeScrollMs / beatMs);
+        double lastBeat = Math.ceil((timeScrollMs + (timelineTrackWidth / pixelsPerSecond) * 1000.0) / beatMs);
+
+        // Band 2: Channel Tracks Area (Clipped strictly at trackAreaY so channel rows never obscure waveform)
+        guiGraphics.enableScissor(timelineTrackLeft, trackAreaY, timelineLeft + timelineWidth, canvasBottom);
+
+        // Channel Tracks Backgrounds
+        for (int c = 0; c < channels.size(); c++) {
+            int trackY = trackAreaY + (c * channelHeight) - (int) channelScrollY;
+            if (trackY + channelHeight < trackAreaY || trackY > canvasBottom) {
+                continue;
+            }
+            int rowBg = (c % 2 == 0) ? 0xEE091624 : 0xEE060F1A;
+            guiGraphics.fill(timelineTrackLeft, trackY, timelineLeft + timelineWidth, trackY + channelHeight, rowBg);
+            guiGraphics.fill(timelineTrackLeft, trackY + channelHeight - 1, timelineLeft + timelineWidth, trackY + channelHeight, 0x3300E5FF);
+        }
+
+        // 50ms Game Tick Grid Lines in Channel Area
+        for (double t = firstTick; t <= lastTick; t++) {
+            double tMs = t * gameTickMs;
+            double tickX = timelineTrackLeft + ((tMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
+            if (tickX >= timelineTrackLeft && tickX <= timelineLeft + timelineWidth) {
+                guiGraphics.fill((int) tickX, trackAreaY, (int) tickX + 1, canvasBottom, 0x1500E5FF);
             }
         }
 
-        // Dimmed Region AFTER END
+        // Beat Lines & Rekordbox Red Bar Lines in Channel Area
+        for (double b = firstBeat; b <= lastBeat; b++) {
+            double bMs = b * beatMs;
+            double beatX = timelineTrackLeft + ((bMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
+
+            if (beatX >= timelineTrackLeft && beatX <= timelineLeft + timelineWidth) {
+                long beatIndex = Math.round(b);
+                boolean isBarStart = (beatIndex % 4 == 0);
+
+                if (isBarStart) {
+                    guiGraphics.fill((int) beatX - 1, trackAreaY, (int) beatX + 1, canvasBottom, 0xFFFF0055);
+                } else {
+                    guiGraphics.fill((int) beatX, trackAreaY, (int) beatX + 1, canvasBottom, 0x3300E5FF);
+                }
+            }
+        }
+
+        // Dimmed Region BEFORE START in Channel Area
+        if (startX > timelineTrackLeft) {
+            int dimW = (int) Math.min((double) timelineTrackWidth, startX - timelineTrackLeft);
+            if (dimW > 0) {
+                guiGraphics.fill(timelineTrackLeft, trackAreaY, timelineTrackLeft + dimW, canvasBottom, 0xCC050A10);
+            }
+        }
+
+        // Dimmed Region AFTER END in Channel Area
         if (endX < timelineLeft + timelineWidth) {
             int dimX = (int) Math.max((double) timelineTrackLeft, endX);
             int dimW = (timelineLeft + timelineWidth) - dimX;
             if (dimW > 0) {
-                guiGraphics.fill(dimX, timelineTop, dimX + dimW, timelineTop + totalHeight, 0xCC050A10);
-                guiGraphics.drawString(this.font, "AFTER END", dimX + 6, timelineTop + 6, 0xAA888888, false);
+                guiGraphics.fill(dimX, trackAreaY, dimX + dimW, canvasBottom, 0xCC050A10);
             }
-        }
-
-        // START Line & Flag Badge
-        if (startX >= timelineTrackLeft && startX <= timelineLeft + timelineWidth) {
-            int sx = (int) startX;
-            guiGraphics.fill(sx - 1, timelineTop, sx + 2, timelineTop + totalHeight, 0xFF00FF88);
-            guiGraphics.fill(sx - 14, timelineTop, sx + 14, timelineTop + 14, 0xEE00FF88);
-            guiGraphics.drawCenteredString(this.font, "IN", sx, timelineTop + 3, 0xFF000000);
-        }
-
-        // END Line & Flag Badge
-        if (endX >= timelineTrackLeft && endX <= timelineLeft + timelineWidth) {
-            int ex = (int) endX;
-            guiGraphics.fill(ex - 1, timelineTop, ex + 2, timelineTop + totalHeight, 0xFFFF3366);
-            guiGraphics.fill(ex - 16, timelineTop, ex + 16, timelineTop + 14, 0xEEFF3366);
-            guiGraphics.drawCenteredString(this.font, "OUT", ex, timelineTop + 3, 0xFFFFFFFF);
         }
 
         // F. Action Keyframe Nodes & Multi-Color Segmented Duration Bars
@@ -2170,9 +2997,12 @@ public class MusicSequenceScreen extends Screen {
             double entryX = timelineTrackLeft + ((entry.getTimestampMs() - timeScrollMs) / 1000.0) * pixelsPerSecond;
             int totalDurationMs = entry.getTotalDurationMs();
 
-            if (entryTrackY >= trackAreaY - 10 && entryTrackY <= timelineTop + totalHeight) {
+            if (entryTrackY >= trackAreaY - 10 && entryTrackY <= canvasBottom) {
                 boolean isSelected = (i == selectedEntryIndex);
                 boolean isCamera = "CAMERA".equalsIgnoreCase(entry.getActionType()) || (channelIndex < channels.size() && "CAMERA".equalsIgnoreCase(channels.get(channelIndex).getType()));
+                boolean isPuppet = "PUPPET".equalsIgnoreCase(entry.getActionType()) || (channelIndex < channels.size() && "PUPPET".equalsIgnoreCase(channels.get(channelIndex).getType()));
+                String pSub = entry.getSubAction() != null ? entry.getSubAction().toUpperCase(Locale.ROOT) : "";
+                boolean isPuppetNonDuration = isPuppet && ("DESPAWN".equals(pSub) || "SPAWN".equals(pSub) || "TOGGLE_AI".equals(pSub));
 
                 if (isCamera) {
                     int kx = (int) entryX;
@@ -2294,7 +3124,7 @@ public class MusicSequenceScreen extends Screen {
                         int timeY = railY + 8;
                         guiGraphics.drawString(this.font, timeTxt, timeX, timeY, isSelected ? 0xFFFFFFFF : 0xFF88AACC, false);
                     }
-                } else if (totalDurationMs > 0) {
+                } else if (totalDurationMs > 0 && !isPuppetNonDuration) {
                     if ("DIALOG".equalsIgnoreCase(entry.getActionType())) {
                         double totalW = Math.max(12.0, (entry.getTotalDurationMs() / 1000.0) * pixelsPerSecond);
                         if (entryX + totalW >= timelineTrackLeft && entryX <= timelineLeft + timelineWidth) {
@@ -2362,7 +3192,11 @@ public class MusicSequenceScreen extends Screen {
                             guiGraphics.drawString(this.font, durBadge, bx + bw + 4, barY + 3, 0xFFAABBCC, false);
                         }
                     } else if ("SCREEN_EFFECT".equalsIgnoreCase(entry.getActionType()) || "SCREEN_EFFECTS".equalsIgnoreCase(entry.getActionType()) || (channelIndex < channels.size() && MusicSequenceChannel.TYPE_SCREEN_EFFECT.equalsIgnoreCase(channels.get(channelIndex).getType()))) {
-                        double totalW = Math.max(12.0, (entry.getTotalDurationMs() / 1000.0) * pixelsPerSecond);
+                        int durMs = entry.getTotalDurationMs() > 0 ? entry.getTotalDurationMs() : (entry.getDurationMs() > 0 ? entry.getDurationMs() : 1000);
+                        if (entry.getDurationMs() <= 0) {
+                            entry.setDurationMs(durMs);
+                        }
+                        double totalW = Math.max(16.0, (durMs / 1000.0) * pixelsPerSecond);
                         if (entryX + totalW >= timelineTrackLeft && entryX <= timelineLeft + timelineWidth) {
                             int bx = (int) entryX;
                             int bw = (int) totalW;
@@ -2372,57 +3206,84 @@ public class MusicSequenceScreen extends Screen {
                             boolean isHovered = (scaledMouseX >= bx - 4 && scaledMouseX <= bx + bw + 4 &&
                                     scaledMouseY >= entryTrackY && scaledMouseY <= entryTrackY + channelHeight);
 
+                            String sub = entry.getSubAction() != null && !entry.getSubAction().isEmpty() ? entry.getSubAction().toUpperCase(Locale.ROOT) : "SCREEN_SHAKE";
+                            int modeClr = switch (sub) {
+                                case "INVERT_COLORS", "INVERT" -> 0xFF00FFCC;
+                                case "STROBE" -> 0xFFFFD700;
+                                case "HUE_SHIFT", "HUE" -> 0xFF33CCFF;
+                                case "IMPACT_FRAME", "IMPACT" -> 0xFFFF2255;
+                                case "CINEMATIC_BARS", "BARS", "CINEMATIC" -> 0xFFAA55FF;
+                                default -> MusicSequenceChannel.COLOR_SCREEN_EFFECT;
+                            };
+
                             // Selection Aura
                             if (isSelected) {
                                 long now = System.currentTimeMillis();
-                                int auraColor = (now / 300) % 2 == 0 ? 0xFFFFFFFF : MusicSequenceChannel.COLOR_SCREEN_EFFECT;
+                                int auraColor = (now / 300) % 2 == 0 ? 0xFFFFFFFF : modeClr;
                                 guiGraphics.fill(bx - 3, barY - 2, bx + bw + 3, barY + barHeight + 2, auraColor);
                             }
 
-                            // Dark Violet/Magenta Background
-                            guiGraphics.fill(bx, barY, bx + bw, barY + barHeight, 0xEE160515);
+                            // Dark Tinted Background
+                            guiGraphics.fill(bx, barY, bx + bw, barY + barHeight, 0xEE140818);
 
                             // Left Accent Notch
-                            guiGraphics.fill(bx, barY, bx + 3, barY + barHeight, MusicSequenceChannel.COLOR_SCREEN_EFFECT);
+                            guiGraphics.fill(bx, barY, bx + 3, barY + barHeight, modeClr);
 
                             // Screen Effect bar fill
-                            guiGraphics.fill(bx + 3, barY + 1, bx + bw - 1, barY + barHeight - 1, isHovered ? 0x44FF00CC : 0x22FF00CC);
+                            int fillClr = (modeClr & 0x00FFFFFF) | (isHovered ? 0x33000000 : 0x1A000000);
+                            guiGraphics.fill(bx + 3, barY + 1, bx + bw - 1, barY + barHeight - 1, fillClr);
 
                             // Bar Outer Border
-                            int borderColor = isHovered ? 0xFFFFFFFF : (isSelected ? 0xFFFFFFFF : 0x88FF00CC);
+                            int borderColor = isHovered ? 0xFFFFFFFF : (isSelected ? 0xFFFFFFFF : (0x88000000 | (modeClr & 0x00FFFFFF)));
                             guiGraphics.fill(bx, barY, bx + bw, barY + 1, borderColor);
                             guiGraphics.fill(bx, barY + barHeight - 1, bx + bw, barY + barHeight, borderColor);
                             guiGraphics.fill(bx + bw - 1, barY, bx + bw, barY + barHeight, borderColor);
 
                             // Right Edge Stretch Handle (Resize Grip)
                             boolean isStretchHovered = (isHovered && Math.abs(scaledMouseX - (bx + bw)) <= 6);
-                            int handleColor = isStretchHovered ? 0xFFFFFFFF : MusicSequenceChannel.COLOR_SCREEN_EFFECT;
+                            boolean isThisStretching = (isStretchingDuration && stretchingEntry == entry);
+                            int handleColor = (isStretchHovered || isThisStretching) ? 0xFF00FF88 : modeClr;
+
+                            // Handle grip styling
                             guiGraphics.fill(bx + bw - 3, barY + 3, bx + bw - 1, barY + barHeight - 3, handleColor);
-                            if (isStretchHovered) {
-                                guiGraphics.fill(bx + bw - 4, barY + 1, bx + bw, barY + barHeight - 1, 0x55FFFFFF);
+                            if (isStretchHovered || isThisStretching) {
+                                guiGraphics.fill(bx + bw - 1, barY - 2, bx + bw + 1, barY + barHeight + 2, 0xFFFFFFFF);
+                                guiGraphics.fill(bx + bw - 3, barY - 3, bx + bw + 3, barY, handleColor);
+                                guiGraphics.fill(bx + bw - 3, barY + barHeight, bx + bw + 3, barY + barHeight + 3, handleColor);
+
+                                int cy = barY + (barHeight / 2);
+                                guiGraphics.fill(bx + bw - 3, cy - 3, bx + bw + 3, cy + 3, 0xEE060C14);
+                                guiGraphics.fill(bx + bw - 2, cy - 2, bx + bw + 2, cy + 2, handleColor);
+                                guiGraphics.fill(bx + bw - 1, cy - 1, bx + bw + 1, cy + 1, 0xFFFFFFFF);
+
+                                // Floating duration tooltip badge above stretch handle
+                                String durTip = "DURATION: " + durMs + "ms (" + String.format(Locale.ROOT, "%.2fs", durMs / 1000.0) + ")";
+                                int tipW = this.font.width(durTip);
+                                int tipX = Math.max(timelineTrackLeft + 2, Math.min(timelineLeft + timelineWidth - tipW - 4, (bx + bw) - (tipW / 2)));
+                                int tipY = barY - 14;
+                                guiGraphics.fill(tipX - 3, tipY - 1, tipX + tipW + 3, tipY + 9, 0xEE060C14);
+                                guiGraphics.fill(tipX - 3, tipY - 1, tipX + tipW + 3, tipY, handleColor);
+                                guiGraphics.drawString(this.font, durTip, tipX, tipY, 0xFFFFFFFF, false);
                             }
 
                             // Screen Effect Keyframe Icon / Node at Start
                             int barCenterY = barY + (barHeight / 2);
-                            guiGraphics.fill(bx - 3, barCenterY - 3, bx + 3, barCenterY + 3, MusicSequenceChannel.COLOR_SCREEN_EFFECT);
+                            guiGraphics.fill(bx - 3, barCenterY - 3, bx + 3, barCenterY + 3, modeClr);
                             guiGraphics.fill(bx - 2, barCenterY - 2, bx + 2, barCenterY + 2, 0xFF000000);
                             guiGraphics.fill(bx - 1, barCenterY - 1, bx + 1, barCenterY + 1, 0xFFFFFFFF);
 
                             // Text preview inside bar
-                            String sub = entry.getSubAction().isEmpty() ? "SHAKE" : entry.getSubAction();
                             String displayLabel = "⚡ " + (entry.getDescription().isEmpty() ? ("FX: " + sub) : entry.getDescription());
                             int textW = this.font.width(displayLabel);
-
                             int textAvailW = bw - 10;
                             if (textAvailW > 20) {
                                 if (textW > textAvailW) {
                                     displayLabel = this.font.plainSubstrByWidth(displayLabel, textAvailW - 8) + "..";
                                 }
-                                guiGraphics.drawString(this.font, displayLabel, bx + 6, barY + 3, 0xFFFF77EE, false);
+                                guiGraphics.drawString(this.font, displayLabel, bx + 6, barY + 3, modeClr, false);
                             }
 
                             // Duration label badge after bar
-                            long durMs = entry.getTotalDurationMs();
                             String durBadge = String.format(Locale.ROOT, "%.1fs (%dms)", durMs / 1000.0, durMs);
                             guiGraphics.drawString(this.font, durBadge, bx + bw + 4, barY + 3, 0xFFAABBCC, false);
                         }
@@ -2470,13 +3331,7 @@ public class MusicSequenceScreen extends Screen {
 
                             for (int p = 0; p < phases.size(); p++) {
                                 ActionTimingPhase phase = phases.get(p);
-                                int ms = switch (phase.id().toLowerCase(Locale.ROOT)) {
-                                    case "windup" -> entry.getWindupMs();
-                                    case "jump" -> entry.getJumpMs();
-                                    case "duration" -> entry.getDurationMs();
-                                    case "recovery" -> entry.getRecoveryMs();
-                                    default -> 0;
-                                };
+                                int ms = entry.getPhaseMs(phase, p);
                                 int pw = (int) Math.round((ms / 1000.0) * pixelsPerSecond);
                                 int clr = phase.color();
                                 String pLabel = phase.label().toUpperCase(Locale.ROOT);
@@ -2486,8 +3341,9 @@ public class MusicSequenceScreen extends Screen {
                                     execX = curX;
                                 }
 
+                                int pEnd = (p == phases.size() - 1) ? (bx + bw) : (curX + pw);
+
                                 if (pw > 0) {
-                                    int pEnd = (p == phases.size() - 1) ? (bx + bw) : (curX + pw);
                                     guiGraphics.fill(curX, barY + 1, pEnd, barY + barHeight - 1, clr);
 
                                     // Left notch on first phase
@@ -2506,9 +3362,80 @@ public class MusicSequenceScreen extends Screen {
                                     } else if (wAvail >= this.font.width(ms + "ms") + 4) {
                                         guiGraphics.drawCenteredString(this.font, ms + "ms", curX + (wAvail / 2), barY + 3, textClr);
                                     }
-
-                                    curX = pEnd;
                                 }
+
+                                curX = pEnd;
+                            }
+
+                            // Interactive Phase Divider Handles & Tooltips ("Time Zones")
+                            int hoveredBoundaryIndex = -1;
+                            String hoveredBoundaryTooltip = null;
+                            int hoveredBoundaryColor = 0xFF00E5FF;
+
+                            int scanX = bx;
+                            for (int p = 0; p < phases.size(); p++) {
+                                ActionTimingPhase phase = phases.get(p);
+                                int ms = entry.getPhaseMs(phase, p);
+                                int pw = (int) Math.round((ms / 1000.0) * pixelsPerSecond);
+                                int pEnd = (p == phases.size() - 1) ? (bx + bw) : (scanX + pw);
+
+                                boolean isThisDividerHovered = (scaledMouseX >= pEnd - 4 && scaledMouseX <= pEnd + 4 &&
+                                        scaledMouseY >= barY - 2 && scaledMouseY <= barY + barHeight + 2);
+                                boolean isThisDividerDragging = (isDraggingPuppetPhase && puppetDraggingEntry == entry && puppetDraggingPhaseIndex == p);
+
+                                // Render handle grip styling
+                                if (p < phases.size() - 1) {
+                                    // Subtle grip notch on intermediate phase boundaries
+                                    guiGraphics.fill(pEnd - 1, barY + 1, pEnd, barY + 4, 0x88FFFFFF);
+                                    guiGraphics.fill(pEnd - 1, barY + barHeight - 4, pEnd, barY + barHeight - 1, 0x88FFFFFF);
+                                } else {
+                                    // Right edge resize grip handle
+                                    guiGraphics.fill(pEnd - 3, barY + 3, pEnd - 1, barY + barHeight - 3, 0xAA00E5FF);
+                                }
+
+                                if (isThisDividerHovered || isThisDividerDragging) {
+                                    hoveredBoundaryIndex = p;
+                                    int handleColor = isThisDividerDragging ? 0xFF00FF88 : 0xFF00E5FF;
+                                    hoveredBoundaryColor = handleColor;
+
+                                    // Glowing handle line
+                                    guiGraphics.fill(pEnd - 1, barY - 2, pEnd + 1, barY + barHeight + 2, 0xFFFFFFFF);
+                                    guiGraphics.fill(pEnd - 3, barY - 3, pEnd + 3, barY, handleColor);
+                                    guiGraphics.fill(pEnd - 3, barY + barHeight, pEnd + 3, barY + barHeight + 3, handleColor);
+
+                                    // Center grip notch
+                                    int cy = barY + (barHeight / 2);
+                                    guiGraphics.fill(pEnd - 3, cy - 4, pEnd + 3, cy + 4, 0xEE060C14);
+                                    guiGraphics.fill(pEnd - 2, cy - 3, pEnd + 2, cy + 3, handleColor);
+                                    guiGraphics.fill(pEnd - 1, cy - 2, pEnd + 1, cy + 2, 0xFFFFFFFF);
+
+                                    String modeTag = hasShiftDown() ? " [Split Dual-Edit]" : " [Ripple Edit]";
+                                    if (p < phases.size() - 1) {
+                                        ActionTimingPhase nextP = phases.get(p + 1);
+                                        hoveredBoundaryTooltip = phase.label().toUpperCase(Locale.ROOT) + " (" + ms + "ms) ↔ " + nextP.label().toUpperCase(Locale.ROOT) + modeTag;
+                                    } else {
+                                        hoveredBoundaryTooltip = phase.label().toUpperCase(Locale.ROOT) + ": " + ms + "ms (Resize End)" + modeTag;
+                                    }
+                                }
+
+                                scanX = pEnd;
+                            }
+
+                            // Floating tooltip badge above active phase divider
+                            if (hoveredBoundaryTooltip != null && hoveredBoundaryIndex >= 0) {
+                                int tipW = this.font.width(hoveredBoundaryTooltip);
+                                int bX = bx;
+                                for (int p = 0; p <= hoveredBoundaryIndex; p++) {
+                                    int ms = entry.getPhaseMs(phases.get(p), p);
+                                    int pw = (int) Math.round((ms / 1000.0) * pixelsPerSecond);
+                                    bX = (p == phases.size() - 1) ? (bx + bw) : (bX + pw);
+                                }
+                                int tipX = bX - (tipW / 2);
+                                tipX = Math.max(timelineTrackLeft + 2, Math.min(timelineLeft + timelineWidth - tipW - 4, tipX));
+                                int tipY = barY - 14;
+                                guiGraphics.fill(tipX - 3, tipY - 1, tipX + tipW + 3, tipY + 9, 0xEE060C14);
+                                guiGraphics.fill(tipX - 3, tipY - 1, tipX + tipW + 3, tipY, hoveredBoundaryColor);
+                                guiGraphics.drawString(this.font, hoveredBoundaryTooltip, tipX, tipY, 0xFFFFFFFF, false);
                             }
 
                             // Bar Outer Border
@@ -2559,52 +3486,200 @@ public class MusicSequenceScreen extends Screen {
                     }
                 } else {
                     // Instant single keyframe node
-                    if (entryX >= timelineTrackLeft && entryX <= timelineLeft + timelineWidth) {
+                    if (entryX >= timelineTrackLeft - 30 && entryX <= timelineLeft + timelineWidth + 30) {
                         int kx = (int) entryX;
                         int ky = entryTrackY + (channelHeight / 2);
 
-                        boolean isHovered = (scaledMouseX >= kx - 8 && scaledMouseX <= kx + 8 && scaledMouseY >= entryTrackY && scaledMouseY <= entryTrackY + channelHeight);
-                        int nodeColor = (isHovered || isSelected) ? 0xFFFFFFFF : chColor;
+                        boolean isDespawn = isPuppet && "DESPAWN".equals(pSub);
+                        boolean isSpawn = isPuppet && "SPAWN".equals(pSub);
+                        boolean isToggleAi = isPuppet && "TOGGLE_AI".equals(pSub);
+
+                        int baseNodeColor = chColor;
+                        String badgeText = "";
+                        int badgeColor = chColor;
+
+                        if (isDespawn) {
+                            baseNodeColor = 0xFFFF3355;
+                            badgeColor = 0xFFFF5566;
+                            String tag = entry.getPuppetParam("actorTag", "");
+                            badgeText = tag.isEmpty() ? "✕ DESPAWN" : "✕ DESPAWN (#" + tag + ")";
+                        } else if (isSpawn) {
+                            baseNodeColor = 0xFF00FF88;
+                            badgeColor = 0xFF00FF88;
+                            String tag = entry.getPuppetParam("actorTag", "");
+                            badgeText = tag.isEmpty() ? "★ SPAWN" : "★ SPAWN (#" + tag + ")";
+                        } else if (isToggleAi) {
+                            baseNodeColor = 0xFFFFD700;
+                            badgeColor = 0xFFFFE066;
+                            String aiState = entry.getPuppetParam("aiState", "FREEZE");
+                            badgeText = "FREEZE".equalsIgnoreCase(aiState) ? "⚡ FREEZE AI" : "⚡ RESTORE AI";
+                        } else {
+                            if (entry.getDescription() != null && !entry.getDescription().isBlank()) {
+                                badgeText = entry.getDescription();
+                            } else if (entry.getCommand() != null && !entry.getCommand().isBlank()) {
+                                badgeText = entry.getCommand();
+                            }
+                        }
+
+                        int bw = !badgeText.isEmpty() ? this.font.width(badgeText) : 0;
+                        boolean isHovered = (scaledMouseX >= kx - 8 && scaledMouseX <= kx + Math.max(16, bw + 14) &&
+                                scaledMouseY >= entryTrackY && scaledMouseY <= entryTrackY + channelHeight);
+                        int nodeColor = (isHovered || isSelected) ? 0xFFFFFFFF : baseNodeColor;
 
                         if (isSelected) {
                             long now = System.currentTimeMillis();
-                            int auraColor = (now / 300) % 2 == 0 ? 0xFFFFFFFF : CYAN_MAIN;
+                            int auraColor = (now / 300) % 2 == 0 ? 0xFFFFFFFF : baseNodeColor;
                             guiGraphics.fill(kx - 8, ky - 8, kx + 8, ky + 8, auraColor);
+                        } else if (isHovered) {
+                            guiGraphics.fill(kx - 7, ky - 7, kx + 7, ky + 7, 0x88FFFFFF);
                         }
 
-                        guiGraphics.fill(kx - 6, ky - 6, kx + 6, ky + 6, 0xEE060C12);
-                        guiGraphics.fill(kx - 5, ky - 5, kx + 5, ky + 5, nodeColor);
-                        guiGraphics.fill(kx - 3, ky - 3, kx + 3, ky + 3, 0xFF000000);
+                        if (isDespawn) {
+                            guiGraphics.fill(kx - 6, ky - 6, kx + 6, ky + 6, 0xEE1A050B);
+                            guiGraphics.fill(kx - 5, ky - 5, kx + 5, ky + 5, nodeColor);
+                            guiGraphics.fill(kx - 3, ky - 3, kx + 3, ky + 3, 0xFF000000);
+                            guiGraphics.fill(kx - 1, ky - 1, kx + 2, ky + 2, 0xFFFF3355);
+                        } else if (isSpawn) {
+                            guiGraphics.fill(kx - 6, ky - 6, kx + 6, ky + 6, 0xEE051A0E);
+                            guiGraphics.fill(kx - 5, ky - 5, kx + 5, ky + 5, nodeColor);
+                            guiGraphics.fill(kx - 3, ky - 3, kx + 3, ky + 3, 0xFF000000);
+                            guiGraphics.fill(kx - 1, ky - 1, kx + 2, ky + 2, 0xFF00FF88);
+                        } else {
+                            guiGraphics.fill(kx - 6, ky - 6, kx + 6, ky + 6, 0xEE060C12);
+                            guiGraphics.fill(kx - 5, ky - 5, kx + 5, ky + 5, nodeColor);
+                            guiGraphics.fill(kx - 3, ky - 3, kx + 3, ky + 3, 0xFF000000);
+                            guiGraphics.fill(kx - 1, ky - 1, kx + 2, ky + 2, 0xFFFFFFFF);
+                        }
 
-                        // Keyframe timestamp badge
+                        // Badge text & timestamp
+                        if (!badgeText.isEmpty()) {
+                            int badgeX = kx + 9;
+                            int badgeY = ky - 8;
+                            int badgeBg = isDespawn ? 0xEE1E050A : (isSpawn ? 0xEE051E0E : 0xEE060C14);
+                            guiGraphics.fill(badgeX - 3, badgeY - 1, badgeX + bw + 3, badgeY + 9, badgeBg);
+                            guiGraphics.fill(badgeX - 3, badgeY - 1, badgeX + bw + 3, badgeY, isHovered || isSelected ? 0xFFFFFFFF : (badgeColor & 0x88FFFFFF));
+                            guiGraphics.drawString(this.font, badgeText, badgeX, badgeY, isSelected ? 0xFFFFFFFF : badgeColor, false);
+                        }
+
+                        // Timestamp below node
                         long sec = entry.getTimestampMs() / 1000;
                         long msRem = entry.getTimestampMs() % 1000;
-                        String timeBadge = String.format("%02d:%02d.%01d", sec / 60, sec % 60, msRem / 100);
-                        guiGraphics.drawString(this.font, timeBadge, kx + 8, ky - 4, nodeColor, false);
+                        String timeBadge = String.format(Locale.ROOT, "%02d:%02d.%02d", sec / 60, sec % 60, msRem / 10);
+                        int timeX = kx + 9;
+                        int timeY = !badgeText.isEmpty() ? ky + 2 : ky - 4;
+                        guiGraphics.drawString(this.font, timeBadge, timeX, timeY, isSelected ? 0xFFFFFFFF : 0xFF88AACC, false);
                     }
                 }
             }
         }
 
-        // G. Render Vertical Red Playhead Scrubber Line
+        // Disable Band 2 (Channel Tracks Area) Scissor
+        guiGraphics.disableScissor();
+
+        // ==========================================
+        // Band 3: PINNED Audio Waveform Visualization Track
+        // ==========================================
+        guiGraphics.enableScissor(timelineTrackLeft, waveTopY, timelineLeft + timelineWidth, trackAreaY);
+        guiGraphics.fill(timelineTrackLeft, waveTopY, timelineLeft + timelineWidth, trackAreaY, 0xEE05101A);
+        guiGraphics.fill(timelineTrackLeft, trackAreaY - 1, timelineLeft + timelineWidth, trackAreaY, 0x6600E5FF);
+
+        MusicWaveformRenderer.renderWaveform(guiGraphics, currentSequence.getSongTrack(), timelineTrackLeft, waveTopY, timelineTrackWidth, waveformHeight, timeScrollMs, pixelsPerSecond);
+
+        // Beat Lines & Rekordbox Red Bar Lines with Bar Numbers across Waveform Track
+        for (double b = firstBeat; b <= lastBeat; b++) {
+            double bMs = b * beatMs;
+            double beatX = timelineTrackLeft + ((bMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
+
+            if (beatX >= timelineTrackLeft && beatX <= timelineLeft + timelineWidth) {
+                long beatIndex = Math.round(b);
+                boolean isBarStart = (beatIndex % 4 == 0);
+
+                if (isBarStart) {
+                    guiGraphics.fill((int) beatX - 1, waveTopY, (int) beatX + 1, trackAreaY, 0xFFFF0055);
+                    long barNumber = (beatIndex / 4) + 1;
+                    if (barNumber > 0) {
+                        guiGraphics.drawString(this.font, "B" + barNumber, (int) beatX + 3, waveTopY + 2, 0xFFFF0055, false);
+                    }
+                } else {
+                    guiGraphics.fill((int) beatX, waveTopY, (int) beatX + 1, trackAreaY, 0x3300E5FF);
+                }
+            }
+        }
+        guiGraphics.disableScissor();
+
+        // ==========================================
+        // Band 4: Overlays (Ruler/Waveform Dimming, Markers, Playhead, Scrollbar)
+        // ==========================================
+        guiGraphics.enableScissor(timelineTrackLeft, rulerY, timelineLeft + timelineWidth, canvasBottom);
+
+        // Dimmed Region BEFORE START across Ruler & Waveform
+        if (startX > timelineTrackLeft) {
+            int dimW = (int) Math.min((double) timelineTrackWidth, startX - timelineTrackLeft);
+            if (dimW > 0) {
+                guiGraphics.fill(timelineTrackLeft, rulerY, timelineTrackLeft + dimW, trackAreaY, 0xCC050A10);
+                guiGraphics.drawString(this.font, "BEFORE START", timelineTrackLeft + 6, rulerY + 4, 0xAA888888, false);
+            }
+        }
+
+        // Dimmed Region AFTER END across Ruler & Waveform
+        if (endX < timelineLeft + timelineWidth) {
+            int dimX = (int) Math.max((double) timelineTrackLeft, endX);
+            int dimW = (timelineLeft + timelineWidth) - dimX;
+            if (dimW > 0) {
+                guiGraphics.fill(dimX, rulerY, dimX + dimW, trackAreaY, 0xCC050A10);
+                guiGraphics.drawString(this.font, "AFTER END", dimX + 6, rulerY + 4, 0xAA888888, false);
+            }
+        }
+
+        // START Line & Flag Badge
+        if (startX >= timelineTrackLeft && startX <= timelineLeft + timelineWidth) {
+            int sx = (int) startX;
+            guiGraphics.fill(sx - 1, rulerY, sx + 2, canvasBottom, 0xFF00FF88);
+            guiGraphics.fill(sx - 14, rulerY, sx + 14, rulerY + 14, 0xEE00FF88);
+            guiGraphics.drawCenteredString(this.font, "IN", sx, rulerY + 3, 0xFF000000);
+        }
+
+        // END Line & Flag Badge
+        if (endX >= timelineTrackLeft && endX <= timelineLeft + timelineWidth) {
+            int ex = (int) endX;
+            guiGraphics.fill(ex - 1, rulerY, ex + 2, canvasBottom, 0xFFFF3366);
+            guiGraphics.fill(ex - 16, rulerY, ex + 16, rulerY + 14, 0xEEFF3366);
+            guiGraphics.drawCenteredString(this.font, "OUT", ex, rulerY + 3, 0xFFFFFFFF);
+        }
+
+        // Playhead Scrubber Line
         double playheadX = timelineTrackLeft + ((playheadMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
         if (playheadX >= timelineTrackLeft && playheadX <= timelineLeft + timelineWidth) {
             int px = (int) playheadX;
-            guiGraphics.fill(px - 1, timelineTop, px + 2, timelineTop + totalHeight, PLAYHEAD_COLOR);
+            guiGraphics.fill(px - 1, rulerY, px + 2, canvasBottom, PLAYHEAD_COLOR);
 
-            // Playhead Handle Cap
-            guiGraphics.fill(px - 5, timelineTop, px + 6, timelineTop + 10, PLAYHEAD_COLOR);
-            guiGraphics.fill(px - 4, timelineTop + 1, px + 5, timelineTop + 9, 0xFFFFFFFF);
+            // Playhead Handle Cap sitting at top of the ruler
+            guiGraphics.fill(px - 5, rulerY, px + 6, rulerY + 10, PLAYHEAD_COLOR);
+            guiGraphics.fill(px - 4, rulerY + 1, px + 5, rulerY + 9, 0xFFFFFFFF);
+        }
+
+        // Vertical Scrollbar on Right edge of Timeline Track Area
+        if (maxScrollY > 0) {
+            int scrollTrackH = channelAreaHeight - 4;
+            int thumbH = Math.max(16, (int) ((double) channelAreaHeight / totalChannelContentH * scrollTrackH));
+            int thumbY = trackAreaY + 2 + (int) ((channelScrollY / maxScrollY) * (scrollTrackH - thumbH));
+            int barX = timelineLeft + timelineWidth - 4;
+            guiGraphics.fill(barX, trackAreaY + 2, barX + 3, trackAreaY + 2 + scrollTrackH, 0x3300E5FF);
+            guiGraphics.fill(barX, thumbY, barX + 3, thumbY + thumbH, 0xAA00E5FF);
         }
 
         guiGraphics.disableScissor();
 
         // Vertical divider line separating Left Track Headers and Timeline Tracks
-        guiGraphics.fill(timelineTrackLeft - 1, timelineTop, timelineTrackLeft, timelineTop + totalHeight, CARD_BORDER);
+        guiGraphics.fill(timelineTrackLeft - 1, canvasY, timelineTrackLeft, canvasBottom, CARD_BORDER);
 
         int widgetMouseX = (activeModal != ModalType.NONE) ? -1000 : scaledMouseX;
         int widgetMouseY = (activeModal != ModalType.NONE) ? -1000 : scaledMouseY;
         super.render(guiGraphics, widgetMouseX, widgetMouseY, partialTick);
+
+        if (!isRightPanelCollapsed && this.rightPanel != null) {
+            this.rightPanel.render(guiGraphics, widgetMouseX, widgetMouseY, partialTick);
+        }
 
         if (activeModal == ModalType.NONE) {
             if (this.fileDropdown != null) {
@@ -2613,17 +3688,20 @@ public class MusicSequenceScreen extends Screen {
             if (this.trackDropdown != null) {
                 this.trackDropdown.renderOverlay(guiGraphics, scaledMouseX, scaledMouseY);
             }
+            if (!isRightPanelCollapsed && this.rightPanel != null) {
+                this.rightPanel.renderOverlay(guiGraphics, widgetMouseX, widgetMouseY);
+            }
 
             // [+SUB] Tooltip on Track Header
             if (scaledMouseX >= trackHeaderLeft && scaledMouseX < timelineTrackLeft) {
                 for (int c = 0; c < channels.size(); c++) {
                     int trackY = trackAreaY + (c * channelHeight) - (int) channelScrollY;
-                    if (trackY >= trackAreaY && trackY + channelHeight <= timelineTop + totalHeight) {
+                    if (trackY >= trackAreaY && trackY + channelHeight <= canvasBottom) {
                         MusicSequenceChannel ch = channels.get(c);
                         if (MusicSequenceChannel.TYPE_PUPPET.equalsIgnoreCase(ch.getType())) {
-                            int subBtnLeft = timelineTrackLeft - 50;
-                            int subBtnRight = timelineTrackLeft - 25;
-                            if (scaledMouseX >= subBtnLeft && scaledMouseX <= subBtnRight && scaledMouseY >= trackY + 5 && scaledMouseY <= trackY + 23) {
+                            int subL = trackHeaderWidth < 90 ? (timelineTrackLeft - 38) : (timelineTrackLeft - 50);
+                            int subR = trackHeaderWidth < 90 ? (timelineTrackLeft - 20) : (timelineTrackLeft - 25);
+                            if (scaledMouseX >= subL && scaledMouseX <= subR && scaledMouseY >= trackY + 4 && scaledMouseY <= trackY + channelHeight - 4) {
                                 guiGraphics.renderTooltip(this.font, Component.literal("Add Sub-Channel for this puppet entity (allows simultaneous actions)"), scaledMouseX, scaledMouseY);
                                 break;
                             }
@@ -2636,14 +3714,25 @@ public class MusicSequenceScreen extends Screen {
         if (activeModal != ModalType.NONE) {
             guiGraphics.pose().pushPose();
             guiGraphics.pose().translate(0, 0, 800.0f);
-            renderActiveModal(guiGraphics, scaledMouseX, scaledMouseY, partialTick, effWidth, effHeight);
+            if (scale < 0.999) {
+                guiGraphics.pose().scale((float) scale, (float) scale, 1.0f);
+            }
+            int effWidth = (int) (this.width / scale);
+            int effHeight = (int) (this.height / scale);
+            int modalMouseX = (int) (mouseX / scale);
+            int modalMouseY = (int) (mouseY / scale);
+            renderActiveModal(guiGraphics, modalMouseX, modalMouseY, partialTick, effWidth, effHeight);
             guiGraphics.pose().popPose();
         }
-
-        guiGraphics.pose().popPose();
     }
 
-    private void updatePreviewCamera() {
+    public void toggleCameraMode() {
+        SequencerViewportManager.toggleMode();
+        updatePreviewCamera();
+        this.init();
+    }
+
+    public void updatePreviewCamera() {
         if (currentSequence == null) {
             cachedCameraTrack = null;
             return;
@@ -2668,7 +3757,9 @@ public class MusicSequenceScreen extends Screen {
 
         if (cameraEntries.isEmpty()) {
             cachedCameraTrack = null;
-            if (isPreviewCameraActive) {
+            if (SequencerViewportManager.getCurrentMode() == SequencerViewportManager.CameraMode.WORK_CAMERA) {
+                SequencerViewportManager.applyCameraState();
+            } else if (isPreviewCameraActive) {
                 CustomCameraManager.clearCustomCamera();
                 isPreviewCameraActive = false;
             }
@@ -2676,6 +3767,12 @@ public class MusicSequenceScreen extends Screen {
         }
 
         cachedCameraTrack = CameraSequenceTrack.compile(cameraEntries, currentSequence.isLooping(), currentSequence.getStartMs(), currentSequence.getEndMs());
+
+        // In Work Camera mode, ensure the interactive flight/pan camera state is applied and do NOT overwrite
+        if (SequencerViewportManager.getCurrentMode() == SequencerViewportManager.CameraMode.WORK_CAMERA) {
+            SequencerViewportManager.applyCameraState();
+            return;
+        }
 
         if (!cameraPreviewEnabled) {
             if (isPreviewCameraActive) {
@@ -2695,6 +3792,110 @@ public class MusicSequenceScreen extends Screen {
                 CustomCameraManager.clearCustomCamera();
                 isPreviewCameraActive = false;
             }
+        }
+    }
+
+    public void updatePreviewScreenEffects() {
+        if (!isPreviewScreenEffects || currentSequence == null) {
+            if (!ClientScreenEffectHandler.getActiveEffects().isEmpty()) {
+                ClientScreenEffectHandler.clearAllEffects();
+            }
+            return;
+        }
+
+        List<MusicSequenceEntry> activeFxEntries = new ArrayList<>();
+        for (MusicSequenceEntry e : currentSequence.getEntries()) {
+            boolean isScreenEffect = "SCREEN_EFFECT".equalsIgnoreCase(e.getActionType()) ||
+                    isChannelType(e, MusicSequenceChannel.TYPE_SCREEN_EFFECT);
+            if (!isScreenEffect) continue;
+
+            long start = e.getTimestampMs();
+            int dur = e.getTotalDurationMs() > 0 ? e.getTotalDurationMs() : (e.getDurationMs() > 0 ? e.getDurationMs() : 1000);
+            long end = start + dur;
+
+            if (playheadMs >= start && playheadMs < end) {
+                activeFxEntries.add(e);
+            }
+        }
+
+        if (activeFxEntries.isEmpty()) {
+            if (!ClientScreenEffectHandler.getActiveEffects().isEmpty()) {
+                ClientScreenEffectHandler.clearAllEffects();
+            }
+            return;
+        }
+
+        Set<ResourceLocation> targetTypes = new HashSet<>();
+        for (MusicSequenceEntry entry : activeFxEntries) {
+            long start = entry.getTimestampMs();
+            int dur = entry.getTotalDurationMs() > 0 ? entry.getTotalDurationMs() : (entry.getDurationMs() > 0 ? entry.getDurationMs() : 1000);
+            long elapsedMs = Math.max(0, (long) (playheadMs - start));
+
+            ScreenEffectInstance inst = createEffectInstanceForEntry(entry, dur);
+            if (inst != null) {
+                ResourceLocation typeId = inst.getType().getId();
+                targetTypes.add(typeId);
+
+                ScreenEffectInstance existing = ClientScreenEffectHandler.getActiveEffect(typeId);
+                if (existing != null) {
+                    existing.setStartTimeMs(System.currentTimeMillis() - elapsedMs);
+                    existing.setDurationMs(dur);
+                } else {
+                    inst.setStartTimeMs(System.currentTimeMillis() - elapsedMs);
+                    ClientScreenEffectHandler.playEffect(inst);
+                }
+            }
+        }
+
+        // Clean up effects that are no longer active at current playhead
+        for (ScreenEffectInstance inst : ClientScreenEffectHandler.getActiveEffects()) {
+            if (!targetTypes.contains(inst.getType().getId())) {
+                ClientScreenEffectHandler.stopEffect(inst.getType().getId());
+            }
+        }
+    }
+
+    public ScreenEffectInstance createEffectInstanceForEntry(MusicSequenceEntry entry, int duration) {
+        if (entry == null) return null;
+        String mode = entry.getSubAction() != null && !entry.getSubAction().isBlank() ? entry.getSubAction().toUpperCase(Locale.ROOT) : "SCREEN_SHAKE";
+        String effId = entry.getScreenEffectId();
+        if (effId != null && (entry.getSubAction() == null || entry.getSubAction().isBlank())) {
+            if (effId.contains("cinematic") || effId.contains("bars")) mode = "CINEMATIC_BARS";
+            else if (effId.contains("strobe")) mode = "STROBE";
+            else if (effId.contains("hue")) mode = "HUE_SHIFT";
+            else if (effId.contains("impact")) mode = "IMPACT_FRAME";
+            else if (effId.contains("invert")) mode = "INVERT_COLORS";
+            else mode = "SCREEN_SHAKE";
+        }
+
+        if ("INVERT_COLORS".equalsIgnoreCase(mode)) {
+            return new InvertColorsEffect.InvertColorsInstance(duration, entry.isScreenEffectPulse(), entry.getScreenEffectFrequency());
+        } else if ("STROBE".equalsIgnoreCase(mode)) {
+            float freq = entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 10.0f;
+            int clr = entry.getScreenEffectColor() != 0 ? entry.getScreenEffectColor() : 0xFFFFFFFF;
+            float alpha = entry.getScreenEffectMaxAlpha() > 0 ? entry.getScreenEffectMaxAlpha() : 0.85f;
+            return new StrobeEffect.StrobeInstance(duration, freq, clr, entry.isScreenEffectSmooth(), alpha);
+        } else if ("HUE_SHIFT".equalsIgnoreCase(mode)) {
+            float freq = entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 0.5f;
+            float intensity = entry.getScreenEffectIntensity() > 0 ? entry.getScreenEffectIntensity() : 1.0f;
+            return new HueShiftEffect.HueShiftInstance(duration, freq, entry.isScreenEffectContinuous(), entry.getScreenEffectAngle(), intensity);
+        } else if ("IMPACT_FRAME".equalsIgnoreCase(mode)) {
+            int pColor = entry.getScreenEffectColor() != 0 ? entry.getScreenEffectColor() : 0xFFFFFFFF;
+            int sColor = entry.getScreenEffectSecondaryColor() != 0 ? entry.getScreenEffectSecondaryColor() : 0xFF000000;
+            float freq = entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 28.0f;
+            int interval = (int) (1000.0f / freq);
+            String style = entry.getScreenEffectStyle() != null && !entry.getScreenEffectStyle().isBlank() ? entry.getScreenEffectStyle() : "NOIR";
+            return new ImpactFrameEffect.ImpactFrameInstance(duration, pColor, sColor, interval, entry.isScreenEffectPulse(), style);
+        } else if ("CINEMATIC_BARS".equalsIgnoreCase(mode)) {
+            int inMs = entry.getScreenEffectTransitionInMs() > 0 ? entry.getScreenEffectTransitionInMs() : 500;
+            int outMs = entry.getScreenEffectTransitionOutMs() > 0 ? entry.getScreenEffectTransitionOutMs() : 500;
+            float barH = entry.getScreenEffectBarHeight() > 0 ? entry.getScreenEffectBarHeight() : 0.125f;
+            int clr = entry.getScreenEffectColor() != 0 ? entry.getScreenEffectColor() : 0xFF000000;
+            return new CinematicBarsEffect.CinematicBarsInstance(duration, inMs, outMs, barH, clr);
+        } else {
+            float intensity = entry.getScreenEffectIntensity() > 0 ? entry.getScreenEffectIntensity() : 2.0f;
+            float freq = entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 20.0f;
+            return new ScreenShakeEffect.ScreenShakeInstance(duration, intensity, freq, entry.isScreenEffectDecay());
         }
     }
 
@@ -2722,10 +3923,12 @@ public class MusicSequenceScreen extends Screen {
             channels.add(cameraChannel);
         }
 
-        Vec3 eye = mc.player.getEyePosition();
-        float yaw = mc.player.getYRot();
-        float pitch = mc.player.getXRot();
-        double fov = CustomCameraManager.isFovActive() ? CustomCameraManager.getCustomFov() : 70.0;
+        boolean isWorkCam = (SequencerViewportManager.getCurrentMode() == SequencerViewportManager.CameraMode.WORK_CAMERA);
+        Vec3 eye = isWorkCam ? SequencerViewportManager.getWorkCameraPos() : mc.player.getEyePosition();
+        float yaw = isWorkCam ? SequencerViewportManager.getWorkCameraYaw() : mc.player.getYRot();
+        float pitch = isWorkCam ? SequencerViewportManager.getWorkCameraPitch() : mc.player.getXRot();
+        float roll = isWorkCam ? SequencerViewportManager.getWorkCameraRoll() : 0.0f;
+        double fov = isWorkCam ? SequencerViewportManager.getWorkCameraFov() : (CustomCameraManager.isFovActive() ? CustomCameraManager.getCustomFov() : 70.0);
         long targetTs = (long) Math.round(playheadMs);
 
         // Check if an entry already exists at this timestamp on camera channel
@@ -2749,10 +3952,11 @@ public class MusicSequenceScreen extends Screen {
             targetEntry.setCameraZ(eye.z);
             targetEntry.setCameraYaw(yaw);
             targetEntry.setCameraPitch(pitch);
-            targetEntry.setCameraRoll(0.0f);
+            targetEntry.setCameraRoll(roll);
             targetEntry.setCameraFov(fov);
             targetEntry.setUseCamera(true);
             saveFeedbackMessage = String.format(Locale.ROOT, "Updated Camera Keyframe at %.3fs", targetTs / 1000.0);
+            setSelectedEntryIndex(currentSequence.getEntries().indexOf(targetEntry));
         } else {
             // Create brand new keyframe
             MusicSequenceEntry newKf = new MusicSequenceEntry(
@@ -2785,14 +3989,15 @@ public class MusicSequenceScreen extends Screen {
                 }
             }
 
+            newKf.setCameraX(eye.x);
+            newKf.setCameraY(eye.y);
+            newKf.setCameraZ(eye.z);
+            newKf.setCameraYaw(yaw);
+            newKf.setCameraPitch(pitch);
+            newKf.setCameraRoll(roll);
+            newKf.setCameraFov(fov);
+
             if (prevCam != null) {
-                newKf.setCameraX(prevCam.getCameraX());
-                newKf.setCameraY(prevCam.getCameraY());
-                newKf.setCameraZ(prevCam.getCameraZ());
-                newKf.setCameraYaw(prevCam.getCameraYaw());
-                newKf.setCameraPitch(prevCam.getCameraPitch());
-                newKf.setCameraRoll(prevCam.getCameraRoll());
-                newKf.setCameraFov(prevCam.getCameraFov() > 0 ? prevCam.getCameraFov() : fov);
                 newKf.setCameraMode(prevCam.getCameraMode() != null ? prevCam.getCameraMode() : "KEYFRAME");
                 newKf.setSplineMode(prevCam.getSplineMode() != null ? prevCam.getSplineMode() : "CATMULL_ROM");
                 newKf.setCameraEasing(prevCam.getCameraEasing() != null ? prevCam.getCameraEasing() : "EASE_IN_OUT_CUBIC");
@@ -2816,13 +4021,6 @@ public class MusicSequenceScreen extends Screen {
                 newKf.setLookAtWeight(prevCam.getLookAtWeight());
             } else {
                 newKf.setCameraMode("KEYFRAME");
-                newKf.setCameraX(eye.x);
-                newKf.setCameraY(eye.y);
-                newKf.setCameraZ(eye.z);
-                newKf.setCameraYaw(yaw);
-                newKf.setCameraPitch(pitch);
-                newKf.setCameraRoll(0.0f);
-                newKf.setCameraFov(fov);
                 newKf.setSplineMode("CATMULL_ROM");
                 newKf.setCameraEasing("EASE_IN_OUT_CUBIC");
                 newKf.setCameraInterpolate(true);
@@ -2838,7 +4036,7 @@ public class MusicSequenceScreen extends Screen {
 
             currentSequence.getEntries().add(newKf);
             currentSequence.sortEntriesByTimestamp();
-            selectedEntryIndex = currentSequence.getEntries().indexOf(newKf);
+            setSelectedEntryIndex(currentSequence.getEntries().indexOf(newKf));
             saveFeedbackMessage = String.format(Locale.ROOT, "Stamped Camera Keyframe at %.3fs", targetTs / 1000.0);
         }
 
@@ -2903,7 +4101,7 @@ public class MusicSequenceScreen extends Screen {
 
     private void clampTimeScrollToPlayhead() {
         int timelineTrackWidth = getTimelineTrackWidth();
-        int timelineTrackLeft = 14 + TRACK_HEADER_WIDTH;
+        int timelineTrackLeft = getTrackHeaderWidth();
         double playheadScreenX = timelineTrackLeft + ((playheadMs - timeScrollMs) / 1000.0) * pixelsPerSecond;
         if (playheadScreenX > timelineTrackLeft + (timelineTrackWidth * 0.75) || playheadScreenX < timelineTrackLeft) {
             timeScrollMs = Math.max(0.0, playheadMs - ((timelineTrackWidth * 0.35) / pixelsPerSecond) * 1000.0);

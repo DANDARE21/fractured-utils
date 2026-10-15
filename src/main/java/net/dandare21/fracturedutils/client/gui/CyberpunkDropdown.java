@@ -156,6 +156,14 @@ public class CyberpunkDropdown<T> extends AbstractWidget {
     }
 
     public int getMenuY() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getWindow() != null) {
+            int screenH = mc.getWindow().getGuiScaledHeight();
+            int menuH = getMenuHeight();
+            if (this.getY() + this.height + 2 + menuH > screenH && this.getY() - menuH - 2 >= 0) {
+                return this.getY() - menuH - 2;
+            }
+        }
         return this.getY() + this.height + 2;
     }
 
@@ -168,12 +176,14 @@ public class CyberpunkDropdown<T> extends AbstractWidget {
         Minecraft mc = Minecraft.getInstance();
         if (mc.getWindow() != null) {
             int screenH = mc.getWindow().getGuiScaledHeight();
-            int availableH = screenH - (this.getY() + this.height + 8);
-            if (availableH > itemHeight * 2) {
-                int maxPossible = Math.max(4, availableH / itemHeight);
+            int downSpace = screenH - (this.getY() + this.height + 8);
+            int upSpace = this.getY() - 8;
+            int bestSpace = Math.max(downSpace, upSpace);
+            if (bestSpace > itemHeight * 2) {
+                int maxPossible = Math.max(3, bestSpace / itemHeight);
                 maxVis = Math.min(maxVis, maxPossible);
             } else {
-                maxVis = Math.max(4, Math.min(maxVis, 6));
+                maxVis = Math.max(3, Math.min(maxVis, 6));
             }
         }
         return Math.max(3, maxVis);

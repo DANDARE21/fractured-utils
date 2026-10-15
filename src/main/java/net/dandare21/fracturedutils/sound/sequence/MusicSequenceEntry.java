@@ -210,6 +210,42 @@ public class MusicSequenceEntry {
         };
     }
 
+    public void setPhaseDurationMs(int phaseIndex, int ms) {
+        int val = Math.max(0, ms);
+        switch (phaseIndex) {
+            case 0 -> this.windupMs = val;
+            case 1 -> this.jumpMs = val;
+            case 2 -> this.durationMs = val;
+            case 3 -> this.recoveryMs = val;
+        }
+    }
+
+    public int getPhaseMs(net.dandare21.fracturedutils.puppet.fsm.ActionTimingPhase phase, int index) {
+        if (phase == null) return getPhaseDurationMs(index);
+        return switch (phase.id().toLowerCase(java.util.Locale.ROOT)) {
+            case "windup" -> windupMs;
+            case "jump" -> jumpMs;
+            case "duration" -> durationMs;
+            case "recovery" -> recoveryMs;
+            default -> getPhaseDurationMs(index);
+        };
+    }
+
+    public void setPhaseMs(net.dandare21.fracturedutils.puppet.fsm.ActionTimingPhase phase, int index, int ms) {
+        int val = Math.max(0, ms);
+        if (phase == null) {
+            setPhaseDurationMs(index, val);
+            return;
+        }
+        switch (phase.id().toLowerCase(java.util.Locale.ROOT)) {
+            case "windup" -> this.windupMs = val;
+            case "jump" -> this.jumpMs = val;
+            case "duration" -> this.durationMs = val;
+            case "recovery" -> this.recoveryMs = val;
+            default -> setPhaseDurationMs(index, val);
+        }
+    }
+
     public String getSubAction() {
         return subAction != null ? subAction : "";
     }

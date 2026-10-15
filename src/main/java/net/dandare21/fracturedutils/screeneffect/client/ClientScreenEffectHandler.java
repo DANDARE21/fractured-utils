@@ -53,6 +53,9 @@ public class ClientScreenEffectHandler {
     private static final ResourceLocation IMPACT_DRAW_SHADER = new ResourceLocation(FracturedUtils.MOD_ID, "shaders/post/impact_draw.json");
     private static boolean impactDrawShaderLoaded = false;
 
+    private static final ResourceLocation IMPACT_SHADER = new ResourceLocation(FracturedUtils.MOD_ID, "shaders/post/impact.json");
+    private static boolean impactShaderLoaded = false;
+
     static {
         registerDefaultRenderers();
     }
@@ -218,33 +221,32 @@ public class ClientScreenEffectHandler {
             }
         });
 
-        // 5. Impact Frame Renderer (Anime High-Contrast Manga Draw / Monochromatic Keyframe)
+        // 5. Impact Frame Renderer (Anime High-Contrast Noir / Chromatic Burst / Thermal Negative)
         registerRenderer(ImpactFrameEffect.TYPE, new ScreenEffectRenderer<ImpactFrameEffect.ImpactFrameInstance>() {
             @Override
             public void onStart(ImpactFrameEffect.ImpactFrameInstance instance) {
                 String style = instance.getStyle();
-                if ("DRAW".equalsIgnoreCase(style) || "MANGA_DRAW".equalsIgnoreCase(style) || style == null || style.isBlank()) {
+                if ("DRAW".equalsIgnoreCase(style) || "MANGA_DRAW".equalsIgnoreCase(style)) {
                     loadImpactDrawShader();
                 } else if ("MANGA_OUTLINE".equalsIgnoreCase(style) || "SOBEL".equalsIgnoreCase(style)) {
                     loadSobelShader();
-                } else if (instance.isInvertWorld()) {
-                    loadInvertShader();
                 } else {
-                    loadColorConvolveShader();
+                    loadImpactShader();
                 }
             }
 
             @Override
             public void onRenderOverlay(ImpactFrameEffect.ImpactFrameInstance instance, GuiGraphics graphics, float partialTicks, int screenWidth, int screenHeight) {
                 long elapsed = System.currentTimeMillis() - instance.getStartTimeMs();
-                int interval = Math.max(20, instance.getFrameIntervalMs());
+                int interval = Math.max(16, instance.getFrameIntervalMs());
                 int frameIndex = (int) (elapsed / interval);
 
                 // Even frames = negative/inverted frame, Odd frames = positive frame
                 boolean isNegativeFrame = (frameIndex % 2 == 0);
                 String style = instance.getStyle();
+                if (style == null || style.isBlank()) style = "NOIR";
 
-                if ("DRAW".equalsIgnoreCase(style) || "MANGA_DRAW".equalsIgnoreCase(style) || style == null || style.isBlank()) {
+                if ("DRAW".equalsIgnoreCase(style) || "MANGA_DRAW".equalsIgnoreCase(style)) {
                     loadImpactDrawShader();
 
                     int pColor = instance.getPrimaryColor();
@@ -264,7 +266,6 @@ public class ClientScreenEffectHandler {
                     float sG = ((sColor >> 8) & 0xFF) / 255.0f;
                     float sB = (sColor & 0xFF) / 255.0f;
 
-                    // ColorDark receives shadow/outline color, ColorLight receives highlight/paper color
                     updateImpactDrawUniforms(sR, sG, sB, pR, pG, pB);
                     return;
                 }
@@ -294,44 +295,66 @@ public class ClientScreenEffectHandler {
                     return;
                 }
 
-                // Fallback / legacy modes
                 if ("MANGA_OUTLINE".equalsIgnoreCase(style) || "SOBEL".equalsIgnoreCase(style)) {
                     loadSobelShader();
-                } else if (instance.isInvertWorld()) {
-                    if (isNegativeFrame) {
-                        shutdownColorConvolveShader();
-                        loadInvertShader();
-                    } else {
-                        shutdownInvertShader();
-                        loadColorConvolveShader();
-                        float c = 2.0f;
-                        updateColorConvolveMatrix(0.299f * c, 0.587f * c, 0.114f * c,
-                                                  0.299f * c, 0.587f * c, 0.114f * c,
-                                                  0.299f * c, 0.587f * c, 0.114f * c);
-                    }
-                } else {
-                    loadColorConvolveShader();
-                    float c = 2.0f;
-                    updateColorConvolveMatrix(0.299f * c, 0.587f * c, 0.114f * c,
-                                              0.299f * c, 0.587f * c, 0.114f * c,
-                                              0.299f * c, 0.587f * c, 0.114f * c);
+                    return;
                 }
 
-                long seed = instance.getStartTimeMs() ^ ((long) frameIndex * 99991L);
-                int baseLineColor = isNegativeFrame ? 0xDDFFFFFF : 0xEE000000;
-                int accentColor = instance.getPrimaryColor();
+                // Shader Options:
+                // Option 1: NOIR / HIGH_CONTRAST (Mode 0.0)
+                // Option 2: CHROMATIC / BURST (Mode 1.0)
+                // Option 3: THERMAL / NEGATIVE_SPEEDLINES (Mode 2.0)
+                // Option 4: HYBRID (Mode 3.0)
+                float modeVal = 0.0f;
+                if ("CHROMATIC".equalsIgnoreCase(style) || "CHROMATIC_BURST".equalsIgnoreCase(style) || "GLITCH".equalsIgnoreCase(style)) {
+                    modeVal = 1.0f;
+                } else if ("THERMAL".equalsIgnoreCase(style) || "SOLARIZED".equalsIgnoreCase(style) || "NEGATIVE_SPEEDLINES".equalsIgnoreCase(style)) {
+                    modeVal = 2.0f;
+                } else if ("HYBRID".equalsIgnoreCase(style) || "ANIME_HYBRID".equalsIgnoreCase(style)) {
+                    modeVal = 3.0f;
+                } else {
+                    modeVal = 0.0f;
+                }
 
-                renderAnimeSpeedLines(graphics, screenWidth, screenHeight, seed, baseLineColor, accentColor, 1.0f);
+                loadImpactShader();
 
-                if ("RADIAL_SHOCK".equalsIgnoreCase(style)) {
-                    int barH = Math.min(screenHeight / 5, 28 + (frameIndex % 3) * 4);
-                    graphics.fill(0, 0, screenWidth, barH, 0xFF000000);
-                    graphics.fill(0, screenHeight - barH, screenWidth, screenHeight, 0xFF000000);
+                // If invertWorld is true, strobe intensity between 1.0 on negative frame and 0.0 on positive frame
+                float intensity = 1.0f;
+                if (instance.isInvertWorld() && !isNegativeFrame) {
+                    intensity = 0.0f;
+                }
+
+                int pColor = instance.getPrimaryColor();
+                int sColor = instance.getSecondaryColor();
+
+                if (instance.isInvertWorld() && isNegativeFrame) {
+                    int tmp = pColor;
+                    pColor = sColor;
+                    sColor = tmp;
+                }
+
+                float pR = ((pColor >> 16) & 0xFF) / 255.0f;
+                float pG = ((pColor >> 8) & 0xFF) / 255.0f;
+                float pB = (pColor & 0xFF) / 255.0f;
+
+                float sR = ((sColor >> 16) & 0xFF) / 255.0f;
+                float sG = ((sColor >> 8) & 0xFF) / 255.0f;
+                float sB = (sColor & 0xFF) / 255.0f;
+
+                updateImpactUniforms(intensity, modeVal, sR, sG, sB, pR, pG, pB);
+
+                // For THERMAL or RADIAL_SHOCK, also overlay anime speed lines
+                if ("THERMAL".equalsIgnoreCase(style) || "RADIAL_SHOCK".equalsIgnoreCase(style)) {
+                    long seed = instance.getStartTimeMs() ^ ((long) frameIndex * 99991L);
+                    int baseLineColor = isNegativeFrame ? 0xDDFFFFFF : 0xEE000000;
+                    int accentColor = instance.getPrimaryColor();
+                    renderAnimeSpeedLines(graphics, screenWidth, screenHeight, seed, baseLineColor, accentColor, 0.75f);
                 }
             }
 
             @Override
             public void onEnd(ImpactFrameEffect.ImpactFrameInstance instance) {
+                shutdownImpactShader();
                 shutdownImpactDrawShader();
                 shutdownInvertShader();
                 shutdownColorConvolveShader();
@@ -499,6 +522,78 @@ public class ClientScreenEffectHandler {
         } catch (Exception ignored) {}
     }
 
+    private static void loadImpactShader() {
+        if (!impactShaderLoaded) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.gameRenderer != null) {
+                try {
+                    shutdownImpactDrawShader();
+                    shutdownInvertShader();
+                    shutdownColorConvolveShader();
+                    shutdownSobelShader();
+                    mc.gameRenderer.loadEffect(IMPACT_SHADER);
+                    impactShaderLoaded = true;
+                } catch (Exception e) {
+                    FracturedUtils.LOGGER.warn("[ClientScreenEffectHandler] Could not load impact shader, using fallback", e);
+                }
+            }
+        }
+    }
+
+    private static void shutdownImpactShader() {
+        if (impactShaderLoaded) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.gameRenderer != null) {
+                try {
+                    mc.gameRenderer.shutdownEffect();
+                } catch (Exception ignored) {}
+            }
+            impactShaderLoaded = false;
+        }
+    }
+
+    private static void updateImpactUniforms(float intensity, float mode, float darkR, float darkG, float darkB, float lightR, float lightG, float lightB) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.gameRenderer == null || mc.gameRenderer.currentEffect() == null) return;
+        try {
+            net.minecraft.client.renderer.PostChain chain = mc.gameRenderer.currentEffect();
+            if (!passesFieldChecked) {
+                passesFieldChecked = true;
+                for (java.lang.reflect.Field f : net.minecraft.client.renderer.PostChain.class.getDeclaredFields()) {
+                    if (java.util.List.class.isAssignableFrom(f.getType())) {
+                        f.setAccessible(true);
+                        passesField = f;
+                        break;
+                    }
+                }
+            }
+
+            if (passesField != null) {
+                java.util.List<?> list = (java.util.List<?>) passesField.get(chain);
+                if (list != null) {
+                    for (Object passObj : list) {
+                        if (passObj instanceof net.minecraft.client.renderer.PostPass pass) {
+                            net.minecraft.client.renderer.EffectInstance effect = pass.getEffect();
+                            if (effect != null) {
+                                com.mojang.blaze3d.shaders.Uniform uIntensity = effect.getUniform("Intensity");
+                                if (uIntensity != null) uIntensity.set(intensity);
+
+                                com.mojang.blaze3d.shaders.Uniform uMode = effect.getUniform("Mode");
+                                if (uMode != null) uMode.set(mode);
+
+                                com.mojang.blaze3d.shaders.Uniform uDark = effect.getUniform("ColorDark");
+                                if (uDark != null) uDark.set(darkR, darkG, darkB, 1.0f);
+
+                                com.mojang.blaze3d.shaders.Uniform uLight = effect.getUniform("ColorLight");
+                                if (uLight != null) uLight.set(lightR, lightG, lightB, 1.0f);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
     /**
      * Renders anime-style radial sakuga speed lines converging from screen edges toward the focal center.
      */
@@ -638,6 +733,26 @@ public class ClientScreenEffectHandler {
         }
     }
 
+    public static List<ScreenEffectInstance> getActiveEffects() {
+        return ACTIVE_EFFECTS;
+    }
+
+    public static <T extends ScreenEffectInstance> T getActiveEffect(ResourceLocation typeId) {
+        if (typeId == null) return null;
+        for (ScreenEffectInstance inst : ACTIVE_EFFECTS) {
+            if (inst.getType().getId().equals(typeId)) {
+                @SuppressWarnings("unchecked")
+                T cast = (T) inst;
+                return cast;
+            }
+        }
+        return null;
+    }
+
+    public static boolean hasActiveEffect(ResourceLocation typeId) {
+        return getActiveEffect(typeId) != null;
+    }
+
     /**
      * Stops all active screen effects.
      */
@@ -650,6 +765,29 @@ public class ClientScreenEffectHandler {
         shutdownColorConvolveShader();
         shutdownSobelShader();
         shutdownImpactDrawShader();
+        shutdownImpactShader();
+    }
+
+    /**
+     * Renders screen effect overlays strictly bounded within a sub-viewport area (e.g. Sequencer 3D Viewport).
+     */
+    public static void renderScreenEffectsInArea(GuiGraphics graphics, float partialTicks, int x, int y, int width, int height) {
+        if (ACTIVE_EFFECTS.isEmpty() || graphics == null || width <= 0 || height <= 0) return;
+
+        graphics.enableScissor(x, y, x + width, y + height);
+        graphics.pose().pushPose();
+        graphics.pose().translate(x, y, 0);
+
+        for (ScreenEffectInstance instance : ACTIVE_EFFECTS) {
+            @SuppressWarnings("unchecked")
+            ScreenEffectRenderer<ScreenEffectInstance> renderer = (ScreenEffectRenderer<ScreenEffectInstance>) RENDERERS.get(instance.getType().getId());
+            if (renderer != null) {
+                renderer.onRenderOverlay(instance, graphics, partialTicks, width, height);
+            }
+        }
+
+        graphics.pose().popPose();
+        graphics.disableScissor();
     }
 
     private static void endInstance(ScreenEffectInstance instance) {

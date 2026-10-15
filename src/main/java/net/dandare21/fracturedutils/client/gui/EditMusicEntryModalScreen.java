@@ -761,20 +761,19 @@ public class EditMusicEntryModalScreen extends Screen {
         int y2 = card1Y + 36;
 
         CyberpunkButton styleBtn = new CyberpunkButton(contentX + 8, y1, 106, 18,
-                Component.literal("STYLE: " + (screenEffectStyle != null ? screenEffectStyle : "DRAW")),
+                Component.literal("STYLE: " + (screenEffectStyle != null ? screenEffectStyle : "NOIR")),
                 b -> {
-                    if ("DRAW".equalsIgnoreCase(screenEffectStyle)) {
-                        screenEffectStyle = "MONOCHROME_CUT";
-                    } else if ("MONOCHROME_CUT".equalsIgnoreCase(screenEffectStyle)) {
-                        screenEffectStyle = "MANGA_OUTLINE";
-                    } else if ("MANGA_OUTLINE".equalsIgnoreCase(screenEffectStyle)) {
-                        screenEffectStyle = "RADIAL_SHOCK";
-                    } else {
-                        screenEffectStyle = "DRAW";
-                    }
+                    String cur = screenEffectStyle != null ? screenEffectStyle.toUpperCase(Locale.ROOT) : "NOIR";
+                    screenEffectStyle = switch (cur) {
+                        case "NOIR" -> "CHROMATIC";
+                        case "CHROMATIC" -> "THERMAL";
+                        case "THERMAL" -> "HYBRID";
+                        case "HYBRID" -> "DRAW";
+                        default -> "NOIR";
+                    };
                     b.setMessage(Component.literal("STYLE: " + screenEffectStyle));
                 },
-                0xFFFF2255, false, Component.literal("Cycle impact style: Draw (2-Color Manga Sketch), Monochrome Cut, Manga Outline, or Radial Shock"));
+                0xFFFF2255, false, Component.literal("Cycle impact style: Noir (Inversion), Chromatic Burst, Thermal Speedlines, Hybrid, Draw"));
         this.addRenderableWidget(styleBtn);
 
         CyberpunkButton invertBtn = new CyberpunkButton(contentX + 118, y1, 74, 18,

@@ -109,14 +109,14 @@ public final class ScreenEffects {
      * @param durationMs Duration in milliseconds (typically 100 - 300ms).
      */
     public static ImpactFrameEffect.ImpactFrameInstance impactFrame(int durationMs) {
-        return new ImpactFrameEffect.ImpactFrameInstance(durationMs, 0xFFFFFFFF, 0xFF000000, 35, true, "DRAW");
+        return new ImpactFrameEffect.ImpactFrameInstance(durationMs, 0xFFFFFFFF, 0xFF000000, 35, true, "NOIR");
     }
 
     /**
-     * Creates an impact frame effect with custom primary and secondary colors in "draw" style.
+     * Creates an impact frame effect with custom primary and secondary colors in "noir" style.
      */
     public static ImpactFrameEffect.ImpactFrameInstance impactFrame(int durationMs, int primaryColor, int secondaryColor, int frameIntervalMs) {
-        return new ImpactFrameEffect.ImpactFrameInstance(durationMs, primaryColor, secondaryColor, frameIntervalMs, true, "DRAW");
+        return new ImpactFrameEffect.ImpactFrameInstance(durationMs, primaryColor, secondaryColor, frameIntervalMs, true, "NOIR");
     }
 
     /**

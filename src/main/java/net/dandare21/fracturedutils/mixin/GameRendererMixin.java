@@ -17,7 +17,7 @@ public abstract class GameRendererMixin {
     @Shadow private float zoom;
     @Shadow private float zoomX;
     @Shadow private float zoomY;
-    @Shadow public abstract float getDepthFar();
+    @Shadow private float renderDistance;
 
     @Inject(method = "getProjectionMatrix", at = @At("HEAD"), cancellable = true)
     private void onGetProjectionMatrix(double fov, CallbackInfoReturnable<Matrix4f> cir) {
@@ -27,7 +27,7 @@ public abstract class GameRendererMixin {
                 matrix4f.translate(this.zoomX, -this.zoomY, 0.0F);
                 matrix4f.scale(this.zoom, this.zoom, 1.0F);
             }
-            matrix4f.perspective((float) (fov * (Math.PI / 180.0)), SequencerViewportManager.getAspectRatio(), 0.05F, this.getDepthFar());
+            matrix4f.perspective((float) (fov * (Math.PI / 180.0)), SequencerViewportManager.getAspectRatio(), 0.05F, this.renderDistance * 4.0F);
             cir.setReturnValue(matrix4f);
         }
     }

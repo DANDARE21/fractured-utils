@@ -4,6 +4,7 @@ plugins {
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
     id 'org.parchmentmc.librarian.forgegradle' version '1.+'
+    id 'org.spongepowered.mixin' version '0.7-SNAPSHOT'
 }
 
 version = mod_version
@@ -169,6 +170,10 @@ repositories {
     maven {
         url = "https://www.cursemaven.com"
     }
+    maven {
+        name = "Sponge"
+        url = "https://repo.spongepowered.org/repository/maven-public/"
+    }
 }
 
 dependencies {
@@ -179,6 +184,13 @@ dependencies {
     // WATERMeDIA 3.0 API & YouTube Extension dependencies
     implementation fg.deobf("maven.modrinth:watermedia:3.0.0.23")
     implementation fg.deobf("maven.modrinth:watermedia-yt-plugin:3.0.0-beta.7")
+
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+mixin {
+    add sourceSets.main, "fractured_utils.refmap.json"
+    config 'fractured_utils.mixins.json'
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

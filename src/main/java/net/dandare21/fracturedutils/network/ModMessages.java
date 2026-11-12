@@ -50,6 +50,9 @@ import net.dandare21.fracturedutils.network.packet.S2CPlayCameraTrackPacket;
 import net.dandare21.fracturedutils.screeneffect.packet.S2CPlayScreenEffectPacket;
 import net.dandare21.fracturedutils.screeneffect.packet.S2CStopScreenEffectPacket;
 import net.dandare21.fracturedutils.bossbar.network.S2CSyncBossBarsPacket;
+import net.dandare21.fracturedutils.region.network.S2CSyncRegionsPacket;
+import net.dandare21.fracturedutils.region.network.C2SSaveRegionPacket;
+import net.dandare21.fracturedutils.region.network.C2SDeleteRegionPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -367,6 +370,24 @@ public class ModMessages {
                 .decoder(S2CSyncBossBarsPacket::new)
                 .encoder(S2CSyncBossBarsPacket::encode)
                 .consumerMainThread(S2CSyncBossBarsPacket::handle)
+                .add();
+
+        net.messageBuilder(S2CSyncRegionsPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(S2CSyncRegionsPacket::new)
+                .encoder(S2CSyncRegionsPacket::encode)
+                .consumerMainThread(S2CSyncRegionsPacket::handle)
+                .add();
+
+        net.messageBuilder(C2SSaveRegionPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(C2SSaveRegionPacket::new)
+                .encoder(C2SSaveRegionPacket::encode)
+                .consumerMainThread(C2SSaveRegionPacket::handle)
+                .add();
+
+        net.messageBuilder(C2SDeleteRegionPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(C2SDeleteRegionPacket::new)
+                .encoder(C2SDeleteRegionPacket::encode)
+                .consumerMainThread(C2SDeleteRegionPacket::handle)
                 .add();
     }
 

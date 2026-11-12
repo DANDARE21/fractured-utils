@@ -47,6 +47,7 @@ public class ServerEventHandler {
         net.dandare21.fracturedutils.command.ScreenEffectCommand.register(event.getDispatcher());
         net.dandare21.fracturedutils.command.BossHealthBarCommand.register(event.getDispatcher());
         net.dandare21.fracturedutils.command.HealthThresholdCommand.register(event.getDispatcher());
+        net.dandare21.fracturedutils.region.command.RegionCommands.register(event.getDispatcher());
     }
 
     @SubscribeEvent

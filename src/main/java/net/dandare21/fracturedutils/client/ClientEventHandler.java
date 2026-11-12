@@ -72,6 +72,7 @@ public class ClientEventHandler {
         net.dandare21.fracturedutils.client.camera.ClientCameraHandler.clientTick();
         net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler.clientTick();
         net.dandare21.fracturedutils.bossbar.client.ClientBossBarManager.getInstance().clientTick();
+        net.dandare21.fracturedutils.region.client.ClientRegionHandler.clientTick();
         ClientCutsceneHandler.getInstance().onClientTick();
 
         Minecraft mc = Minecraft.getInstance();
@@ -182,6 +183,9 @@ public class ClientEventHandler {
 
             // Render Objective HUD Overlay in Top-Left
             net.dandare21.fracturedutils.client.gui.ObjectiveHudOverlay.render(guiGraphics);
+
+            // Render Region HUD Title Banner & Location Indicator
+            net.dandare21.fracturedutils.region.client.RegionHudOverlay.render(guiGraphics, event.getPartialTick());
 
             // Render OP Active Sequence Monitor HUD Overlay
             ClientOpMonitorData.renderHudOverlay(guiGraphics);

@@ -62,6 +62,7 @@ public class FracturedUtils
     {
         net.dandare21.fracturedutils.sound.event.EventAudioManager.getInstance().onServerStarting(event.getServer());
         net.dandare21.fracturedutils.bossbar.BossHealthBarManager.getInstance().onServerStarting(event.getServer());
+        net.dandare21.fracturedutils.region.RegionManager.getInstance().onServerStarting(event.getServer());
     }
 
     @SubscribeEvent
@@ -69,6 +70,7 @@ public class FracturedUtils
     {
         net.dandare21.fracturedutils.sound.event.EventAudioManager.getInstance().onServerStopping(event.getServer());
         net.dandare21.fracturedutils.bossbar.BossHealthBarManager.getInstance().onServerStopping(event.getServer());
+        net.dandare21.fracturedutils.region.RegionManager.getInstance().onServerStopping(event.getServer());
     }
 
     @Mod.EventBusSubscriber(modid = MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)

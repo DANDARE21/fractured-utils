@@ -21,6 +21,8 @@ public class ClientConfig {
     private static int opMonitorY = -1;
     private static float opMonitorOpacity = 0.6f;
     private static float opMonitorScale = 1.0f;
+    private static float regionMapOpacity = 0.5f;
+    private static String regionMapDisplayMode = "ALL";
 
     private static boolean loaded = false;
 
@@ -49,6 +51,12 @@ public class ClientConfig {
                         if (json.has("opMonitorScale")) {
                             opMonitorScale = Math.max(0.5f, Math.min(2.0f, json.get("opMonitorScale").getAsFloat()));
                         }
+                        if (json.has("regionMapOpacity")) {
+                            regionMapOpacity = Math.max(0.0f, Math.min(1.0f, json.get("regionMapOpacity").getAsFloat()));
+                        }
+                        if (json.has("regionMapDisplayMode")) {
+                            regionMapDisplayMode = json.get("regionMapDisplayMode").getAsString();
+                        }
                         FracturedUtils.LOGGER.info("[ClientConfig] Loaded client configuration.");
                     }
                 }
@@ -71,6 +79,8 @@ public class ClientConfig {
             json.addProperty("opMonitorY", opMonitorY);
             json.addProperty("opMonitorOpacity", opMonitorOpacity);
             json.addProperty("opMonitorScale", opMonitorScale);
+            json.addProperty("regionMapOpacity", regionMapOpacity);
+            json.addProperty("regionMapDisplayMode", regionMapDisplayMode);
 
             try (Writer writer = Files.newBufferedWriter(CONFIG_FILE)) {
                 GSON.toJson(json, writer);
@@ -170,5 +180,32 @@ public class ClientConfig {
         opMonitorOpacity = 0.6f;
         opMonitorScale = 1.0f;
         save();
+    }
+
+    public static float getRegionMapOpacity() {
+        load();
+        return regionMapOpacity;
+    }
+
+    public static void setRegionMapOpacity(float opacity) {
+        load();
+        float clamped = Math.max(0.0f, Math.min(1.0f, opacity));
+        if (Math.abs(regionMapOpacity - clamped) > 0.001f) {
+            regionMapOpacity = clamped;
+            save();
+        }
+    }
+
+    public static String getRegionMapDisplayMode() {
+        load();
+        return regionMapDisplayMode != null ? regionMapDisplayMode : "ALL";
+    }
+
+    public static void setRegionMapDisplayMode(String mode) {
+        load();
+        if (mode != null && !mode.equals(regionMapDisplayMode)) {
+            regionMapDisplayMode = mode;
+            save();
+        }
     }
 }

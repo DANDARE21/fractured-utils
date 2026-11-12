@@ -20,19 +20,15 @@ import org.joml.Matrix4f;
 import java.util.List;
 
 /**
- * Renders an animated, glowing worldborder-style forcefield along the perimeter
- * of locked regions.
+ * Renders an animated, glowing worldborder-style forcefield along the perimeter of locked regions.
  * Dynamically fades in as the player approaches within proximity of any edge.
- * Uses analytical line-segment clipping so borders always render reliably near
- * the player,
- * even when region vertices are located far away in unloaded chunks / outside
- * simulation distance.
+ * Uses analytical line-segment clipping so borders always render reliably near the player,
+ * even when region vertices are located far away in unloaded chunks / outside simulation distance.
  */
 @Mod.EventBusSubscriber(modid = FracturedUtils.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class LockedBorderForcefieldRenderer {
 
-    private static final ResourceLocation FORCEFIELD_TEXTURE = new ResourceLocation("minecraft",
-            "textures/misc/forcefield.png");
+    private static final ResourceLocation FORCEFIELD_TEXTURE = new ResourceLocation("minecraft", "textures/misc/forcefield.png");
     private static final double PROXIMITY_THRESHOLD = 20.0;
     private static final double CLIP_RADIUS = 28.0;
 
@@ -102,8 +98,7 @@ public class LockedBorderForcefieldRenderer {
                 continue;
             }
 
-            int color = r.getColor() != 0 ? r.getColor()
-                    : (r.getType() != null ? r.getType().getDefaultColor() : 0xFF2255);
+            int color = r.getColor() != 0 ? r.getColor() : (r.getType() != null ? r.getType().getDefaultColor() : 0xFF2255);
             int cr = (color >> 16) & 0xFF;
             int cg = (color >> 8) & 0xFF;
             int cb = color & 0xFF;
@@ -147,8 +142,7 @@ public class LockedBorderForcefieldRenderer {
                     continue; // Segment [a, b] is entirely outside the active radius
                 }
 
-                // Subdivide clipped segment into short steps for smooth distance fading &
-                // OpenGL stability
+                // Subdivide clipped segment into short steps for smooth distance fading & OpenGL stability
                 double clippedLen = (tMax - tMin) * edgeLen;
                 int steps = Math.max(1, (int) Math.ceil(clippedLen / 4.0));
                 double dt = (tMax - tMin) / steps;
@@ -181,14 +175,10 @@ public class LockedBorderForcefieldRenderer {
                     float v1 = (yTop - yBottom) / 4.0f;
 
                     // Quad: P0(bottom) -> P1(bottom) -> P1(top) -> P0(top)
-                    buffer.vertex(matrix, (float) p0x, yBottom, (float) p0z).uv(u0, v0).color(cr, cg, cb, alpha0)
-                            .endVertex();
-                    buffer.vertex(matrix, (float) p1x, yBottom, (float) p1z).uv(u1, v0).color(cr, cg, cb, alpha1)
-                            .endVertex();
-                    buffer.vertex(matrix, (float) p1x, yTop, (float) p1z).uv(u1, v1).color(cr, cg, cb, alpha1)
-                            .endVertex();
-                    buffer.vertex(matrix, (float) p0x, yTop, (float) p0z).uv(u0, v1).color(cr, cg, cb, alpha0)
-                            .endVertex();
+                    buffer.vertex(matrix, (float) p0x, yBottom, (float) p0z).uv(u0, v0).color(cr, cg, cb, alpha0).endVertex();
+                    buffer.vertex(matrix, (float) p1x, yBottom, (float) p1z).uv(u1, v0).color(cr, cg, cb, alpha1).endVertex();
+                    buffer.vertex(matrix, (float) p1x, yTop, (float) p1z).uv(u1, v1).color(cr, cg, cb, alpha1).endVertex();
+                    buffer.vertex(matrix, (float) p0x, yTop, (float) p0z).uv(u0, v1).color(cr, cg, cb, alpha0).endVertex();
                 }
             }
         }

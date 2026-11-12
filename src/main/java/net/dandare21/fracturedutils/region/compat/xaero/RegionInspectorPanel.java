@@ -16,8 +16,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
- * Compact floating side-panel on Xaero's GuiMap for inspecting and editing
- * region metadata.
+ * Compact floating side-panel on Xaero's GuiMap for inspecting and editing region metadata.
  */
 public class RegionInspectorPanel {
 
@@ -37,7 +36,7 @@ public class RegionInspectorPanel {
             0x8833DD, // Mystic Purple
             0xCC22AA, // Nether Magenta
             0xFF66AA, // Blossom Pink
-            0xEEEEEE // Pale Silver / White
+            0xEEEEEE  // Pale Silver / White
     };
 
     private final int width = 195;
@@ -62,8 +61,7 @@ public class RegionInspectorPanel {
     private boolean isLocked = false;
     private boolean active = false;
 
-    public RegionInspectorPanel(BiConsumer<Region, String> onSaveCallback, Consumer<String> onDeleteCallback,
-            Runnable onCloseCallback) {
+    public RegionInspectorPanel(BiConsumer<Region, String> onSaveCallback, Consumer<String> onDeleteCallback, Runnable onCloseCallback) {
         this.onSaveCallback = onSaveCallback;
         this.onDeleteCallback = onDeleteCallback;
         this.onCloseCallback = onCloseCallback;
@@ -117,12 +115,14 @@ public class RegionInspectorPanel {
     }
 
     public boolean isAnyBoxFocused() {
-        return active && ((idBox != null && idBox.isFocused()) ||
+        return active && (
+                (idBox != null && idBox.isFocused()) ||
                 (nameBox != null && nameBox.isFocused()) ||
                 (parentBox != null && parentBox.isFocused()) ||
                 (flagBox != null && flagBox.isFocused()) ||
                 (deniedBox != null && deniedBox.isFocused()) ||
-                (colorBox != null && colorBox.isFocused()));
+                (colorBox != null && colorBox.isFocused())
+        );
     }
 
     public void open(Region region, String suggestedParentId, Font font, int screenWidth, int screenHeight) {
@@ -131,8 +131,7 @@ public class RegionInspectorPanel {
         this.active = true;
         init(screenWidth, screenHeight, font);
 
-        if (suggestedParentId != null && !suggestedParentId.isEmpty()
-                && (region.getParentId() == null || region.getParentId().isEmpty())) {
+        if (suggestedParentId != null && !suggestedParentId.isEmpty() && (region.getParentId() == null || region.getParentId().isEmpty())) {
             parentBox.setValue(suggestedParentId);
         }
     }
@@ -243,15 +242,14 @@ public class RegionInspectorPanel {
     }
 
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (!active)
-            return false;
+        if (!active) return false;
 
         if (idBox.keyPressed(keyCode, scanCode, modifiers) ||
-                nameBox.keyPressed(keyCode, scanCode, modifiers) ||
-                parentBox.keyPressed(keyCode, scanCode, modifiers) ||
-                flagBox.keyPressed(keyCode, scanCode, modifiers) ||
-                deniedBox.keyPressed(keyCode, scanCode, modifiers) ||
-                colorBox.keyPressed(keyCode, scanCode, modifiers)) {
+            nameBox.keyPressed(keyCode, scanCode, modifiers) ||
+            parentBox.keyPressed(keyCode, scanCode, modifiers) ||
+            flagBox.keyPressed(keyCode, scanCode, modifiers) ||
+            deniedBox.keyPressed(keyCode, scanCode, modifiers) ||
+            colorBox.keyPressed(keyCode, scanCode, modifiers)) {
             return true;
         }
 
@@ -267,14 +265,13 @@ public class RegionInspectorPanel {
     }
 
     public boolean charTyped(char codePoint, int modifiers) {
-        if (!active)
-            return false;
+        if (!active) return false;
         return idBox.charTyped(codePoint, modifiers) ||
-                nameBox.charTyped(codePoint, modifiers) ||
-                parentBox.charTyped(codePoint, modifiers) ||
-                flagBox.charTyped(codePoint, modifiers) ||
-                deniedBox.charTyped(codePoint, modifiers) ||
-                colorBox.charTyped(codePoint, modifiers);
+               nameBox.charTyped(codePoint, modifiers) ||
+               parentBox.charTyped(codePoint, modifiers) ||
+               flagBox.charTyped(codePoint, modifiers) ||
+               deniedBox.charTyped(codePoint, modifiers) ||
+               colorBox.charTyped(codePoint, modifiers);
     }
 
     private void commitSave() {
@@ -284,8 +281,7 @@ public class RegionInspectorPanel {
         }
 
         String name = nameBox.getValue().trim();
-        if (name.isEmpty())
-            name = id;
+        if (name.isEmpty()) name = id;
 
         String parent = parentBox.getValue().trim();
         String flag = flagBox.getValue().trim();
@@ -296,15 +292,10 @@ public class RegionInspectorPanel {
                 ? selectedRegion.getPolygon()
                 : new Polygon2D(java.util.List.of());
 
-        String subtitle = (selectedRegion != null && selectedRegion.getSubtitle() != null)
-                ? selectedRegion.getSubtitle()
-                : "";
-        String ambientMusic = (selectedRegion != null && selectedRegion.getAmbientMusic() != null)
-                ? selectedRegion.getAmbientMusic()
-                : "";
+        String subtitle = (selectedRegion != null && selectedRegion.getSubtitle() != null) ? selectedRegion.getSubtitle() : "";
+        String ambientMusic = (selectedRegion != null && selectedRegion.getAmbientMusic() != null) ? selectedRegion.getAmbientMusic() : "";
 
-        Region updated = new Region(id, name, selectedType, parent, polygon, isLocked, flag, denied, color, subtitle,
-                ambientMusic);
+        Region updated = new Region(id, name, selectedType, parent, polygon, isLocked, flag, denied, color, subtitle, ambientMusic);
         ModMessages.sendToServer(new C2SSaveRegionPacket(updated, originalRegionId));
 
         if (onSaveCallback != null) {
@@ -325,8 +316,7 @@ public class RegionInspectorPanel {
     }
 
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, Font font) {
-        if (!active)
-            return;
+        if (!active) return;
 
         // Background panel
         guiGraphics.fill(x, y, x + width, y + height, 0xEE16161E);
@@ -428,3 +418,4 @@ public class RegionInspectorPanel {
         guiGraphics.drawCenteredString(font, "Delete", x + 142, y + 301, 0xFFFFFFFF);
     }
 }
+

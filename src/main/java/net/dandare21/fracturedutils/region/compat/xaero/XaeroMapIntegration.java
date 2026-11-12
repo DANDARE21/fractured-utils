@@ -32,8 +32,7 @@ import java.util.*;
 
 /**
  * Direct integration with Xaero's World Map (xaero.map.gui.GuiMap).
- * Renders 2D polygon mesh overlays, territory labels, and provides an in-map OP
- * region editor.
+ * Renders 2D polygon mesh overlays, territory labels, and provides an in-map OP region editor.
  */
 @Mod.EventBusSubscriber(modid = FracturedUtils.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class XaeroMapIntegration {
@@ -55,8 +54,7 @@ public class XaeroMapIntegration {
 
         public static DisplayMode fromString(String name) {
             for (DisplayMode mode : values()) {
-                if (mode.name().equalsIgnoreCase(name))
-                    return mode;
+                if (mode.name().equalsIgnoreCase(name)) return mode;
             }
             return ALL;
         }
@@ -98,16 +96,11 @@ public class XaeroMapIntegration {
 
     // Dragging state
     private static boolean isDragging = false;
-
-    private static record DragNode(Region region, int vertexIndex) {
-    }
-
+    private static record DragNode(Region region, int vertexIndex) {}
     private static final List<DragNode> activeDragNodes = new ArrayList<>();
 
     // Midpoint hover handle
-    private static record MidpointHandle(Region region, int edgeIndex, double screenX, double screenY, Vec2d worldPos) {
-    }
-
+    private static record MidpointHandle(Region region, int edgeIndex, double screenX, double screenY, Vec2d worldPos) {}
     private static MidpointHandle hoveredMidpoint = null;
 
     private static RegionInspectorPanel inspectorPanel = null;
@@ -129,7 +122,8 @@ public class XaeroMapIntegration {
                     r.getId(), r.getName(), r.getType(), r.getParentId(),
                     r.getPolygon() != null ? r.getPolygon().copy() : new Polygon2D(List.of()),
                     r.isLocked(), r.getRequiredFlag(), r.getDeniedMessage(),
-                    r.getColor(), r.getSubtitle(), r.getAmbientMusic()));
+                    r.getColor(), r.getSubtitle(), r.getAmbientMusic()
+            ));
         }
     }
 
@@ -146,11 +140,11 @@ public class XaeroMapIntegration {
                     r.getId(), r.getName(), r.getType(), r.getParentId(),
                     r.getPolygon() != null ? r.getPolygon().copy() : new Polygon2D(List.of()),
                     r.isLocked(), r.getRequiredFlag(), r.getDeniedMessage(),
-                    r.getColor(), r.getSubtitle(), r.getAmbientMusic()));
+                    r.getColor(), r.getSubtitle(), r.getAmbientMusic()
+            ));
         }
         undoStack.push(snapshot);
-        if (undoStack.size() > 30)
-            undoStack.removeLast();
+        if (undoStack.size() > 30) undoStack.removeLast();
         redoStack.clear();
     }
 
@@ -174,11 +168,9 @@ public class XaeroMapIntegration {
 
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
-        if (!isXaeroInstalled())
-            return;
+        if (!isXaeroInstalled()) return;
         Screen screen = event.getScreen();
-        if (!XaeroReflectionHelper.isXaeroGuiMap(screen))
-            return;
+        if (!XaeroReflectionHelper.isXaeroGuiMap(screen)) return;
 
         Minecraft mc = Minecraft.getInstance();
         inspectorPanel = new RegionInspectorPanel(
@@ -187,8 +179,7 @@ public class XaeroMapIntegration {
                     int existingIdx = -1;
                     for (int i = 0; i < draftRegions.size(); i++) {
                         String curId = draftRegions.get(i).getId();
-                        if ((origId != null && !origId.isEmpty() && curId.equals(origId))
-                                || curId.equals(updatedRegion.getId())) {
+                        if ((origId != null && !origId.isEmpty() && curId.equals(origId)) || curId.equals(updatedRegion.getId())) {
                             existingIdx = i;
                             break;
                         }
@@ -218,7 +209,8 @@ public class XaeroMapIntegration {
                 },
                 () -> {
                     selectedRegion = null;
-                });
+                }
+        );
         inspectorPanel.init(screen.width, screen.height, mc.font);
         copyLiveToDraft();
 
@@ -234,15 +226,12 @@ public class XaeroMapIntegration {
 
     @SubscribeEvent
     public static void onScreenRender(ScreenEvent.Render.Post event) {
-        if (!isXaeroInstalled())
-            return;
+        if (!isXaeroInstalled()) return;
         Screen screen = event.getScreen();
-        if (!XaeroReflectionHelper.isXaeroGuiMap(screen))
-            return;
+        if (!XaeroReflectionHelper.isXaeroGuiMap(screen)) return;
 
         XaeroReflectionHelper.MapViewport vp = XaeroReflectionHelper.getViewport(screen);
-        if (vp == null)
-            return;
+        if (vp == null) return;
 
         Minecraft mc = Minecraft.getInstance();
         GuiGraphics guiGraphics = event.getGuiGraphics();
@@ -267,8 +256,7 @@ public class XaeroMapIntegration {
         }
     }
 
-    private static void renderPolygonOverlays(GuiGraphics guiGraphics, Screen screen,
-            XaeroReflectionHelper.MapViewport vp, int mouseX, int mouseY, Font font) {
+    private static void renderPolygonOverlays(GuiGraphics guiGraphics, Screen screen, XaeroReflectionHelper.MapViewport vp, int mouseX, int mouseY, Font font) {
         List<Region> sourceList = editorMode ? draftRegions : ClientRegionData.getInstance().getAllRegions();
         double cx = vp.cameraX();
         double cz = vp.cameraZ();
@@ -283,8 +271,7 @@ public class XaeroMapIntegration {
         Region hoveredRegion = null;
         List<Region> hoveredCandidates = new ArrayList<>();
         for (Region r : sourceList) {
-            if (!matchesFilter(r))
-                continue;
+            if (!matchesFilter(r)) continue;
             if (r.getPolygon() != null && r.getPolygon().contains(mouseWorldX, mouseWorldZ)) {
                 hoveredCandidates.add(r);
             }
@@ -292,8 +279,7 @@ public class XaeroMapIntegration {
         if (!hoveredCandidates.isEmpty()) {
             hoveredCandidates.sort((a, b) -> {
                 int tierComp = Integer.compare(b.getType().getTier(), a.getType().getTier());
-                if (tierComp != 0)
-                    return tierComp;
+                if (tierComp != 0) return tierComp;
                 double areaA = a.getPolygon() != null ? a.getPolygon().getArea() : 0.0;
                 double areaB = b.getPolygon() != null ? b.getPolygon().getArea() : 0.0;
                 return Double.compare(areaA, areaB);
@@ -334,14 +320,12 @@ public class XaeroMapIntegration {
         Tesselator tesselator = Tesselator.getInstance();
         BufferBuilder buffer = tesselator.getBuilder();
 
-        // Pass 1: Render Translucent Polygon Fills (Macro-zones first, inner nested
-        // zones on top)
+        // Pass 1: Render Translucent Polygon Fills (Macro-zones first, inner nested zones on top)
         if (fillOpacity > 0.001f) {
             List<Region> sortedForFills = new ArrayList<>(activeList);
             sortedForFills.sort((a, b) -> {
                 int tierComp = Integer.compare(a.getType().getTier(), b.getType().getTier());
-                if (tierComp != 0)
-                    return tierComp;
+                if (tierComp != 0) return tierComp;
                 double areaA = a.getPolygon() != null ? a.getPolygon().getArea() : 0.0;
                 double areaB = b.getPolygon() != null ? b.getPolygon().getArea() : 0.0;
                 return Double.compare(areaB, areaA);
@@ -350,17 +334,14 @@ public class XaeroMapIntegration {
             buffer.begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 
             for (Region r : sortedForFills) {
-                if (!matchesFilter(r))
-                    continue;
+                if (!matchesFilter(r)) continue;
                 Polygon2D poly = r.getPolygon();
-                if (poly == null || poly.vertexCount() < 3)
-                    continue;
+                if (poly == null || poly.vertexCount() < 3) continue;
 
                 List<Vec2d> vertices = poly.getVertices();
                 int[] indices = EarClippingTriangulator.triangulate(vertices);
 
-                int baseColor = r.getColor() != 0 ? r.getColor()
-                        : (r.getType() != null ? r.getType().getDefaultColor() : 0x00D0FF);
+                int baseColor = r.getColor() != 0 ? r.getColor() : (r.getType() != null ? r.getType().getDefaultColor() : 0x00D0FF);
                 int red = (baseColor >> 16) & 0xFF;
                 int green = (baseColor >> 8) & 0xFF;
                 int blue = baseColor & 0xFF;
@@ -380,11 +361,9 @@ public class XaeroMapIntegration {
 
         // Pass 2: Render Crisp Border Outlines
         for (Region r : activeList) {
-            if (!matchesFilter(r))
-                continue;
+            if (!matchesFilter(r)) continue;
             Polygon2D poly = r.getPolygon();
-            if (poly == null || poly.vertexCount() < 2)
-                continue;
+            if (poly == null || poly.vertexCount() < 2) continue;
 
             int borderAlpha;
             if (r == selectedRegion) {
@@ -395,16 +374,12 @@ public class XaeroMapIntegration {
                 borderAlpha = (int) (238 * fillOpacity);
             }
 
-            if (borderAlpha <= 0)
-                continue;
+            if (borderAlpha <= 0) continue;
 
-            int regColor = r.getColor() != 0 ? r.getColor()
-                    : (r.getType() != null ? r.getType().getDefaultColor() : 0x00D0FF);
+            int regColor = r.getColor() != 0 ? r.getColor() : (r.getType() != null ? r.getType().getDefaultColor() : 0x00D0FF);
             int strokeColor = (borderAlpha << 24) | (regColor & 0x00FFFFFF);
-            if (r == selectedRegion)
-                strokeColor = (borderAlpha << 24) | 0x00FFFFFF;
-            else if (r == hoveredRegion)
-                strokeColor = (borderAlpha << 24) | 0x00FFFFAA;
+            if (r == selectedRegion) strokeColor = (borderAlpha << 24) | 0x00FFFFFF;
+            else if (r == hoveredRegion) strokeColor = (borderAlpha << 24) | 0x00FFFFAA;
 
             float strokeWidth = (r == selectedRegion) ? 2.5f : ((r == hoveredRegion) ? 2.0f : 1.5f);
 
@@ -425,11 +400,9 @@ public class XaeroMapIntegration {
 
         // Pass 3: Render Centered Region Badges
         for (Region r : activeList) {
-            if (!matchesFilter(r))
-                continue;
+            if (!matchesFilter(r)) continue;
             Polygon2D poly = r.getPolygon();
-            if (poly == null || poly.vertexCount() < 3)
-                continue;
+            if (poly == null || poly.vertexCount() < 3) continue;
 
             Vec2d centroid = poly.getCentroid();
             float cxScreen = (float) (halfW + (centroid.x() - cx) * scale);
@@ -482,8 +455,7 @@ public class XaeroMapIntegration {
         }
 
         // 3. Opacity Button
-        String opacityText = fillOpacity <= 0.001f ? "Opacity: §c0%"
-                : ("Opacity: §e" + (int) (fillOpacity * 100) + "%");
+        String opacityText = fillOpacity <= 0.001f ? "Opacity: §c0%" : ("Opacity: §e" + (int)(fillOpacity * 100) + "%");
         int opacityW = font.width(opacityText) + 12;
         boolean hoverOpacity = mouseX >= x && mouseX <= x + opacityW && mouseY >= y && mouseY <= y + 16;
         guiGraphics.fill(x, y, x + opacityW, y + 16, hoverOpacity ? 0xFF2A2A38 : 0xFF181822);
@@ -515,8 +487,7 @@ public class XaeroMapIntegration {
             int undoW = font.width(undoText) + 10;
             boolean hoverUndo = mouseX >= r2X && mouseX <= r2X + undoW && mouseY >= r2Y && mouseY <= r2Y + 16;
             guiGraphics.fill(r2X, r2Y, r2X + undoW, r2Y + 16, hoverUndo ? 0xFF2A2A38 : 0xFF181822);
-            guiGraphics.drawString(font, undoText, r2X + 5, r2Y + 4, undoStack.isEmpty() ? 0xFF666666 : 0xFFFFFFFF,
-                    true);
+            guiGraphics.drawString(font, undoText, r2X + 5, r2Y + 4, undoStack.isEmpty() ? 0xFF666666 : 0xFFFFFFFF, true);
             r2X += undoW + 5;
 
             // Redo Button
@@ -524,8 +495,7 @@ public class XaeroMapIntegration {
             int redoW = font.width(redoText) + 10;
             boolean hoverRedo = mouseX >= r2X && mouseX <= r2X + redoW && mouseY >= r2Y && mouseY <= r2Y + 16;
             guiGraphics.fill(r2X, r2Y, r2X + redoW, r2Y + 16, hoverRedo ? 0xFF2A2A38 : 0xFF181822);
-            guiGraphics.drawString(font, redoText, r2X + 5, r2Y + 4, redoStack.isEmpty() ? 0xFF666666 : 0xFFFFFFFF,
-                    true);
+            guiGraphics.drawString(font, redoText, r2X + 5, r2Y + 4, redoStack.isEmpty() ? 0xFF666666 : 0xFFFFFFFF, true);
             r2X += redoW + 5;
 
             // Save & Sync All Button
@@ -537,8 +507,7 @@ public class XaeroMapIntegration {
         }
     }
 
-    private static void renderEditorHandles(GuiGraphics guiGraphics, Screen screen,
-            XaeroReflectionHelper.MapViewport vp, int mouseX, int mouseY, Font font) {
+    private static void renderEditorHandles(GuiGraphics guiGraphics, Screen screen, XaeroReflectionHelper.MapViewport vp, int mouseX, int mouseY, Font font) {
         double cx = vp.cameraX();
         double cz = vp.cameraZ();
         double scale = vp.effectiveScale();
@@ -554,25 +523,23 @@ public class XaeroMapIntegration {
                 Vec2d a = drawingVertices.get(i);
                 Vec2d b = drawingVertices.get(i + 1);
                 drawLine(guiGraphics,
-                        (float) (halfW + (a.x() - cx) * scale), (float) (halfH + (a.z() - cz) * scale),
-                        (float) (halfW + (b.x() - cx) * scale), (float) (halfH + (b.z() - cz) * scale),
+                        (float)(halfW + (a.x() - cx) * scale), (float)(halfH + (a.z() - cz) * scale),
+                        (float)(halfW + (b.x() - cx) * scale), (float)(halfH + (b.z() - cz) * scale),
                         0xFF55FF55, 2.0f);
             }
             // Line to cursor
             Vec2d last = drawingVertices.get(n - 1);
             drawLine(guiGraphics,
-                    (float) (halfW + (last.x() - cx) * scale), (float) (halfH + (last.z() - cz) * scale),
+                    (float)(halfW + (last.x() - cx) * scale), (float)(halfH + (last.z() - cz) * scale),
                     mouseX, mouseY,
                     0xAA55FF55, 1.5f);
         }
 
         // Render Handles for existing draft regions
         for (Region r : draftRegions) {
-            if (!matchesFilter(r))
-                continue;
+            if (!matchesFilter(r)) continue;
             Polygon2D poly = r.getPolygon();
-            if (poly == null)
-                continue;
+            if (poly == null) continue;
 
             List<Vec2d> vertices = poly.getVertices();
             int n = vertices.size();
@@ -588,8 +555,7 @@ public class XaeroMapIntegration {
                 // Check if shared vertex
                 boolean isShared = countRegionsSharingVertex(v.x(), v.z()) > 1;
                 int handleColor = isShared ? 0xFFFFD700 : 0xFF00D0FF;
-                if (isHovered)
-                    handleColor = 0xFFFFFFFF;
+                if (isHovered) handleColor = 0xFFFFFFFF;
 
                 guiGraphics.fill((int) sx - 3, (int) sy - 3, (int) sx + 4, (int) sy + 4, 0xFF000000);
                 guiGraphics.fill((int) sx - 2, (int) sy - 2, (int) sx + 3, (int) sy + 3, handleColor);
@@ -628,8 +594,7 @@ public class XaeroMapIntegration {
         return count;
     }
 
-    private static Vec2d findSnapVertex(int mouseX, int mouseY, Screen screen, XaeroReflectionHelper.MapViewport vp,
-            double pixelThreshold) {
+    private static Vec2d findSnapVertex(int mouseX, int mouseY, Screen screen, XaeroReflectionHelper.MapViewport vp, double pixelThreshold) {
         double cx = vp.cameraX();
         double cz = vp.cameraZ();
         double scale = vp.effectiveScale();
@@ -637,8 +602,7 @@ public class XaeroMapIntegration {
         double halfH = screen.height / 2.0;
 
         for (Region r : draftRegions) {
-            if (r.getPolygon() == null)
-                continue;
+            if (r.getPolygon() == null) continue;
             for (Vec2d v : r.getPolygon().getVertices()) {
                 double sx = halfW + (v.x() - cx) * scale;
                 double sy = halfH + (v.z() - cz) * scale;
@@ -651,24 +615,18 @@ public class XaeroMapIntegration {
     }
 
     private static boolean matchesFilter(Region r) {
-        if (layerFilter == LayerFilter.ALL)
-            return true;
-        if (layerFilter == LayerFilter.MAP_ZONES)
-            return r.getType() == RegionType.MAP_ZONE;
-        if (layerFilter == LayerFilter.CITIES)
-            return r.getType() == RegionType.CITY;
-        if (layerFilter == LayerFilter.EVENT_ZONES)
-            return r.getType() == RegionType.EVENT_ZONE;
+        if (layerFilter == LayerFilter.ALL) return true;
+        if (layerFilter == LayerFilter.MAP_ZONES) return r.getType() == RegionType.MAP_ZONE;
+        if (layerFilter == LayerFilter.CITIES) return r.getType() == RegionType.CITY;
+        if (layerFilter == LayerFilter.EVENT_ZONES) return r.getType() == RegionType.EVENT_ZONE;
         return true;
     }
 
-    private static void drawLine(GuiGraphics guiGraphics, float x1, float y1, float x2, float y2, int color,
-            float thickness) {
+    private static void drawLine(GuiGraphics guiGraphics, float x1, float y1, float x2, float y2, int color, float thickness) {
         float dx = x2 - x1;
         float dy = y2 - y1;
         float len = (float) Math.hypot(dx, dy);
-        if (len < 1e-4)
-            return;
+        if (len < 1e-4) return;
 
         float nx = (-dy / len) * (thickness / 2.0f);
         float ny = (dx / len) * (thickness / 2.0f);
@@ -696,15 +654,12 @@ public class XaeroMapIntegration {
 
     @SubscribeEvent
     public static void onMouseButtonPressed(ScreenEvent.MouseButtonPressed.Pre event) {
-        if (!isXaeroInstalled())
-            return;
+        if (!isXaeroInstalled()) return;
         Screen screen = event.getScreen();
-        if (!XaeroReflectionHelper.isXaeroGuiMap(screen))
-            return;
+        if (!XaeroReflectionHelper.isXaeroGuiMap(screen)) return;
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null)
-            return;
+        if (mc.player == null) return;
         boolean isOp = mc.player.hasPermissions(2);
 
         double mx = event.getMouseX();
@@ -743,8 +698,7 @@ public class XaeroMapIntegration {
             }
 
             // Opacity Button
-            String opacityText = fillOpacity <= 0.001f ? "Opacity: §c0%"
-                    : ("Opacity: §e" + (int) (fillOpacity * 100) + "%");
+            String opacityText = fillOpacity <= 0.001f ? "Opacity: §c0%" : ("Opacity: §e" + (int)(fillOpacity * 100) + "%");
             int opacityW = font.width(opacityText) + 12;
             if (mx >= x && mx <= x + opacityW) {
                 opacityIndex = (opacityIndex + 1) % OPACITY_PRESETS.length;
@@ -777,8 +731,7 @@ public class XaeroMapIntegration {
             if (mx >= r2X && mx <= r2X + newW) {
                 if (drawingRegion == null) {
                     drawingVertices.clear();
-                    drawingRegion = new Region("new_region_" + (draftRegions.size() + 1), "New Region",
-                            RegionType.MAP_ZONE, "", new Polygon2D(List.of()), false, "", "", 0x00D0FF, "", "");
+                    drawingRegion = new Region("new_region_" + (draftRegions.size() + 1), "New Region", RegionType.MAP_ZONE, "", new Polygon2D(List.of()), false, "", "", 0x00D0FF, "", "");
                 } else {
                     // Finish drawing
                     if (drawingVertices.size() >= 3) {
@@ -826,15 +779,13 @@ public class XaeroMapIntegration {
                 for (Region r : draftRegions) {
                     ModMessages.sendToServer(new C2SSaveRegionPacket(r, r.getId()));
                 }
-                mc.player.displayClientMessage(Component.literal("§a[Region Editor] All regions synced to server!"),
-                        false);
+                mc.player.displayClientMessage(Component.literal("§a[Region Editor] All regions synced to server!"), false);
                 event.setCanceled(true);
                 return;
             }
         }
 
-        if (!isOp || !editorMode)
-            return;
+        if (!isOp || !editorMode) return;
 
         // 2. Inspector panel input
         if (inspectorPanel != null && inspectorPanel.isActive()) {
@@ -845,8 +796,7 @@ public class XaeroMapIntegration {
         }
 
         XaeroReflectionHelper.MapViewport vp = XaeroReflectionHelper.getViewport(screen);
-        if (vp == null)
-            return;
+        if (vp == null) return;
 
         double cx = vp.cameraX();
         double cz = vp.cameraZ();
@@ -883,11 +833,9 @@ public class XaeroMapIntegration {
 
         // 4. Vertex Handle Click (Drag or Delete)
         for (Region r : draftRegions) {
-            if (!matchesFilter(r))
-                continue;
+            if (!matchesFilter(r)) continue;
             Polygon2D poly = r.getPolygon();
-            if (poly == null)
-                continue;
+            if (poly == null) continue;
 
             List<Vec2d> vertices = poly.getVertices();
             for (int i = 0; i < vertices.size(); i++) {
@@ -903,8 +851,7 @@ public class XaeroMapIntegration {
 
                         // Topological Shared-Node Dragging: Find all regions sharing this vertex!
                         for (Region candidate : draftRegions) {
-                            if (candidate.getPolygon() == null)
-                                continue;
+                            if (candidate.getPolygon() == null) continue;
                             List<Vec2d> cVerts = candidate.getPolygon().getVertices();
                             for (int ci = 0; ci < cVerts.size(); ci++) {
                                 if (cVerts.get(ci).distanceSq(v) <= 0.05 * 0.05) {
@@ -937,13 +884,11 @@ public class XaeroMapIntegration {
             return;
         }
 
-        // 6. Click inside polygon to select and open Inspector (innermost / higher-tier
-        // first)
+        // 6. Click inside polygon to select and open Inspector (innermost / higher-tier first)
         if (button == 0) {
             List<Region> hits = new ArrayList<>();
             for (Region r : draftRegions) {
-                if (!matchesFilter(r))
-                    continue;
+                if (!matchesFilter(r)) continue;
                 if (r.getPolygon() != null && r.getPolygon().contains(worldX, worldZ)) {
                     hits.add(r);
                 }
@@ -954,8 +899,7 @@ public class XaeroMapIntegration {
                 // Priority 2: Smaller polygon area first
                 hits.sort((a, b) -> {
                     int tierComp = Integer.compare(b.getType().getTier(), a.getType().getTier());
-                    if (tierComp != 0)
-                        return tierComp;
+                    if (tierComp != 0) return tierComp;
                     double areaA = a.getPolygon() != null ? a.getPolygon().getArea() : 0.0;
                     double areaB = b.getPolygon() != null ? b.getPolygon().getArea() : 0.0;
                     return Double.compare(areaA, areaB);
@@ -969,9 +913,9 @@ public class XaeroMapIntegration {
                 if (r.getType() != RegionType.MAP_ZONE) {
                     for (Region parentCand : draftRegions) {
                         if (parentCand.getType() == RegionType.MAP_ZONE &&
-                                parentCand != r &&
-                                parentCand.getPolygon() != null &&
-                                parentCand.getPolygon().contains(r.getPolygon().getCentroid())) {
+                            parentCand != r &&
+                            parentCand.getPolygon() != null &&
+                            parentCand.getPolygon().contains(r.getPolygon().getCentroid())) {
                             suggestedParent = parentCand.getId();
                             break;
                         }
@@ -989,15 +933,12 @@ public class XaeroMapIntegration {
 
     @SubscribeEvent
     public static void onMouseDragged(ScreenEvent.MouseDragged.Pre event) {
-        if (!isXaeroInstalled() || !editorMode || !isDragging || activeDragNodes.isEmpty())
-            return;
+        if (!isXaeroInstalled() || !editorMode || !isDragging || activeDragNodes.isEmpty()) return;
         Screen screen = event.getScreen();
-        if (!XaeroReflectionHelper.isXaeroGuiMap(screen))
-            return;
+        if (!XaeroReflectionHelper.isXaeroGuiMap(screen)) return;
 
         XaeroReflectionHelper.MapViewport vp = XaeroReflectionHelper.getViewport(screen);
-        if (vp == null)
-            return;
+        if (vp == null) return;
 
         double cx = vp.cameraX();
         double cz = vp.cameraZ();
@@ -1049,11 +990,9 @@ public class XaeroMapIntegration {
 
     @SubscribeEvent
     public static void onCharacterTyped(ScreenEvent.CharacterTyped.Pre event) {
-        if (!isXaeroInstalled() || !editorMode)
-            return;
+        if (!isXaeroInstalled() || !editorMode) return;
         Screen screen = event.getScreen();
-        if (!XaeroReflectionHelper.isXaeroGuiMap(screen))
-            return;
+        if (!XaeroReflectionHelper.isXaeroGuiMap(screen)) return;
 
         if (inspectorPanel != null && inspectorPanel.isActive()) {
             if (inspectorPanel.charTyped(event.getCodePoint(), event.getModifiers())) {
@@ -1064,11 +1003,9 @@ public class XaeroMapIntegration {
 
     @SubscribeEvent
     public static void onKeyPressed(ScreenEvent.KeyPressed.Pre event) {
-        if (!isXaeroInstalled() || !editorMode)
-            return;
+        if (!isXaeroInstalled() || !editorMode) return;
         Screen screen = event.getScreen();
-        if (!XaeroReflectionHelper.isXaeroGuiMap(screen))
-            return;
+        if (!XaeroReflectionHelper.isXaeroGuiMap(screen)) return;
 
         int keyCode = event.getKeyCode();
         int modifiers = event.getModifiers();
@@ -1079,8 +1016,7 @@ public class XaeroMapIntegration {
                 return;
             }
             if (inspectorPanel.isAnyBoxFocused() && keyCode != 256) {
-                // Consume all typing keys while an edit box is focused so map shortcuts are not
-                // triggered
+                // Consume all typing keys while an edit box is focused so map shortcuts are not triggered
                 event.setCanceled(true);
                 return;
             }
@@ -1108,11 +1044,11 @@ public class XaeroMapIntegration {
             }
             if (selectedRegion != null) {
                 selectedRegion = null;
-                if (inspectorPanel != null)
-                    inspectorPanel.close();
+                if (inspectorPanel != null) inspectorPanel.close();
                 event.setCanceled(true);
                 return;
             }
         }
     }
 }
+

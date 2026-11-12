@@ -1,8 +1,16 @@
 package net.dandare21.fracturedutils.client.gui;
 
+import net.dandare21.fracturedutils.client.camera.CustomCameraManager;
 import net.dandare21.fracturedutils.dialog.DialogFormatUtil;
+import net.dandare21.fracturedutils.dialog.style.DialogStyle;
+import net.dandare21.fracturedutils.dialog.style.DialogStyleRegistry;
+import net.dandare21.fracturedutils.dialog.style.NineSliceRenderer;
+import net.dandare21.fracturedutils.dialog.text.DialogTextParser;
+import net.dandare21.fracturedutils.dialog.text.DialogTextToken;
 import net.dandare21.fracturedutils.network.ModMessages;
 import net.dandare21.fracturedutils.network.packet.C2SDialogAdvancePacket;
+import net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler;
+import net.dandare21.fracturedutils.screeneffect.effects.ScreenShakeEffect;
 import net.dandare21.fracturedutils.sound.ModSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -13,7 +21,8 @@ import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
-import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,12 +45,34 @@ public class DialogHudOverlay {
     private static int revealedCharCount = 0;
     private static int totalCharCount = 0;
     private static int charTickTimer = 0;
+    private static int pauseTicksRemaining = 0;
+    private static int tokenIndex = 0;
+    private static List<DialogTextToken.Token> parsedTokens = new ArrayList<>();
+
+    // Styling & Theme
+    private static DialogStyle activeStyle = DialogStyleRegistry.CYBERPUNK;
 
     // Multiplayer consensus player readiness state
     private static final List<UUID> readyPlayerUUIDs = new ArrayList<>();
     private static boolean dialogSetCamera = false;
 
-    public static void setActiveDialog(String speaker, String text, int delayTicks, int charSpeedTicks, String letterSound, float letterSoundPitchMin, float letterSoundPitchMax, boolean waitForInput, boolean useCamera, double cameraX, double cameraY, double cameraZ, float cameraYaw, float cameraPitch, double cameraFov) {
+    // Render Performance Caching
+    private static int lastRenderGuiTicks = -1;
+    private static float lastRenderPartialTick = -1.0f;
+    private static int lastRevealedCharCount = -1;
+    private static String lastActiveText = "";
+    private static String cachedRevealedText = "";
+    private static String lastSpeaker = "";
+    private static int cachedSpeakerWidth = 0;
+
+    public static void setActiveDialog(
+            String speaker, String text, int delayTicks, int charSpeedTicks,
+            String letterSound, float letterSoundPitchMin, float letterSoundPitchMax,
+            boolean waitForInput, boolean useCamera, double cameraX, double cameraY, double cameraZ,
+            float cameraYaw, float cameraPitch, double cameraFov, int targetEntityId,
+            String anchor, double offsetX, double offsetY, double offsetZ, boolean lookAtTarget,
+            int interpolationTicks, String easing, String styleId
+    ) {
         activeSpeaker = speaker != null ? speaker : "";
         activeText = text != null ? text : "";
         DialogHudOverlay.delayTicks = Math.max(1, delayTicks);
@@ -53,26 +84,50 @@ public class DialogHudOverlay {
         DialogHudOverlay.letterSoundPitchMax = letterSoundPitchMax > 0 ? letterSoundPitchMax : 1.2f;
         DialogHudOverlay.waitForInput = waitForInput;
 
-        totalCharCount = DialogFormatUtil.getVisibleCharCount(activeText);
+        activeStyle = DialogStyleRegistry.get(styleId);
+
+        // Parse text into token stream with rich formatting, mid-text events and punctuation pacing
+        parsedTokens = DialogTextParser.parse(activeText, activeStyle.defaultTextColor());
+        totalCharCount = DialogTextParser.countVisibleChars(parsedTokens);
+        tokenIndex = 0;
+        pauseTicksRemaining = 0;
+        charTickTimer = 0;
+
         if (DialogHudOverlay.charSpeedTicks == 0) {
             revealedCharCount = totalCharCount;
+            // Execute all instant tokens up to end
+            while (tokenIndex < parsedTokens.size()) {
+                executeToken(parsedTokens.get(tokenIndex++));
+            }
         } else {
             revealedCharCount = 0;
         }
-        charTickTimer = 0;
+
         readyPlayerUUIDs.clear();
         active = true;
 
         if (useCamera) {
             dialogSetCamera = true;
-            net.dandare21.fracturedutils.client.camera.CustomCameraManager.setCustomCamera(cameraX, cameraY, cameraZ, cameraYaw, cameraPitch, true);
-            net.dandare21.fracturedutils.client.camera.CustomCameraManager.setCustomFov(cameraFov);
+            Minecraft mc = Minecraft.getInstance();
+            Entity target = null;
+            if (targetEntityId >= 0 && mc.level != null) {
+                target = mc.level.getEntity(targetEntityId);
+            }
+            CustomCameraManager.setDialogCamera(
+                    target, anchor, new Vec3(offsetX, offsetY, offsetZ), lookAtTarget,
+                    cameraYaw, cameraPitch, cameraX, cameraY, cameraZ, cameraYaw, cameraPitch, cameraFov,
+                    interpolationTicks, easing
+            );
         } else {
-            if (dialogSetCamera && net.dandare21.fracturedutils.client.camera.CustomCameraManager.getActiveTrack() == null) {
-                net.dandare21.fracturedutils.client.camera.CustomCameraManager.clearCustomCamera();
+            if (dialogSetCamera && CustomCameraManager.getActiveTrack() == null) {
+                CustomCameraManager.clearCustomCamera();
             }
             dialogSetCamera = false;
         }
+    }
+
+    public static void setActiveDialog(String speaker, String text, int delayTicks, int charSpeedTicks, String letterSound, float letterSoundPitchMin, float letterSoundPitchMax, boolean waitForInput, boolean useCamera, double cameraX, double cameraY, double cameraZ, float cameraYaw, float cameraPitch, double cameraFov) {
+        setActiveDialog(speaker, text, delayTicks, charSpeedTicks, letterSound, letterSoundPitchMin, letterSoundPitchMax, waitForInput, useCamera, cameraX, cameraY, cameraZ, cameraYaw, cameraPitch, cameraFov, -1, "eyes", 0, 0, 0, true, 20, "EASE_IN_OUT_CUBIC", "fractured_utils:cyberpunk");
     }
 
     public static void updateReadyPlayers(List<UUID> readyUUIDs) {
@@ -86,9 +141,17 @@ public class DialogHudOverlay {
         active = false;
         activeSpeaker = "";
         activeText = "";
+        parsedTokens.clear();
         readyPlayerUUIDs.clear();
-        if (dialogSetCamera && net.dandare21.fracturedutils.client.camera.CustomCameraManager.getActiveTrack() == null) {
-            net.dandare21.fracturedutils.client.camera.CustomCameraManager.clearCustomCamera();
+        lastRenderGuiTicks = -1;
+        lastRenderPartialTick = -1.0f;
+        lastRevealedCharCount = -1;
+        lastActiveText = "";
+        cachedRevealedText = "";
+        lastSpeaker = "";
+        cachedSpeakerWidth = 0;
+        if (dialogSetCamera && CustomCameraManager.getActiveTrack() == null) {
+            CustomCameraManager.clearCustomCamera();
         }
         dialogSetCamera = false;
     }
@@ -97,16 +160,26 @@ public class DialogHudOverlay {
         return active;
     }
 
+    /**
+     * Two-Stage Advance Handler:
+     * Stage 1: If typewriter is printing or in pause, instantly fast-forward text to 100%.
+     * Stage 2: If line is fully printed, send C2SDialogAdvancePacket to advance line.
+     */
     public static boolean handleUserInput() {
         if (!active || !waitForInput) return false;
 
-        // 1. First Press: If text is still revealing, reveal all text immediately!
-        if (revealedCharCount < totalCharCount) {
+        // Stage 1: Fast-Forward Typewriter
+        if (revealedCharCount < totalCharCount || pauseTicksRemaining > 0) {
             revealedCharCount = totalCharCount;
+            pauseTicksRemaining = 0;
+            // Execute all remaining inline triggers
+            while (tokenIndex < parsedTokens.size()) {
+                executeToken(parsedTokens.get(tokenIndex++));
+            }
             return true;
         }
 
-        // 2. Second Press: If text is fully revealed, send C2SDialogAdvancePacket to server!
+        // Stage 2: Advance Dialogue Line
         ModMessages.sendToServer(new C2SDialogAdvancePacket());
         return true;
     }
@@ -117,29 +190,58 @@ public class DialogHudOverlay {
         if (revealedCharCount < totalCharCount) {
             if (charSpeedTicks == 0) {
                 revealedCharCount = totalCharCount;
+                while (tokenIndex < parsedTokens.size()) {
+                    executeToken(parsedTokens.get(tokenIndex++));
+                }
             } else {
+                if (pauseTicksRemaining > 0) {
+                    pauseTicksRemaining--;
+                    return;
+                }
+
                 charTickTimer++;
                 if (charTickTimer >= charSpeedTicks) {
                     charTickTimer = 0;
-                    revealedCharCount++;
 
-                    // Play sound blip on revealed character if non-whitespace
-                    String currentRevealedText = DialogFormatUtil.getRevealedText(activeText, revealedCharCount);
-                    if (!currentRevealedText.isEmpty()) {
-                        char lastChar = currentRevealedText.charAt(currentRevealedText.length() - 1);
-                        if (!Character.isWhitespace(lastChar)) {
-                            playLetterSound();
+                    // Advance through tokens until next text character is revealed
+                    while (tokenIndex < parsedTokens.size()) {
+                        DialogTextToken.Token token = parsedTokens.get(tokenIndex++);
+                        if (token instanceof DialogTextToken.TextChar tc) {
+                            revealedCharCount++;
+                            if (!Character.isWhitespace(tc.character())) {
+                                playLetterSound();
+                            }
+                            break;
+                        } else {
+                            executeToken(token);
+                            if (pauseTicksRemaining > 0) {
+                                break;
+                            }
                         }
                     }
                 }
             }
         } else if (!waitForInput) {
-            // Delay happens AFTER typewriter text has finished displaying!
+            // Post-typewriter display delay for automated lines
             if (delayRemainingTicks > 0) {
                 delayRemainingTicks--;
             } else {
-                active = false;
+                ModMessages.sendToServer(new C2SDialogAdvancePacket());
+                clearActiveDialog();
             }
+        }
+    }
+
+    private static void executeToken(DialogTextToken.Token token) {
+        if (token instanceof DialogTextToken.Pause p) {
+            pauseTicksRemaining = p.ticks();
+        } else if (token instanceof DialogTextToken.ScreenShake s) {
+            ClientScreenEffectHandler.playEffect(new ScreenShakeEffect.ScreenShakeInstance(s.durationTicks() * 50, s.intensity(), 20.0f, true));
+        } else if (token instanceof DialogTextToken.SoundTrigger st) {
+            try {
+                SoundEvent soundEvent = SoundEvent.createVariableRangeEvent(st.sound());
+                Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(soundEvent, st.pitch(), st.volume()));
+            } catch (Exception ignored) {}
         }
     }
 
@@ -152,8 +254,7 @@ public class DialogHudOverlay {
                 if (soundEvent != null) {
                     Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(soundEvent, pitch));
                 }
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
         }
     }
 
@@ -167,74 +268,64 @@ public class DialogHudOverlay {
             return;
         }
 
+        // Frame Guard: Ensure we never render more than once per frame even if invoked repeatedly
+        int currentGuiTicks = mc.gui.getGuiTicks();
+        float currentPartialTick = mc.getFrameTime();
+        if (currentGuiTicks == lastRenderGuiTicks && currentPartialTick == lastRenderPartialTick) {
+            return;
+        }
+        lastRenderGuiTicks = currentGuiTicks;
+        lastRenderPartialTick = currentPartialTick;
+
         int screenWidth = mc.getWindow().getGuiScaledWidth();
         int screenHeight = mc.getWindow().getGuiScaledHeight();
 
-        // Sleek RPG Dialog Box Dimensions (Anchored to screen center)
-        int boxW = Math.min(330, screenWidth - 20);
+        // Dialog Box Dimensions
+        int boxW = Math.min(340, screenWidth - 20);
         int boxH = 58;
         int boxX = (screenWidth - boxW) / 2;
-        int boxY = Math.min(screenHeight - boxH - 10, (screenHeight / 2) + 40);
+        int boxY = Math.min(screenHeight - boxH - 12, (screenHeight / 2) + 40);
 
-        int alphaBits = 0xF5000000;
+        // 1. Render Styled Dialog Frame using NineSliceRenderer
+        NineSliceRenderer.renderFrame(guiGraphics, activeStyle, boxX, boxY, boxW, boxH);
 
-        // 1. Dark RPG Frame Background Fill
-        guiGraphics.fill(boxX, boxY, boxX + boxW, boxY + boxH, alphaBits | 0x05090C);
+        int contentX = boxX + activeStyle.paddingLeft();
+        int currentY = boxY + activeStyle.paddingTop();
+        int maxTextWidth = boxW - activeStyle.paddingLeft() - activeStyle.paddingRight();
 
-        // 2. Double Cyberpunk Border
-        int borderColor = alphaBits | 0x00E5FF;
-        guiGraphics.fill(boxX, boxY, boxX + boxW, boxY + 1, borderColor);
-        guiGraphics.fill(boxX, boxY + boxH - 1, boxX + boxW, boxY + boxH, borderColor);
-        guiGraphics.fill(boxX, boxY, boxX + 1, boxY + boxH, borderColor);
-        guiGraphics.fill(boxX + boxW - 1, boxY, boxX + boxW, boxY + boxH, borderColor);
-
-        // Inner Border
-        guiGraphics.fill(boxX + 2, boxY + 2, boxX + boxW - 2, boxY + 3, alphaBits | 0x4400E5FF);
-        guiGraphics.fill(boxX + 2, boxY + boxH - 3, boxX + boxW - 2, boxY + boxH - 2, alphaBits | 0x4400E5FF);
-        guiGraphics.fill(boxX + 2, boxY + 2, boxX + 3, boxY + boxH - 2, alphaBits | 0x4400E5FF);
-        guiGraphics.fill(boxX + boxW - 3, boxY + 2, boxX + boxW - 2, boxY + boxH - 2, alphaBits | 0x4400E5FF);
-
-        // Cyberpunk Corner Accent Notches
-        guiGraphics.fill(boxX + 3, boxY + 3, boxX + 8, boxY + 5, borderColor);
-        guiGraphics.fill(boxX + 3, boxY + 3, boxX + 5, boxY + 8, borderColor);
-
-        guiGraphics.fill(boxX + boxW - 8, boxY + 3, boxX + boxW - 3, boxY + 5, borderColor);
-        guiGraphics.fill(boxX + boxW - 5, boxY + 3, boxX + boxW - 3, boxY + 8, borderColor);
-
-        guiGraphics.fill(boxX + 3, boxY + boxH - 5, boxX + 8, boxY + boxH - 3, borderColor);
-        guiGraphics.fill(boxX + 3, boxY + boxH - 8, boxX + 5, boxY + boxH - 3, borderColor);
-
-        guiGraphics.fill(boxX + boxW - 8, boxY + boxH - 5, boxX + boxW - 3, boxY + boxH - 3, borderColor);
-        guiGraphics.fill(boxX + boxW - 5, boxY + boxH - 8, boxX + boxW - 3, boxY + boxH - 3, borderColor);
-
-        int contentX = boxX + 16;
-        int currentY = boxY + 8;
-        int maxTextWidth = boxW - 32;
-
-        // 3. Render Speaker Tag / Header Badge
+        // 2. Render Speaker Badge Header
         if (!activeSpeaker.isEmpty()) {
-            Component speakerComp = DialogFormatUtil.formatText(activeSpeaker);
-            int speakerWidth = mc.font.width(speakerComp);
+            if (!activeSpeaker.equals(lastSpeaker)) {
+                lastSpeaker = activeSpeaker;
+                Component speakerComp = DialogFormatUtil.formatText(activeSpeaker);
+                cachedSpeakerWidth = mc.font.width(speakerComp);
+            }
+            int speakerWidth = cachedSpeakerWidth;
 
             int badgeX = boxX + 12;
             int badgeY = boxY - 12;
             int badgeW = speakerWidth + 12;
             int badgeH = 14;
 
-            guiGraphics.fill(badgeX, badgeY, badgeX + badgeW, badgeY + badgeH, alphaBits | 0x0A1622);
-            guiGraphics.fill(badgeX, badgeY, badgeX + badgeW, badgeY + 1, borderColor);
-            guiGraphics.fill(badgeX, badgeY, badgeX + 1, badgeY + badgeH, borderColor);
-            guiGraphics.fill(badgeX + badgeW - 1, badgeY, badgeX + badgeW, badgeY + badgeH, borderColor);
+            guiGraphics.fill(badgeX, badgeY, badgeX + badgeW, badgeY + badgeH, activeStyle.speakerBadgeBgColor());
+            int badgeBorder = activeStyle.speakerBadgeBorderColor();
+            guiGraphics.fill(badgeX, badgeY, badgeX + badgeW, badgeY + 1, badgeBorder);
+            guiGraphics.fill(badgeX, badgeY + 1, badgeX + 1, badgeY + badgeH, badgeBorder);
+            guiGraphics.fill(badgeX + badgeW - 1, badgeY + 1, badgeX + badgeW, badgeY + badgeH, badgeBorder);
 
-            DialogFormatUtil.renderAnimatedText(guiGraphics, mc.font, activeSpeaker, badgeX + 6, badgeY + 3, badgeW, 0xFFFFFFFF);
+            DialogFormatUtil.renderAnimatedText(guiGraphics, mc.font, activeSpeaker, badgeX + 6, badgeY + 3, badgeW, activeStyle.speakerTextColor());
             currentY += 4;
         }
 
-        // 4. Render Typewriter Revealed Dialog Text with Custom Animated Effects
-        String currentRevealedText = DialogFormatUtil.getRevealedText(activeText, revealedCharCount);
-        DialogFormatUtil.renderAnimatedText(guiGraphics, mc.font, currentRevealedText, contentX, currentY, maxTextWidth, 0xFFFFFFFF);
+        // 3. Render Typewriter Revealed Dialog Text
+        if (revealedCharCount != lastRevealedCharCount || !activeText.equals(lastActiveText)) {
+            lastRevealedCharCount = revealedCharCount;
+            lastActiveText = activeText;
+            cachedRevealedText = DialogFormatUtil.getRevealedText(activeText, revealedCharCount);
+        }
+        DialogFormatUtil.renderAnimatedText(guiGraphics, mc.font, cachedRevealedText, contentX, currentY, maxTextWidth, activeStyle.defaultTextColor());
 
-        // 5. Render Blinking RPG Next Prompt Indicator (▼) and Ready Player Heads
+        // 4. Render Blinking Advance Prompt Indicator (▼) and Ready Player Heads
         if (revealedCharCount >= totalCharCount) {
             int promptX = boxX + boxW - 20;
             int promptY = boxY + boxH - 16;
@@ -242,11 +333,11 @@ public class DialogHudOverlay {
             boolean blink = (System.currentTimeMillis() / 400) % 2 == 0;
             if (blink) {
                 String promptText = waitForInput ? "▼" : "…";
-                int promptColor = waitForInput ? 0xFF00E5FF : 0xAA888888;
+                int promptColor = waitForInput ? activeStyle.borderColor() : 0xAA888888;
                 guiGraphics.drawString(mc.font, promptText, promptX, promptY, promptColor);
             }
 
-            // Render Player Face Icons next to the "next" icon for all players who pressed advance!
+            // Render Player Face Icons next to the "next" icon for all players who pressed advance
             if (!readyPlayerUUIDs.isEmpty() && mc.getConnection() != null) {
                 int headSize = 12;
                 int headX = promptX - 16;
@@ -257,13 +348,10 @@ public class DialogHudOverlay {
                     if (info != null) {
                         ResourceLocation skinLoc = info.getSkinLocation();
 
-                        // Cyan Border Frame
-                        guiGraphics.fill(headX - 1, headY - 1, headX + headSize + 1, headY + headSize + 1, 0xFF00E5FF);
+                        guiGraphics.fill(headX - 1, headY - 1, headX + headSize + 1, headY + headSize + 1, activeStyle.borderColor());
                         guiGraphics.fill(headX, headY, headX + headSize, headY + headSize, 0xFF000000);
 
-                        // Draw Player Skin Face
                         PlayerFaceRenderer.draw(guiGraphics, skinLoc, headX, headY, headSize);
-
                         headX -= (headSize + 4);
                     }
                 }

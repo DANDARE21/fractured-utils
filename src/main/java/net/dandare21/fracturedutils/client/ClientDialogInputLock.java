@@ -18,7 +18,7 @@ public class ClientDialogInputLock {
     private static Float savedPlayerPitch = null;
 
     public static boolean shouldLockInput() {
-        return CustomCameraManager.isCameraActive();
+        return CustomCameraManager.isCameraActive() || DialogHudOverlay.isActive();
     }
 
     @SubscribeEvent
@@ -33,13 +33,7 @@ public class ClientDialogInputLock {
         }
 
         if (shouldLockInput()) {
-            // Save original player view rotation BEFORE custom camera takes over
-            if (savedPlayerYaw == null) {
-                savedPlayerYaw = mc.player.getYRot();
-                savedPlayerPitch = mc.player.getXRot();
-            }
-
-            // 1. Clear attack and use keypresses every tick so player cannot punch or interact when custom camera is active
+            // 1. Clear attack and use keypresses every tick so player cannot punch or interact when custom camera or dialog is active
             if (mc.options != null) {
                 if (mc.options.keyAttack != null) {
                     mc.options.keyAttack.setDown(false);
@@ -59,18 +53,38 @@ public class ClientDialogInputLock {
                 }
             }
 
-            // 2. Keep player entity's rotation anchored to its original pre-camera view orientation
-            float lockYaw = savedPlayerYaw;
-            float lockPitch = savedPlayerPitch;
+            // 2. Orient player towards speaking NPC if custom camera is active and entity target is set
+            if (CustomCameraManager.isCameraActive()) {
+                if (savedPlayerYaw == null) {
+                    savedPlayerYaw = mc.player.getYRot();
+                    savedPlayerPitch = mc.player.getXRot();
+                }
 
-            mc.player.setYRot(lockYaw);
-            mc.player.setXRot(lockPitch);
-            mc.player.yRotO = lockYaw;
-            mc.player.xRotO = lockPitch;
-            mc.player.yHeadRot = lockYaw;
-            mc.player.yHeadRotO = lockYaw;
-            mc.player.yBodyRot = lockYaw;
-            mc.player.yBodyRotO = lockYaw;
+                float lockYaw = savedPlayerYaw;
+                float lockPitch = savedPlayerPitch;
+
+                net.minecraft.world.entity.Entity npcTarget = CustomCameraManager.getDialogTargetEntity();
+                if (npcTarget != null && npcTarget.isAlive() && mc.player != null) {
+                    double dx = npcTarget.getX() - mc.player.getX();
+                    double dy = npcTarget.getEyeY() - mc.player.getEyeY();
+                    double dz = npcTarget.getZ() - mc.player.getZ();
+                    double dist = Math.sqrt(dx * dx + dz * dz);
+                    float targetYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+                    float targetPitch = (float) Math.toDegrees(Math.atan2(-dy, dist));
+
+                    lockYaw = net.minecraft.util.Mth.rotLerp(0.25f, mc.player.getYRot(), targetYaw);
+                    lockPitch = net.minecraft.util.Mth.rotLerp(0.25f, mc.player.getXRot(), targetPitch);
+                }
+
+                mc.player.setYRot(lockYaw);
+                mc.player.setXRot(lockPitch);
+                mc.player.yRotO = lockYaw;
+                mc.player.xRotO = lockPitch;
+                mc.player.yHeadRot = lockYaw;
+                mc.player.yHeadRotO = lockYaw;
+                mc.player.yBodyRot = lockYaw;
+                mc.player.yBodyRotO = lockYaw;
+            }
         } else {
             // Restore saved original player view rotation when custom camera finishes
             if (savedPlayerYaw != null) {

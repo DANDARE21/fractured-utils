@@ -27,6 +27,12 @@ import net.minecraftforge.fml.common.Mod;
 public class ServerEventHandler {
 
     @SubscribeEvent
+    public static void onAddReloadListeners(net.minecraftforge.event.AddReloadListenerEvent event) {
+        event.addListener(new net.dandare21.fracturedutils.dialog.data.DialogSequenceReloadListener());
+        event.addListener(new net.dandare21.fracturedutils.dialog.style.DialogStyleReloadListener());
+    }
+
+    @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         WaitingRoomCommands.register(event.getDispatcher());
         MaintenanceCommands.register(event.getDispatcher());
@@ -53,20 +59,14 @@ public class ServerEventHandler {
             net.dandare21.fracturedutils.sound.event.EventAudioManager.getInstance().tick(event.getServer());
             net.dandare21.fracturedutils.sound.sequence.MusicSequenceManager.getInstance().tick(event.getServer());
             net.dandare21.fracturedutils.bossbar.BossHealthBarManager.getInstance().tick(event.getServer());
-
-            for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
-                if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
-                    player.setDeltaMovement(Vec3.ZERO);
-                    player.hurtMarked = true;
-                }
-            }
         }
     }
 
     @SubscribeEvent
     public static void onLivingHurt(net.minecraftforge.event.entity.living.LivingHurtEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
+            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isPlayerInDialog(player)
+                    || net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
                 event.setCanceled(true);
                 return;
             }
@@ -135,9 +135,20 @@ public class ServerEventHandler {
     }
 
     @SubscribeEvent
+    public static void onPlayerAttack(net.minecraftforge.event.entity.player.AttackEntityEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isPlayerInDialog(player)
+                    || net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
+                event.setCanceled(true);
+            }
+        }
+    }
+
+    @SubscribeEvent
     public static void onEntityInteract(PlayerInteractEvent.EntityInteract event) {
         if (event.getEntity() instanceof ServerPlayer reviver) {
-            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(reviver)) {
+            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isPlayerInDialog(reviver)
+                    || net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(reviver)) {
                 event.setCanceled(true);
                 return;
             }
@@ -154,7 +165,8 @@ public class ServerEventHandler {
     @SubscribeEvent
     public static void onEntityInteractSpecific(PlayerInteractEvent.EntityInteractSpecific event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
+            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isPlayerInDialog(player)
+                    || net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
                 event.setCanceled(true);
             }
         }
@@ -163,7 +175,8 @@ public class ServerEventHandler {
     @SubscribeEvent
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
+            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isPlayerInDialog(player)
+                    || net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
                 event.setCanceled(true);
             }
         }
@@ -172,7 +185,8 @@ public class ServerEventHandler {
     @SubscribeEvent
     public static void onLeftClickBlock(PlayerInteractEvent.LeftClickBlock event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
+            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isPlayerInDialog(player)
+                    || net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
                 event.setCanceled(true);
             }
         }
@@ -181,7 +195,8 @@ public class ServerEventHandler {
     @SubscribeEvent
     public static void onRightClickItem(PlayerInteractEvent.RightClickItem event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
+            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isPlayerInDialog(player)
+                    || net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
                 event.setCanceled(true);
             }
         }
@@ -190,7 +205,8 @@ public class ServerEventHandler {
     @SubscribeEvent
     public static void onBlockBreak(BlockEvent.BreakEvent event) {
         if (event.getPlayer() instanceof ServerPlayer player) {
-            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
+            if (net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isPlayerInDialog(player)
+                    || net.dandare21.fracturedutils.dialog.DialogManager.getInstance().isCameraActiveForPlayer(player)) {
                 event.setCanceled(true);
             }
         }

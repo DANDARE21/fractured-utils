@@ -2,9 +2,15 @@ package net.dandare21.fracturedutils.client.gui;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import com.mojang.serialization.DataResult;
+import com.mojang.serialization.JsonOps;
+import net.dandare21.fracturedutils.FracturedUtils;
 import net.dandare21.fracturedutils.dialog.DialogLine;
 import net.dandare21.fracturedutils.dialog.DialogManager;
+import net.dandare21.fracturedutils.dialog.DialogSequence;
+import net.dandare21.fracturedutils.dialog.style.DialogStyleRegistry;
 import net.dandare21.fracturedutils.network.ModMessages;
 import net.dandare21.fracturedutils.network.packet.C2SDeleteDialogSequencePacket;
 import net.dandare21.fracturedutils.network.packet.C2SRequestOpenDialogUiPacket;
@@ -19,6 +25,7 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
 
 import java.io.File;
@@ -32,9 +39,7 @@ public class DialogScreen extends Screen {
     private static final int CYAN_BG = 0xFF05090C;
     private static final int CARD_BORDER = 0xAA00E5FF;
 
-    private static final Gson GSON = new GsonBuilder()
-            .setPrettyPrinting()
-            .create();
+    private static final Gson GSON = net.dandare21.fracturedutils.util.ModGson.GSON;
 
     private final Map<String, String> savedServerSequenceFiles;
     private final Map<String, String> workingServerSequenceFiles;
@@ -44,9 +49,11 @@ public class DialogScreen extends Screen {
 
     private String currentFileName;
     private List<DialogLine> currentLines = new ArrayList<>();
+    private ResourceLocation currentStyleId = DialogStyleRegistry.CYBERPUNK_ID;
 
     private DialogListWidget dialogListWidget;
     private EditBox newFileEditBox;
+    private CyberpunkDropdown<ResourceLocation> styleDropdown;
 
     private static class SidebarRow {
         String fileName;
@@ -153,22 +160,42 @@ public class DialogScreen extends Screen {
     private void loadCurrentFileLines() {
         Map<String, String> map = getActiveSequenceMap();
         String content = map.get(currentFileName);
-        if (content != null) {
+        if (content != null && !content.isBlank()) {
             try {
-                List<DialogLine> parsed = GSON.fromJson(content, new TypeToken<List<DialogLine>>() {}.getType());
-                this.currentLines = parsed != null ? new ArrayList<>(parsed) : new ArrayList<>();
+                JsonElement jsonElement = JsonParser.parseString(content);
+                DataResult<DialogSequence> result = DialogSequence.CODEC.parse(JsonOps.INSTANCE, jsonElement);
+                DialogSequence sequence = result.result().orElse(null);
+                if (sequence != null) {
+                    this.currentLines = new ArrayList<>(sequence.getLines());
+                    this.currentStyleId = sequence.getStyleId() != null ? sequence.getStyleId() : DialogStyleRegistry.CYBERPUNK_ID;
+                    if (this.styleDropdown != null) {
+                        this.styleDropdown.selectByValue(this.currentStyleId);
+                    }
+                    return;
+                }
             } catch (Exception e) {
-                this.currentLines = new ArrayList<>();
+                FracturedUtils.LOGGER.warn("Failed to parse sequence JSON for {}: {}", currentFileName, e.getMessage());
             }
-        } else {
-            this.currentLines = new ArrayList<>();
+        }
+        this.currentLines = new ArrayList<>();
+        this.currentStyleId = DialogStyleRegistry.CYBERPUNK_ID;
+        if (this.styleDropdown != null) {
+            this.styleDropdown.selectByValue(this.currentStyleId);
         }
     }
 
     private void syncCurrentLinesToWorkingMap() {
         if (currentFileName != null) {
-            String json = GSON.toJson(currentLines);
-            getActiveWorkingMap().put(currentFileName, json);
+            ResourceLocation seqId = currentFileName.contains(":")
+                    ? new ResourceLocation(currentFileName)
+                    : new ResourceLocation(FracturedUtils.MOD_ID, currentFileName.replace(".json", ""));
+            DialogSequence sequence = new DialogSequence(seqId, currentLines, currentStyleId);
+            DataResult<JsonElement> encoded = DialogSequence.CODEC.encodeStart(JsonOps.INSTANCE, sequence);
+            JsonElement jsonElement = encoded.result().orElse(null);
+            if (jsonElement != null) {
+                String json = GSON.toJson(jsonElement);
+                getActiveWorkingMap().put(currentFileName, json);
+            }
         }
     }
 
@@ -221,6 +248,25 @@ public class DialogScreen extends Screen {
         this.dialogListWidget.setLeftPos(listLeft);
         this.dialogListWidget.updateEntries(currentLines);
         this.addRenderableWidget(this.dialogListWidget);
+
+        // Sequence Dialog Box Style Dropdown
+        int styleDropdownW = 145;
+        int styleDropdownX = rightPanelLeft + rightPanelWidth - 235;
+        int styleDropdownY = mainTop + 7;
+        this.styleDropdown = new CyberpunkDropdown<>(styleDropdownX, styleDropdownY, styleDropdownW, 18, Component.literal("Sequence Style"));
+        List<CyberpunkDropdown.DropdownEntry<ResourceLocation>> styleOptions = List.of(
+                new CyberpunkDropdown.DropdownEntry<>(DialogStyleRegistry.CYBERPUNK_ID, Component.literal("Cyberpunk"), Component.literal("Neon Cyan 9-Slice & Badges"), 0xFF00E5FF),
+                new CyberpunkDropdown.DropdownEntry<>(DialogStyleRegistry.RETRO_UNDERTALE_ID, Component.literal("Retro Undertale"), Component.literal("Monochrome Pixel RPG Frame"), 0xFFFFFFFF),
+                new CyberpunkDropdown.DropdownEntry<>(DialogStyleRegistry.FANTASY_PARCHMENT_ID, Component.literal("Fantasy Parchment"), Component.literal("Aged Gold & Warm Wood"), 0xFFFFD700),
+                new CyberpunkDropdown.DropdownEntry<>(DialogStyleRegistry.MINIMAL_DARK_ID, Component.literal("Minimal Dark"), Component.literal("Sleek Modern Charcoal Frame"), 0xFF888888)
+        );
+        this.styleDropdown.setOptions(styleOptions);
+        this.styleDropdown.selectByValue(currentStyleId != null ? currentStyleId : DialogStyleRegistry.CYBERPUNK_ID);
+        this.styleDropdown.setOnSelect(entry -> {
+            this.currentStyleId = entry.getValue();
+            syncCurrentLinesToWorkingMap();
+        });
+        this.addRenderableWidget(this.styleDropdown);
 
         // Sidebar Header Control Buttons: Folder 📁, Reload 🔄, Mode toggle
         boolean isMultiplayer = Minecraft.getInstance().getCurrentServer() != null || !Minecraft.getInstance().isSingleplayer();
@@ -582,6 +628,11 @@ public class DialogScreen extends Screen {
             mouseX /= scale;
             mouseY /= scale;
         }
+        if (styleDropdown != null && styleDropdown.isOpen()) {
+            if (styleDropdown.mouseClicked(mouseX, mouseY, button)) {
+                return true;
+            }
+        }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -594,6 +645,11 @@ public class DialogScreen extends Screen {
             dragX /= scale;
             dragY /= scale;
         }
+        if (styleDropdown != null && styleDropdown.isOpen()) {
+            if (styleDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
+                return true;
+            }
+        }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
@@ -603,6 +659,11 @@ public class DialogScreen extends Screen {
         if (scale < 1.0) {
             mouseX /= scale;
             mouseY /= scale;
+        }
+        if (styleDropdown != null && styleDropdown.isOpen()) {
+            if (styleDropdown.mouseScrolled(mouseX, mouseY, delta)) {
+                return true;
+            }
         }
         if (mouseX >= leftPanelLeft && mouseX <= leftPanelLeft + leftPanelWidth && mouseY >= mainTop + 28 && mouseY <= mainTop + mainHeight - 35) {
             Map<String, String> activeMap = getActiveSequenceMap();
@@ -673,6 +734,11 @@ public class DialogScreen extends Screen {
         }
 
         super.render(guiGraphics, scaledMouseX, scaledMouseY, partialTick);
+
+        if (styleDropdown != null) {
+            styleDropdown.renderOverlay(guiGraphics, scaledMouseX, scaledMouseY);
+        }
+
         guiGraphics.pose().popPose();
     }
 }

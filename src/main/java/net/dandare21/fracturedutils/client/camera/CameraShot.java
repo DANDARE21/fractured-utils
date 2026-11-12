@@ -1,5 +1,6 @@
 package net.dandare21.fracturedutils.client.camera;
 
+import net.dandare21.fracturedutils.client.gui.MusicSequenceScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -106,6 +107,10 @@ public class CameraShot {
             CameraTransform firstTr = evaluateKeyframeOrThirdPerson(first, partialTick, mc);
             long firstTs = first.getTimestampMs();
             if (firstTs > startMs && timeMs < firstTs) {
+                // Never blend with player avatar inside the Sequencer editor UI
+                if (mc != null && mc.screen instanceof MusicSequenceScreen) {
+                    return firstTr;
+                }
                 CameraTransform playerTr = getPlayerTransform(partialTick, mc, firstTr);
                 long blendDuration = (blendInMs > 0 && blendInMs < (firstTs - startMs)) ? blendInMs : (firstTs - startMs);
                 long blendStart = startMs;
@@ -131,6 +136,10 @@ public class CameraShot {
             CameraTransform lastTr = evaluateKeyframeOrThirdPerson(last, partialTick, mc);
             long lastTs = last.getTimestampMs();
             if (disableKeyframe != null && endMs > lastTs && timeMs > lastTs) {
+                // Never blend with player avatar inside the Sequencer editor UI
+                if (mc != null && mc.screen instanceof MusicSequenceScreen) {
+                    return lastTr;
+                }
                 CameraTransform playerTr = getPlayerTransform(partialTick, mc, lastTr);
                 long blendDuration = (blendOutMs > 0 && blendOutMs < (endMs - lastTs)) ? blendOutMs : (endMs - lastTs);
                 long blendEnd = lastTs + blendDuration;
@@ -262,6 +271,11 @@ public class CameraShot {
     }
 
     private CameraTransform applyBlending(CameraTransform base, double timeMs, float partialTick, Minecraft mc) {
+        // Never blend with player avatar inside the Sequencer editor UI
+        if (mc != null && mc.screen instanceof MusicSequenceScreen) {
+            return base;
+        }
+
         CameraTransform result = base;
 
         // 1. Blend in from player's view at start of shot

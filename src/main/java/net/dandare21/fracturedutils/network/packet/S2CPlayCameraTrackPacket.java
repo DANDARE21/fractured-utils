@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.function.Supplier;
 
 public class S2CPlayCameraTrackPacket {
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = net.dandare21.fracturedutils.util.ModGson.GSON;
     private static final Type ENTRY_LIST_TYPE = new TypeToken<ArrayList<MusicSequenceEntry>>() {}.getType();
 
     private final String sequenceName;

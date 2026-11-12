@@ -101,8 +101,10 @@ public class CameraSequenceTrack {
         if (shotKfs.isEmpty() && enableKf != null) {
             shotKfs.add(enableKf);
         }
-        long blendIn = enableKf != null ? Math.max(0L, enableKf.getDurationMs()) : 0L;
-        long blendOut = disableKf != null ? Math.max(0L, disableKf.getDurationMs()) : 0L;
+        long blendIn = (enableKf != null && enableKf.isInterpolate() && enableKf.getEasing() != CameraEasing.INSTANT)
+                ? Math.max(0L, enableKf.getDurationMs()) : 0L;
+        long blendOut = (disableKf != null && disableKf.isInterpolate() && disableKf.getEasing() != CameraEasing.INSTANT)
+                ? Math.max(0L, disableKf.getDurationMs()) : 0L;
         return new CameraShot(startMs, endMs, shotKfs, enableKf, disableKf, blendIn, blendOut);
     }
 
@@ -245,6 +247,15 @@ public class CameraSequenceTrack {
             return mc.player;
         }
 
+        // Check loaded players first
+        String clean = targetStr.startsWith("#") ? targetStr.substring(1) : targetStr;
+        for (net.minecraft.client.player.AbstractClientPlayer p : mc.level.players()) {
+            if (p.getName().getString().equalsIgnoreCase(clean)
+                    || (p.getCustomName() != null && p.getCustomName().getString().equalsIgnoreCase(clean))) {
+                return p;
+            }
+        }
+
         // Check by UUID
         try {
             UUID uuid = UUID.fromString(targetStr.trim());
@@ -253,10 +264,11 @@ public class CameraSequenceTrack {
             }
         } catch (IllegalArgumentException ignored) {}
 
-        // Check by Tag or Name
-        String clean = targetStr.startsWith("#") ? targetStr.substring(1) : targetStr;
+        // Check by Tag or Name in loaded rendering entities
         for (Entity e : mc.level.entitiesForRendering()) {
-            if (e.getTags().contains(clean) || (e.getCustomName() != null && e.getCustomName().getString().equalsIgnoreCase(clean))) {
+            if (e.getTags().contains(clean)
+                    || (e.getCustomName() != null && e.getCustomName().getString().equalsIgnoreCase(clean))
+                    || (e.getName() != null && e.getName().getString().equalsIgnoreCase(clean))) {
                 return e;
             }
         }

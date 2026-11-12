@@ -1,25 +1,32 @@
 package net.dandare21.fracturedutils.dialog;
 
 import com.mojang.brigadier.StringReader;
+import net.dandare21.fracturedutils.dialog.camera.CameraTarget;
 import net.dandare21.fracturedutils.network.ModMessages;
 import net.dandare21.fracturedutils.network.packet.S2CDialogClearPacket;
 import net.dandare21.fracturedutils.network.packet.S2CDialogDisplayPacket;
 import net.dandare21.fracturedutils.network.packet.S2CDialogReadinessPacket;
-import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.commands.arguments.selector.EntitySelector;
+import net.minecraft.commands.arguments.selector.EntitySelectorParser;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.*;
 
 public class DialogSequenceInstance {
+    private final ResourceLocation sequenceId;
     private final String fileName;
     private final List<DialogLine> lines;
+    private final ResourceLocation defaultStyleId;
     private final Set<UUID> targetedPlayerUUIDs = new HashSet<>();
     private final Set<UUID> readyPlayers = new HashSet<>();
     private int currentIndex = 0;
@@ -27,9 +34,11 @@ public class DialogSequenceInstance {
     private boolean lineStarted = false;
     private boolean finished = false;
 
-    public DialogSequenceInstance(String fileName, List<DialogLine> lines, Collection<ServerPlayer> targetPlayers) {
-        this.fileName = fileName != null ? fileName : "dialog.json";
+    public DialogSequenceInstance(ResourceLocation sequenceId, List<DialogLine> lines, ResourceLocation defaultStyleId, Collection<ServerPlayer> targetPlayers) {
+        this.sequenceId = sequenceId;
+        this.fileName = sequenceId != null ? sequenceId.toString() : "dialog";
         this.lines = lines != null ? lines : List.of();
+        this.defaultStyleId = defaultStyleId != null ? defaultStyleId : new ResourceLocation("fractured_utils", "cyberpunk");
         if (targetPlayers != null) {
             for (ServerPlayer p : targetPlayers) {
                 if (p != null) {
@@ -37,6 +46,14 @@ public class DialogSequenceInstance {
                 }
             }
         }
+    }
+
+    public DialogSequenceInstance(String fileName, List<DialogLine> lines, Collection<ServerPlayer> targetPlayers) {
+        this(fileName != null && fileName.contains(":") ? new ResourceLocation(fileName) : null, lines, null, targetPlayers);
+    }
+
+    public ResourceLocation getSequenceId() {
+        return sequenceId;
     }
 
     public String getFileName() {
@@ -89,7 +106,7 @@ public class DialogSequenceInstance {
         S2CDialogReadinessPacket packet = new S2CDialogReadinessPacket(new ArrayList<>(readyPlayers));
         ModMessages.sendToPlayers(packet, targets);
 
-        // Consensus check: if all online targeted players are ready, advance line!
+        // Consensus check: if all online targeted players are ready, advance line
         if (readyPlayers.size() >= Math.max(1, targets.size())) {
             advanceLine(server);
         }
@@ -110,6 +127,7 @@ public class DialogSequenceInstance {
             finished = true;
             if (server != null) {
                 List<ServerPlayer> targets = resolvePlayers(server, targetedPlayerUUIDs);
+                removeSoftInputLock(targets);
                 ModMessages.sendToPlayers(new S2CDialogClearPacket(), targets);
             }
         }
@@ -120,6 +138,10 @@ public class DialogSequenceInstance {
         UUID uuid = player.getUUID();
         readyPlayers.remove(uuid);
         targetedPlayerUUIDs.remove(uuid);
+        try {
+            player.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
+            player.removeEffect(MobEffects.JUMP);
+        } catch (Exception ignored) {}
     }
 
     public synchronized void stop(MinecraftServer server) {
@@ -127,6 +149,7 @@ public class DialogSequenceInstance {
         readyPlayers.clear();
         if (server != null) {
             List<ServerPlayer> targets = resolvePlayers(server, targetedPlayerUUIDs);
+            removeSoftInputLock(targets);
             ModMessages.sendToPlayers(new S2CDialogClearPacket(), targets);
         }
     }
@@ -144,6 +167,7 @@ public class DialogSequenceInstance {
         if (currentIndex >= lines.size()) {
             finished = true;
             List<ServerPlayer> targets = resolvePlayers(server, targetedPlayerUUIDs);
+            removeSoftInputLock(targets);
             ModMessages.sendToPlayers(new S2CDialogClearPacket(), targets);
             return;
         }
@@ -158,15 +182,17 @@ public class DialogSequenceInstance {
         // 1. Play line ONCE when starting a new line index
         if (!lineStarted) {
             readyPlayers.clear();
+            applySoftInputLock(targets);
             playLine(server, currentLine, targets);
             lineStarted = true;
 
             if (!currentLine.isWaitForInput()) {
                 int visibleChars = DialogFormatUtil.getVisibleCharCount(currentLine.getText());
                 int animTicks = currentLine.getCharSpeedTicks() * visibleChars;
-                delayRemainingTicks = animTicks + Math.max(1, currentLine.getDelayTicks());
+                // Generous safety fallback duration on server (client also sends advance packet upon completion)
+                delayRemainingTicks = animTicks + Math.max(1, currentLine.getDelayTicks()) + 40;
             } else {
-                delayRemainingTicks = -1; // Waiting for client C2SDialogAdvancePacket
+                delayRemainingTicks = -1; // Waiting for client advance
             }
             return;
         }
@@ -177,7 +203,7 @@ public class DialogSequenceInstance {
             return;
         }
 
-        // 3. If line is not waiting for input, tick down post-text delay
+        // 3. Fallback timeout for automated lines if client does not advance
         if (!currentLine.isWaitForInput() && delayRemainingTicks > 0) {
             delayRemainingTicks--;
             if (delayRemainingTicks <= 0) {
@@ -188,6 +214,18 @@ public class DialogSequenceInstance {
 
     private void playLine(MinecraftServer server, DialogLine line, List<ServerPlayer> targets) {
         if (targets == null || targets.isEmpty()) return;
+
+        Entity targetEntity = resolveTargetEntity(server, line, targets);
+        int targetEntityId = targetEntity != null ? targetEntity.getId() : -1;
+
+        CameraTarget camTarget = line.getCameraTarget();
+        String anchor = camTarget != null ? camTarget.anchor().name().toLowerCase(Locale.ROOT) : "eyes";
+        Vec3 offset = camTarget != null ? camTarget.offset() : Vec3.ZERO;
+        boolean lookAt = camTarget != null ? camTarget.lookAtTarget() : true;
+        float fixedYaw = camTarget != null ? camTarget.fixedYaw() : line.getCameraYaw();
+        float fixedPitch = camTarget != null ? camTarget.fixedPitch() : line.getCameraPitch();
+
+        ResourceLocation lineStyle = line.getStyleId() != null ? line.getStyleId() : defaultStyleId;
 
         S2CDialogDisplayPacket packet = new S2CDialogDisplayPacket(
                 line.getSpeaker(),
@@ -202,9 +240,18 @@ public class DialogSequenceInstance {
                 line.getCameraX(),
                 line.getCameraY(),
                 line.getCameraZ(),
-                line.getCameraYaw(),
-                line.getCameraPitch(),
-                line.getCameraFov()
+                fixedYaw,
+                fixedPitch,
+                line.getCameraFov(),
+                targetEntityId,
+                anchor,
+                offset.x,
+                offset.y,
+                offset.z,
+                lookAt,
+                line.getInterpolationTicks(),
+                line.getEasing(),
+                lineStyle != null ? lineStyle.toString() : "fractured_utils:cyberpunk"
         );
         ModMessages.sendToPlayers(packet, targets);
 
@@ -220,7 +267,54 @@ public class DialogSequenceInstance {
                         player.playNotifySound(soundEvent, SoundSource.RECORDS, line.getVolume(), line.getPitch());
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private Entity resolveTargetEntity(MinecraftServer server, DialogLine line, List<ServerPlayer> targets) {
+        if (server == null || targets == null || targets.isEmpty()) return null;
+        CameraTarget camTarget = line.getCameraTarget();
+        if (camTarget == null) return null;
+
+        ServerPlayer firstPlayer = targets.get(0);
+        ServerLevel level = firstPlayer.serverLevel();
+
+        if (camTarget.type() == CameraTarget.TargetType.ENTITY_TAG && camTarget.tag().isPresent()) {
+            String tag = camTarget.tag().get().trim();
+            for (Entity e : level.getAllEntities()) {
+                if (e.getTags().contains(tag)) {
+                    return e;
+                }
+            }
+        } else if (camTarget.type() == CameraTarget.TargetType.SELECTOR && camTarget.selector().isPresent()) {
+            String selectorStr = camTarget.selector().get().trim();
+            try {
+                EntitySelector selector = new EntitySelectorParser(new StringReader(selectorStr), true).parse();
+                List<? extends Entity> list = selector.findEntities(firstPlayer.createCommandSourceStack());
+                if (!list.isEmpty()) {
+                    return list.get(0);
+                }
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
+    private void applySoftInputLock(List<ServerPlayer> players) {
+        if (players == null) return;
+        for (ServerPlayer player : players) {
+            if (player != null) {
+                player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 99999, 255, false, false, false));
+                player.addEffect(new MobEffectInstance(MobEffects.JUMP, 99999, 128, false, false, false));
+            }
+        }
+    }
+
+    private void removeSoftInputLock(List<ServerPlayer> players) {
+        if (players == null) return;
+        for (ServerPlayer player : players) {
+            if (player != null) {
+                player.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
+                player.removeEffect(MobEffects.JUMP);
             }
         }
     }

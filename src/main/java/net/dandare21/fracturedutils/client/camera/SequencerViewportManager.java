@@ -37,11 +37,23 @@ public class SequencerViewportManager {
     // Work Camera Flight Momentum
     private static Vec3 flightVelocity = Vec3.ZERO;
     private static double flightSpeedMultiplier = 1.0;
+    private static boolean workCameraInitialized = false;
 
     private static boolean renderingLevel = false;
 
     public static boolean isActive() {
         return active;
+    }
+
+    public static boolean isWorkCameraInitialized() {
+        return workCameraInitialized;
+    }
+
+    public static void resetWorkCamera() {
+        workCameraInitialized = false;
+        workCameraPos = Vec3.ZERO;
+        flightVelocity = Vec3.ZERO;
+        currentMode = CameraMode.SEQUENCE;
     }
 
     public static void setActive(boolean active) {
@@ -159,6 +171,7 @@ public class SequencerViewportManager {
     }
 
     public static void initWorkCameraFromCurrent() {
+        workCameraInitialized = true;
         CameraTransform current = CustomCameraManager.getCurrentTransform();
         if (current != null) {
             workCameraPos = current.getPosition();
@@ -179,6 +192,7 @@ public class SequencerViewportManager {
     }
 
     public static void setWorkCamera(Vec3 pos, float yaw, float pitch, float roll, double fov) {
+        workCameraInitialized = true;
         workCameraPos = pos != null ? pos : Vec3.ZERO;
         workCameraYaw = yaw;
         workCameraPitch = Mth.clamp(pitch, -90.0f, 90.0f);

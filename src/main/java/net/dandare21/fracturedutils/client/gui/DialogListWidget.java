@@ -231,6 +231,19 @@ public class DialogListWidget extends ObjectSelectionList<DialogListWidget.Dialo
             if (line.getLetterSound() != null && !line.getLetterSound().isEmpty()) {
                 headerText += " | 💬 " + line.getLetterSound();
             }
+            if (line.isUseCamera()) {
+                if (line.getCameraTarget() != null) {
+                    headerText += " | 📷 " + line.getCameraTarget().type().name();
+                } else {
+                    headerText += " | 📷 3D Shot";
+                }
+                if (line.getInterpolationTicks() > 0) {
+                    headerText += " (" + line.getInterpolationTicks() + "t)";
+                }
+            }
+            if (line.getStyleId() != null) {
+                headerText += " | 🎨 " + line.getStyleId().getPath();
+            }
 
             int maxHeaderWidth = width - 110;
             if (font.width(headerText) > maxHeaderWidth) {

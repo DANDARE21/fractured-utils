@@ -2,8 +2,12 @@ package net.dandare21.fracturedutils.dialog;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
+import com.mojang.serialization.JsonOps;
 import net.dandare21.fracturedutils.FracturedUtils;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.fml.loading.FMLPaths;
@@ -14,15 +18,15 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class DialogManager {
     private static final DialogManager INSTANCE = new DialogManager();
 
-    private static final Gson GSON = new GsonBuilder()
-            .setPrettyPrinting()
-            .create();
+    private static final Gson GSON = net.dandare21.fracturedutils.util.ModGson.GSON;
 
+    private final Map<ResourceLocation, DialogSequence> dataPackSequences = new ConcurrentHashMap<>();
     private final List<DialogSequenceInstance> activeSequences = new CopyOnWriteArrayList<>();
 
     public static DialogManager getInstance() {
@@ -43,6 +47,96 @@ public class DialogManager {
 
     public void ensureDirectoryExists() {
         getDirectory();
+    }
+
+    public void onDataPackReload(Map<ResourceLocation, DialogSequence> loaded) {
+        dataPackSequences.clear();
+        if (loaded != null) {
+            dataPackSequences.putAll(loaded);
+        }
+    }
+
+    public DialogSequence getSequence(ResourceLocation id) {
+        if (id == null) return null;
+        DialogSequence seq = dataPackSequences.get(id);
+        if (seq != null) {
+            return seq;
+        }
+
+        // Fallback: check config/dialog_sequences/<path>.json
+        File file = new File(getDirectory(), id.getPath() + ".json");
+        if (!file.exists()) {
+            file = new File(getDirectory(), id.getPath());
+        }
+        if (file.exists()) {
+            try (FileReader reader = new FileReader(file)) {
+                JsonElement json = JsonParser.parseReader(reader);
+                var result = DialogSequence.CODEC.parse(JsonOps.INSTANCE, json);
+                if (result.result().isPresent()) {
+                    DialogSequence fallback = result.result().get();
+                    fallback.setId(id);
+                    return fallback;
+                }
+            } catch (Exception e) {
+                FracturedUtils.LOGGER.error("Failed to parse config fallback dialog file '{}': {}", file.getName(), e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    public ResourceLocation parseSequenceId(String nameOrId) {
+        if (nameOrId == null || nameOrId.isBlank()) return null;
+        String clean = nameOrId.trim();
+        if (clean.endsWith(".json")) {
+            clean = clean.substring(0, clean.length() - 5);
+        }
+        clean = clean.replaceAll("[\\\\/]", "");
+        if (clean.contains(":")) {
+            try {
+                return new ResourceLocation(clean);
+            } catch (Exception e) {
+                return new ResourceLocation(FracturedUtils.MOD_ID, clean.replace(':', '_'));
+            }
+        }
+        return new ResourceLocation(FracturedUtils.MOD_ID, clean);
+    }
+
+    public boolean startSequence(ResourceLocation id, Collection<ServerPlayer> targets) {
+        if (id == null) return false;
+        DialogSequence seq = getSequence(id);
+        if (seq == null) {
+            FracturedUtils.LOGGER.error("Dialog sequence not found: {}", id);
+            return false;
+        }
+
+        DialogSequenceInstance instance = new DialogSequenceInstance(id, seq.getLines(), seq.getStyleId(), targets);
+        activeSequences.add(instance);
+        return true;
+    }
+
+    public boolean startSequence(String nameOrId, Collection<ServerPlayer> targets) {
+        ResourceLocation id = parseSequenceId(nameOrId);
+        if (id == null) return false;
+        return startSequence(id, targets);
+    }
+
+    public boolean startSequence(ResourceLocation id) {
+        return startSequence(id, null);
+    }
+
+    public boolean startSequence(String nameOrId) {
+        return startSequence(nameOrId, null);
+    }
+
+    public Collection<ResourceLocation> getSequenceIds() {
+        Set<ResourceLocation> all = new HashSet<>(dataPackSequences.keySet());
+        for (String fileName : getSequenceFileNames()) {
+            ResourceLocation rl = parseSequenceId(fileName);
+            if (rl != null) {
+                all.add(rl);
+            }
+        }
+        return all;
     }
 
     public String sanitizeFileName(String fileName) {
@@ -90,16 +184,15 @@ public class DialogManager {
         if (cleanName.isEmpty()) return false;
 
         try {
-            // Validate JSON syntax by attempting parsing
-            List<DialogLine> lines = GSON.fromJson(jsonContent, new TypeToken<List<DialogLine>>() {}.getType());
-            if (lines == null) {
-                lines = new ArrayList<>();
+            JsonElement json = JsonParser.parseString(jsonContent);
+            var parseResult = DialogSequence.CODEC.parse(JsonOps.INSTANCE, json);
+            if (parseResult.error().isPresent()) {
+                FracturedUtils.LOGGER.warn("Dialog JSON validation warning: {}", parseResult.error().get().message());
             }
-            String formattedJson = GSON.toJson(lines);
 
             File file = new File(getDirectory(), cleanName);
             try (FileWriter writer = new FileWriter(file)) {
-                writer.write(formattedJson);
+                writer.write(GSON.toJson(json));
             }
             return true;
         } catch (Exception e) {
@@ -117,47 +210,21 @@ public class DialogManager {
         return false;
     }
 
-    public boolean startSequence(String fileName, Collection<ServerPlayer> targets) {
-        String cleanName = sanitizeFileName(fileName);
-        File file = new File(getDirectory(), cleanName);
-
-        if (!file.exists()) {
-            FracturedUtils.LOGGER.error("Dialog file not found: {}", file.getAbsolutePath());
-            return false;
-        }
-
-        try (FileReader reader = new FileReader(file)) {
-            List<DialogLine> lines = GSON.fromJson(reader, new TypeToken<List<DialogLine>>() {}.getType());
-            if (lines == null) {
-                lines = new ArrayList<>();
-            }
-            DialogSequenceInstance instance = new DialogSequenceInstance(cleanName, lines, targets);
-            activeSequences.add(instance);
-            return true;
-        } catch (Exception e) {
-            FracturedUtils.LOGGER.error("Failed to parse dialog file {}: {}", cleanName, e.getMessage());
-            return false;
-        }
-    }
-
-    public boolean startSequence(String fileName) {
-        return startSequence(fileName, null);
-    }
-
     public boolean startSingleDialog(DialogLine line, Collection<ServerPlayer> targets) {
         if (line == null) return false;
         DialogLine copy = line.copy();
         copy.setWaitForInput(false);
         copy.setUseCamera(false);
 
+        ResourceLocation singleId = new ResourceLocation(FracturedUtils.MOD_ID, "single_dialog");
         for (DialogSequenceInstance existing : activeSequences) {
-            if ("single_dialog".equals(existing.getFileName())) {
+            if (singleId.equals(existing.getSequenceId()) || "single_dialog".equals(existing.getFileName())) {
                 existing.cancelWithoutClear();
             }
         }
         activeSequences.removeIf(DialogSequenceInstance::isFinished);
 
-        DialogSequenceInstance instance = new DialogSequenceInstance("single_dialog", List.of(copy), targets);
+        DialogSequenceInstance instance = new DialogSequenceInstance(singleId, List.of(copy), null, targets);
         activeSequences.add(instance);
         return true;
     }
@@ -230,11 +297,24 @@ public class DialogManager {
         return !activeSequences.isEmpty();
     }
 
-    public boolean isSequenceRunning(String fileName) {
-        if (fileName == null || fileName.isBlank()) return isSequenceRunning();
-        String cleanName = sanitizeFileName(fileName);
+    public boolean isSequenceRunning(ResourceLocation id) {
+        if (id == null) return isSequenceRunning();
         for (DialogSequenceInstance instance : activeSequences) {
-            if (!instance.isFinished() && instance.getFileName().equalsIgnoreCase(cleanName)) {
+            if (!instance.isFinished() && id.equals(instance.getSequenceId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean isSequenceRunning(String nameOrId) {
+        if (nameOrId == null || nameOrId.isBlank()) return isSequenceRunning();
+        ResourceLocation rl = parseSequenceId(nameOrId);
+        if (rl != null && isSequenceRunning(rl)) return true;
+
+        String clean = sanitizeFileName(nameOrId);
+        for (DialogSequenceInstance instance : activeSequences) {
+            if (!instance.isFinished() && instance.getFileName().equalsIgnoreCase(clean)) {
                 return true;
             }
         }

@@ -29,7 +29,7 @@ public class MusicSequenceSelectScreen extends Screen {
     private static final int GREEN_RUN = 0xFF00FF88;
     private static final int YELLOW_RENAME = 0xFFFFD700;
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = net.dandare21.fracturedutils.util.ModGson.GSON;
 
     private final Map<String, String> savedServerSequenceFiles;
     private final Map<String, String> workingServerSequenceFiles;

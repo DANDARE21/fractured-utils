@@ -52,6 +52,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraftforge.registries.ForgeRegistries;
 
+import net.dandare21.fracturedutils.util.ModGson;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -62,9 +63,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class MusicSequenceManager {
     private static final MusicSequenceManager INSTANCE = new MusicSequenceManager();
 
-    private static final Gson GSON = new GsonBuilder()
-            .setPrettyPrinting()
-            .create();
+    private static final Gson GSON = ModGson.GSON;
+
 
     public static class ActiveMusicSequence {
         private final String fileName;

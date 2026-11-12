@@ -25,6 +25,19 @@ public class CustomCameraManager {
     private static float currentSmoothYaw = Float.NaN;
     private static float currentSmoothPitch = Float.NaN;
 
+    // Dynamic Dialog Target & Transition Interpolation
+    private static Entity dialogTargetEntity = null;
+    private static String dialogAnchor = "eyes";
+    private static Vec3 dialogOffset = Vec3.ZERO;
+    private static boolean dialogLookAt = true;
+    private static float dialogFixedYaw = 0.0f;
+    private static float dialogFixedPitch = 0.0f;
+
+    private static CameraTransform transitionStartTransform = null;
+    private static long transitionStartTimeMs = 0L;
+    private static long transitionDurationMs = 0L;
+    private static CameraEasing transitionEasing = CameraEasing.EASE_IN_OUT_CUBIC;
+
     private static boolean customFovActive = false;
     private static double customFov = 70.0;
 
@@ -134,6 +147,107 @@ public class CustomCameraManager {
         return customFov;
     }
 
+    public static void setDialogCamera(
+            Entity target, String anchor, Vec3 offset, boolean lookAt, float fixedYaw, float fixedPitch,
+            double staticX, double staticY, double staticZ, float staticYaw, float staticPitch, double fov,
+            int interpolationTicks, String easingName
+    ) {
+        Minecraft mc = Minecraft.getInstance();
+        CameraTransform start = null;
+        if (active && currentTransform != null) {
+            start = currentTransform;
+        } else if (mc.player != null) {
+            Vec3 playerEye = mc.player.getEyePosition(1.0f);
+            start = CameraTransform.fromEuler(playerEye, mc.player.getYRot(), mc.player.getXRot(), 0.0f, customFovActive ? customFov : 70.0);
+        }
+
+        CustomCameraManager.dialogTargetEntity = target;
+        CustomCameraManager.dialogAnchor = anchor != null ? anchor : "eyes";
+        CustomCameraManager.dialogOffset = offset != null ? offset : Vec3.ZERO;
+        CustomCameraManager.dialogLookAt = lookAt;
+        CustomCameraManager.dialogFixedYaw = fixedYaw;
+        CustomCameraManager.dialogFixedPitch = fixedPitch;
+
+        CustomCameraManager.targetEntity = null;
+        CustomCameraManager.overTheShoulder = false;
+        CustomCameraManager.activeTrack = null;
+        CustomCameraManager.renderPlayerModel = true;
+
+        if (target != null) {
+            double baseY = target.getEyeY();
+            if ("feet".equalsIgnoreCase(anchor)) baseY = target.getY();
+            else if ("chest".equalsIgnoreCase(anchor)) baseY = target.getY() + target.getBbHeight() * 0.5;
+            Vec3 pos = new Vec3(target.getX() + dialogOffset.x, baseY + dialogOffset.y, target.getZ() + dialogOffset.z);
+            float yaw = fixedYaw;
+            float pitch = fixedPitch;
+            if (lookAt) {
+                double dx = target.getX() - pos.x;
+                double dy = baseY - pos.y;
+                double dz = target.getZ() - pos.z;
+                double dist = Math.sqrt(dx * dx + dz * dz);
+                yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+                pitch = (float) Math.toDegrees(Math.atan2(-dy, dist));
+            }
+            CustomCameraManager.currentTransform = CameraTransform.fromEuler(pos, yaw, pitch, 0.0f, fov > 0 ? fov : 70.0);
+        } else {
+            CustomCameraManager.currentTransform = CameraTransform.fromEuler(new Vec3(staticX, staticY, staticZ), staticYaw, staticPitch, 0.0f, fov > 0 ? fov : 70.0);
+        }
+
+        CustomCameraManager.customFov = fov > 0 ? fov : 70.0;
+        CustomCameraManager.customFovActive = true;
+        CustomCameraManager.active = true;
+
+        if (interpolationTicks > 0 && start != null) {
+            CustomCameraManager.transitionStartTransform = start;
+            CustomCameraManager.transitionStartTimeMs = System.currentTimeMillis();
+            CustomCameraManager.transitionDurationMs = interpolationTicks * 50L;
+            CustomCameraManager.transitionEasing = CameraEasing.fromString(easingName);
+        } else {
+            CustomCameraManager.transitionStartTransform = null;
+            CustomCameraManager.transitionDurationMs = 0L;
+        }
+    }
+
+    public static Entity getDialogTargetEntity() {
+        return dialogTargetEntity;
+    }
+
+    public static String getDialogAnchor() {
+        return dialogAnchor;
+    }
+
+    public static Vec3 getDialogOffset() {
+        return dialogOffset;
+    }
+
+    public static boolean isDialogLookAt() {
+        return dialogLookAt;
+    }
+
+    public static float getDialogFixedYaw() {
+        return dialogFixedYaw;
+    }
+
+    public static float getDialogFixedPitch() {
+        return dialogFixedPitch;
+    }
+
+    public static CameraTransform getTransitionStartTransform() {
+        return transitionStartTransform;
+    }
+
+    public static long getTransitionStartTimeMs() {
+        return transitionStartTimeMs;
+    }
+
+    public static long getTransitionDurationMs() {
+        return transitionDurationMs;
+    }
+
+    public static CameraEasing getTransitionEasing() {
+        return transitionEasing != null ? transitionEasing : CameraEasing.EASE_IN_OUT_CUBIC;
+    }
+
     public static void clearCustomCamera() {
         CustomCameraManager.active = false;
         CustomCameraManager.activeTrack = null;
@@ -144,6 +258,9 @@ public class CustomCameraManager {
         CustomCameraManager.currentSmoothPos = null;
         CustomCameraManager.currentSmoothYaw = Float.NaN;
         CustomCameraManager.currentSmoothPitch = Float.NaN;
+        CustomCameraManager.dialogTargetEntity = null;
+        CustomCameraManager.transitionStartTransform = null;
+        CustomCameraManager.transitionDurationMs = 0L;
         CustomCameraManager.customFovActive = false;
         CustomCameraManager.customFov = 70.0;
         CameraUtils.resetProximity();

@@ -33,6 +33,16 @@ public class CyberpunkMultilineEditBox extends AbstractWidget {
     private int clickCount = 0;
 
     private Consumer<String> responder;
+    private Component cachedSyntaxComponent = null;
+    private String cachedValue = null;
+
+    public Component getHighlightedComponent() {
+        if (cachedSyntaxComponent == null || cachedValue == null || !cachedValue.equals(this.value)) {
+            cachedValue = this.value;
+            cachedSyntaxComponent = DialogFormatUtil.getSyntaxHighlightedComponent(this.value);
+        }
+        return cachedSyntaxComponent;
+    }
 
     public CyberpunkMultilineEditBox(int x, int y, int width, int height, Component title) {
         super(x, y, width, height, title);
@@ -139,36 +149,31 @@ public class CyberpunkMultilineEditBox extends AbstractWidget {
 
         if (this.value.isEmpty()) return 0;
 
-        Component textComp = DialogFormatUtil.formatText(this.value);
+        Component textComp = getHighlightedComponent();
         List<FormattedCharSequence> lines = font.split(textComp, maxW);
         if (lines.isEmpty()) return 0;
 
         int lineIdx = Math.max(0, Math.min(lines.size() - 1, (int) ((mouseY - (this.getY() + padY)) / 10)));
         int relX = (int) (mouseX - (this.getX() + padX));
 
-        int len = this.value.length();
-        int lastMatchIdx = 0;
+        int startIdx = getCharIndexAtLineStart(lineIdx, lines, maxW);
+        int endIdx = lineIdx + 1 < lines.size() ? getCharIndexAtLineStart(lineIdx + 1, lines, maxW) : this.value.length();
 
-        for (int i = 0; i <= len; i++) {
+        int bestIdx = startIdx;
+        for (int i = startIdx; i <= endIdx; i++) {
             String sub = this.value.substring(0, i);
-            List<FormattedCharSequence> subLines = font.split(DialogFormatUtil.formatText(sub), maxW);
-            if (subLines.isEmpty()) {
-                if (lineIdx == 0) {
-                    lastMatchIdx = 0;
-                }
-                continue;
-            }
-            int subLineIdx = Math.max(0, subLines.size() - 1);
-            if (subLineIdx == lineIdx) {
-                int lineW = font.width(subLines.get(subLineIdx));
+            List<FormattedCharSequence> subLines = font.split(DialogFormatUtil.getSyntaxHighlightedComponent(sub), maxW);
+            if (!subLines.isEmpty()) {
+                int targetSubIdx = Math.min(lineIdx, subLines.size() - 1);
+                int lineW = font.width(subLines.get(targetSubIdx));
                 if (lineW <= relX + 3) {
-                    lastMatchIdx = i;
+                    bestIdx = i;
+                } else {
+                    break;
                 }
-            } else if (subLineIdx > lineIdx) {
-                break;
             }
         }
-        return lastMatchIdx;
+        return bestIdx;
     }
 
     private void selectWordAtCursor() {
@@ -392,7 +397,7 @@ public class CyberpunkMultilineEditBox extends AbstractWidget {
         int maxW = this.width - (padX * 2);
 
         // Multiline Formatted Wrapping Render
-        Component textComp = DialogFormatUtil.formatText(this.value);
+        Component textComp = getHighlightedComponent();
         List<FormattedCharSequence> lines = font.split(textComp, maxW);
 
         int renderY = this.getY() + padY;
@@ -446,23 +451,29 @@ public class CyberpunkMultilineEditBox extends AbstractWidget {
         if (lineIdx >= lines.size()) return this.value.length();
 
         Font font = Minecraft.getInstance().font;
-        int len = this.value.length();
+        int low = 0;
+        int high = this.value.length();
+        int result = high;
 
-        for (int i = 0; i <= len; i++) {
-            String sub = this.value.substring(0, i);
-            List<FormattedCharSequence> subLines = font.split(DialogFormatUtil.formatText(sub), maxW);
+        while (low <= high) {
+            int mid = (low + high) >>> 1;
+            String sub = this.value.substring(0, mid);
+            List<FormattedCharSequence> subLines = font.split(DialogFormatUtil.getSyntaxHighlightedComponent(sub), maxW);
             if (subLines.size() > lineIdx) {
-                return i;
+                result = mid;
+                high = mid - 1;
+            } else {
+                low = mid + 1;
             }
         }
-        return this.value.length();
+        return result;
     }
 
     private int getLineIdxForCharPos(int charPos, List<FormattedCharSequence> lines, int maxW) {
         if (charPos <= 0 || lines.isEmpty()) return 0;
         Font font = Minecraft.getInstance().font;
         String sub = this.value.substring(0, Math.min(charPos, this.value.length()));
-        List<FormattedCharSequence> subLines = font.split(DialogFormatUtil.formatText(sub), maxW);
+        List<FormattedCharSequence> subLines = font.split(DialogFormatUtil.getSyntaxHighlightedComponent(sub), maxW);
         return Math.max(0, Math.min(lines.size() - 1, subLines.size() - 1));
     }
 
@@ -470,7 +481,7 @@ public class CyberpunkMultilineEditBox extends AbstractWidget {
         if (charPos <= 0 || lines.isEmpty() || lineIdx >= lines.size()) return 0;
         Font font = Minecraft.getInstance().font;
         String sub = this.value.substring(0, Math.min(charPos, this.value.length()));
-        List<FormattedCharSequence> subLines = font.split(DialogFormatUtil.formatText(sub), maxW);
+        List<FormattedCharSequence> subLines = font.split(DialogFormatUtil.getSyntaxHighlightedComponent(sub), maxW);
         if (!subLines.isEmpty()) {
             int targetSubIdx = Math.min(lineIdx, subLines.size() - 1);
             return font.width(subLines.get(targetSubIdx));

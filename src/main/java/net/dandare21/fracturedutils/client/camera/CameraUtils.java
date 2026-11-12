@@ -12,8 +12,6 @@ import org.joml.Vector3f;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.List;
 
 public class CameraUtils {
     private static Method setPositionMethodDouble = null;
@@ -41,68 +39,71 @@ public class CameraUtils {
             // Find methods on Camera.class
             for (Method m : Camera.class.getDeclaredMethods()) {
                 m.setAccessible(true);
+                String name = m.getName();
                 Class<?>[] params = m.getParameterTypes();
-                if (params.length == 3 && params[0] == double.class && params[1] == double.class && params[2] == double.class) {
-                    setPositionMethodDouble = m;
-                } else if (params.length == 1 && params[0] == Vec3.class) {
-                    setPositionMethodVec3 = m;
-                } else if (params.length == 2 && params[0] == float.class && params[1] == float.class) {
-                    setRotationMethod = m;
+                // Never match 'move' (SRG m_90568_) which applies relative camera-space translation
+                if (!name.equals("move") && !name.equals("m_90568_")) {
+                    if (params.length == 3 && params[0] == double.class && params[1] == double.class && params[2] == double.class) {
+                        if (name.equals("setPosition") || name.equals("m_90575_") || setPositionMethodDouble == null) {
+                            setPositionMethodDouble = m;
+                        }
+                    } else if (params.length == 1 && params[0] == Vec3.class) {
+                        if (name.equals("setPosition") || name.equals("m_90576_") || setPositionMethodVec3 == null) {
+                            setPositionMethodVec3 = m;
+                        }
+                    }
+                }
+                if (params.length == 2 && params[0] == float.class && params[1] == float.class) {
+                    if (name.equals("setRotation") || name.equals("m_90573_") || setRotationMethod == null) {
+                        setRotationMethod = m;
+                    }
                 }
             }
 
             // Find fields on Camera.class
-            List<Field> vec3fFields = new ArrayList<>();
-            List<Field> floatFields = new ArrayList<>();
             for (Field f : Camera.class.getDeclaredFields()) {
                 f.setAccessible(true);
+                String name = f.getName();
                 Class<?> type = f.getType();
                 if (type == Vec3.class) {
                     positionField = f;
                 } else if (BlockPos.class.isAssignableFrom(type)) {
                     blockPositionField = f;
                 } else if (type == boolean.class) {
-                    if (f.getName().equals("detached") || f.getName().equals("m_90581_") || detachedField == null) {
+                    // Match 'detached' (SRG f_90560_), but NOT 'initialized' (SRG f_90549_)
+                    if (name.equals("detached") || name.equals("f_90560_")) {
                         detachedField = f;
                     }
                 } else if (type == Quaternionf.class) {
                     rotationField = f;
                 } else if (type == Vector3f.class) {
-                    vec3fFields.add(f);
-                    if (f.getName().equals("forwards") || f.getName().equals("m_90587_")) {
+                    if (name.equals("forwards") || name.equals("f_90565_")) {
                         forwardsField = f;
-                    } else if (f.getName().equals("up") || f.getName().equals("m_90588_")) {
+                    } else if (name.equals("up") || name.equals("f_90566_")) {
                         upField = f;
-                    } else if (f.getName().equals("left") || f.getName().equals("m_90589_")) {
+                    } else if (name.equals("left") || name.equals("f_90567_")) {
                         leftField = f;
                     }
                 } else if (type == float.class) {
-                    floatFields.add(f);
+                    if (name.equals("xRot") || name.equals("f_90570_")) {
+                        xRotField = f;
+                    } else if (name.equals("yRot") || name.equals("f_90571_")) {
+                        yRotField = f;
+                    }
                 }
             }
 
-            if (vec3fFields.size() >= 3) {
-                if (forwardsField == null) forwardsField = vec3fFields.get(0);
-                if (upField == null) upField = vec3fFields.get(1);
-                if (leftField == null) leftField = vec3fFields.get(2);
-            }
-            if (floatFields.size() >= 2) {
-                xRotField = floatFields.get(0);
-                yRotField = floatFields.get(1);
-            }
-
-            FracturedUtils.LOGGER.info("[CameraUtils] Initialized reflection: positionField={}, blockPosField={}, setPosD={}, setPosV={}, setRot={}, rotField={}, detachedField={}",
+            FracturedUtils.LOGGER.info("[CameraUtils] Initialized reflection fallback: positionField={}, blockPosField={}, setPosD={}, setPosV={}, setRot={}, rotField={}, detachedField={}",
                     positionField != null, blockPositionField != null,
                     setPositionMethodDouble != null, setPositionMethodVec3 != null,
                     setRotationMethod != null, rotationField != null, detachedField != null);
         } catch (Exception e) {
-            FracturedUtils.LOGGER.error("[CameraUtils] Failed to initialize reflection", e);
+            FracturedUtils.LOGGER.error("[CameraUtils] Failed to initialize reflection fallback", e);
         }
     }
 
     public static void applyCameraOverride(Camera camera, ViewportEvent.ComputeCameraAngles event) {
         if (camera == null || !CustomCameraManager.isActive()) return;
-        initReflection();
 
         float partialTick = (float) event.getPartialTick();
         CustomCameraManager.updateTrackFrame(partialTick);
@@ -194,6 +195,33 @@ public class CameraUtils {
             CustomCameraManager.setCurrentSmoothPos(current);
             pos = current;
             rot = CameraMath.eulerToQuaternion(yaw, pitch, roll);
+        } else if (CustomCameraManager.getDialogTargetEntity() != null && CustomCameraManager.getDialogTargetEntity().isAlive()) {
+            Entity dTarget = CustomCameraManager.getDialogTargetEntity();
+            double targetX = Mth.lerp(partialTick, dTarget.xo, dTarget.getX());
+            double targetY = Mth.lerp(partialTick, dTarget.yo, dTarget.getY());
+            double targetZ = Mth.lerp(partialTick, dTarget.zo, dTarget.getZ());
+
+            double baseY = targetY + dTarget.getEyeHeight();
+            String anchor = CustomCameraManager.getDialogAnchor();
+            if ("feet".equalsIgnoreCase(anchor)) baseY = targetY;
+            else if ("chest".equalsIgnoreCase(anchor)) baseY = targetY + dTarget.getBbHeight() * 0.5;
+
+            Vec3 offset = CustomCameraManager.getDialogOffset();
+            pos = new Vec3(targetX + offset.x, baseY + offset.y, targetZ + offset.z);
+
+            if (CustomCameraManager.isDialogLookAt()) {
+                double dx = targetX - pos.x;
+                double dy = baseY - pos.y;
+                double dz = targetZ - pos.z;
+                double dist = Math.sqrt(dx * dx + dz * dz);
+                yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+                pitch = (float) Math.toDegrees(Math.atan2(-dy, dist));
+            } else {
+                yaw = CustomCameraManager.getDialogFixedYaw();
+                pitch = CustomCameraManager.getDialogFixedPitch();
+            }
+            roll = 0.0f;
+            rot = CameraMath.eulerToQuaternion(yaw, pitch, roll);
         } else {
             pos = transform.getPosition();
             yaw = transform.getYaw();
@@ -202,12 +230,54 @@ public class CameraUtils {
             rot = transform.getRotation();
         }
 
+        // Apply smooth transition interpolation if active
+        long durationMs = CustomCameraManager.getTransitionDurationMs();
+        if (durationMs > 0 && CustomCameraManager.getTransitionStartTransform() != null) {
+            long elapsed = System.currentTimeMillis() - CustomCameraManager.getTransitionStartTimeMs();
+            double t = Mth.clamp((double) elapsed / durationMs, 0.0, 1.0);
+            double u = CustomCameraManager.getTransitionEasing().ease(t);
+
+            CameraTransform start = CustomCameraManager.getTransitionStartTransform();
+            Vec3 startPos = start.getPosition();
+            pos = new Vec3(
+                    Mth.lerp(u, startPos.x, pos.x),
+                    Mth.lerp(u, startPos.y, pos.y),
+                    Mth.lerp(u, startPos.z, pos.z)
+            );
+            yaw = Mth.rotLerp((float) u, start.getYaw(), yaw);
+            pitch = Mth.rotLerp((float) u, start.getPitch(), pitch);
+            roll = Mth.rotLerp((float) u, start.getRoll(), roll);
+            rot = CameraMath.eulerToQuaternion(yaw, pitch, roll);
+
+            double startFov = start.getFov();
+            double targetFov = transform != null ? transform.getFov() : CustomCameraManager.getCustomFov();
+            double curFov = Mth.lerp(u, startFov, targetFov);
+            CustomCameraManager.setCustomFov(curFov);
+        }
+
         event.setPitch(pitch);
         event.setYaw(yaw);
         event.setRoll(roll);
 
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        boolean tooClose = mc.player != null && isPlayerTooCloseToCamera(mc.player, pos, partialTick);
+        lastPlayerTooClose = tooClose;
+        boolean shouldRender = CustomCameraManager.shouldRenderPlayerModel() && !tooClose;
+
+        // 1. Set angles via Forge's public Camera method
+        camera.setAnglesInternal(yaw, pitch);
+
+        // 2. Set orientation quaternion and direction vectors via Camera public methods
+        if (rot != null) {
+            camera.rotation().set(rot);
+            camera.getLookVector().set(0.0F, 0.0F, 1.0F).rotate(rot);
+            camera.getUpVector().set(0.0F, 1.0F, 0.0F).rotate(rot);
+            camera.getLeftVector().set(1.0F, 0.0F, 0.0F).rotate(rot);
+        }
+
+        // 3. Set camera position and detached state
+        initReflection();
         try {
-            // 1. Direct field assignment for position
             if (positionField != null) {
                 positionField.set(camera, pos);
             }
@@ -217,55 +287,17 @@ public class CameraUtils {
                     mbp.set(pos.x, pos.y, pos.z);
                 }
             }
-
-            // 2. Invoke setPosition methods if available
-            if (setPositionMethodDouble != null) {
-                setPositionMethodDouble.invoke(camera, pos.x, pos.y, pos.z);
-            } else if (setPositionMethodVec3 != null) {
-                setPositionMethodVec3.invoke(camera, pos);
+            if (positionField == null) {
+                if (setPositionMethodDouble != null) {
+                    setPositionMethodDouble.invoke(camera, pos.x, pos.y, pos.z);
+                } else if (setPositionMethodVec3 != null) {
+                    setPositionMethodVec3.invoke(camera, pos);
+                }
             }
-
-            // 3. Rotation methods & fields
             if (setRotationMethod != null) {
                 setRotationMethod.invoke(camera, yaw, pitch);
             }
-            if (xRotField != null) {
-                xRotField.setFloat(camera, pitch);
-            }
-            if (yRotField != null) {
-                yRotField.setFloat(camera, yaw);
-            }
-            if (rotationField != null && rot != null) {
-                Quaternionf camRot = (Quaternionf) rotationField.get(camera);
-                if (camRot != null) {
-                    camRot.set(rot);
-                }
-                if (forwardsField != null) {
-                    Vector3f f = (Vector3f) forwardsField.get(camera);
-                    if (f != null) {
-                        FORWARDS.rotate(rot, f);
-                    }
-                }
-                if (upField != null) {
-                    Vector3f u = (Vector3f) upField.get(camera);
-                    if (u != null) {
-                        UP.rotate(rot, u);
-                    }
-                }
-                if (leftField != null) {
-                    Vector3f l = (Vector3f) leftField.get(camera);
-                    if (l != null) {
-                        LEFT.rotate(rot, l);
-                    }
-                }
-            }
-
-            // 4. Detached field for player model rendering (hide player if too close to camera to avoid clipping inside)
-            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-            boolean tooClose = mc.player != null && isPlayerTooCloseToCamera(mc.player, pos, partialTick);
-            lastPlayerTooClose = tooClose;
             if (detachedField != null) {
-                boolean shouldRender = CustomCameraManager.shouldRenderPlayerModel() && !tooClose;
                 detachedField.setBoolean(camera, shouldRender);
             }
         } catch (Exception e) {
@@ -273,7 +305,7 @@ public class CameraUtils {
         }
     }
 
-    public static final double PLAYER_TOO_CLOSE_DISTANCE = 0.85;
+    public static final double PLAYER_TOO_CLOSE_DISTANCE = 0.35;
     private static boolean lastPlayerTooClose = false;
 
     public static boolean isPlayerTooCloseToCamera(Entity player, Vec3 cameraPos, float partialTick) {

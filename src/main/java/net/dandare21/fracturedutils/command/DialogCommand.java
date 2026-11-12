@@ -22,7 +22,7 @@ import java.util.Map;
 public class DialogCommand {
 
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_DIALOG_SEQUENCES = (ctx, builder) ->
-            SharedSuggestionProvider.suggest(DialogManager.getInstance().getSequenceFileNames(), builder);
+            SharedSuggestionProvider.suggestResource(DialogManager.getInstance().getSequenceIds(), builder);
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("dialog")
@@ -57,7 +57,7 @@ public class DialogCommand {
                     .withStyle(ChatFormatting.GREEN), true);
             return 1;
         } else {
-            source.sendFailure(Component.literal("Failed to start dialog sequence '" + fileName + "'. File missing or invalid JSON.")
+            source.sendFailure(Component.literal("Failed to start dialog sequence '" + fileName + "'. Sequence not found or invalid.")
                     .withStyle(ChatFormatting.RED));
             return 0;
         }
@@ -87,15 +87,16 @@ public class DialogCommand {
 
     private static int executeList(CommandContext<CommandSourceStack> ctx) {
         CommandSourceStack source = ctx.getSource();
-        List<String> files = DialogManager.getInstance().getSequenceFileNames();
-        if (files.isEmpty()) {
-            source.sendSuccess(() -> Component.literal("No dialog sequence files found in config/dialog_sequences.")
+        Collection<net.minecraft.resources.ResourceLocation> ids = DialogManager.getInstance().getSequenceIds();
+        if (ids.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("No dialog sequences found.")
                     .withStyle(ChatFormatting.GRAY), false);
         } else {
-            source.sendSuccess(() -> Component.literal("Available dialog sequences (" + files.size() + "): " + String.join(", ", files))
+            List<String> list = ids.stream().map(net.minecraft.resources.ResourceLocation::toString).sorted().toList();
+            source.sendSuccess(() -> Component.literal("Available dialog sequences (" + list.size() + "): " + String.join(", ", list))
                     .withStyle(ChatFormatting.AQUA), false);
         }
-        return files.size();
+        return ids.size();
     }
 
     private static int openUi(CommandContext<CommandSourceStack> ctx) {

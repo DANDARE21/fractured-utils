@@ -3,8 +3,22 @@ package net.dandare21.fracturedutils.dialog;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
+
+import java.util.List;
 
 public class DialogFormatUtil {
+
+    private static final String[] ASCII_STRINGS = new String[128];
+    static {
+        for (int i = 0; i < 128; i++) {
+            ASCII_STRINGS[i] = String.valueOf((char) i);
+        }
+    }
+
+    private static String getCharString(char c) {
+        return c < 128 ? ASCII_STRINGS[c] : String.valueOf(c);
+    }
 
     public enum CustomEffect {
         NONE,
@@ -20,10 +34,33 @@ public class DialogFormatUtil {
      */
     public static String translateCodes(String input) {
         if (input == null || input.isEmpty()) return "";
+        if (input.indexOf('{') == -1 && input.indexOf('&') == -1) return input;
         int len = input.length();
         StringBuilder sb = new StringBuilder(len);
         for (int i = 0; i < len; i++) {
             char c = input.charAt(i);
+
+            // Translate BBCode inline tags: {shake}, {wave}, {rainbow}, {glitch}, {pulse}, {/shake}, etc.
+            if (c == '{') {
+                int closeIdx = input.indexOf('}', i);
+                if (closeIdx != -1) {
+                    String tag = input.substring(i + 1, closeIdx).trim().toLowerCase(java.util.Locale.ROOT);
+                    if (tag.equals("shake")) { sb.append('§').append('~').append('s'); }
+                    else if (tag.equals("/shake")) { sb.append('§').append('~').append('x'); }
+                    else if (tag.equals("wave")) { sb.append('§').append('~').append('w'); }
+                    else if (tag.equals("/wave")) { sb.append('§').append('~').append('x'); }
+                    else if (tag.equals("rainbow")) { sb.append('§').append('~').append('r'); }
+                    else if (tag.equals("/rainbow")) { sb.append('§').append('~').append('x'); }
+                    else if (tag.equals("glitch")) { sb.append('§').append('~').append('g'); }
+                    else if (tag.equals("/glitch")) { sb.append('§').append('~').append('x'); }
+                    else if (tag.equals("pulse")) { sb.append('§').append('~').append('p'); }
+                    else if (tag.equals("/pulse")) { sb.append('§').append('~').append('x'); }
+                    // Action tags like {pause:N}, {shake_screen:...}, {sound:...} are stripped from display text
+                    i = closeIdx;
+                    continue;
+                }
+            }
+
             if (c == '&' && i + 1 < len) {
                 char next = input.charAt(i + 1);
                 if (next == '~' && i + 2 < len && isCustomEffectChar(input.charAt(i + 2))) {
@@ -71,6 +108,13 @@ public class DialogFormatUtil {
         int len = input.length();
         for (int i = 0; i < len; i++) {
             char c = input.charAt(i);
+            if (c == '{') {
+                int closeIdx = input.indexOf('}', i);
+                if (closeIdx != -1) {
+                    i = closeIdx;
+                    continue;
+                }
+            }
             if ((c == '&' || c == '§') && i + 2 < len && input.charAt(i + 1) == '~' && isCustomEffectChar(input.charAt(i + 2))) {
                 i += 2; // Skip 3-char custom code (&~s)
             } else if ((c == '&' || c == '§') && i + 1 < len && isFormatChar(input.charAt(i + 1))) {
@@ -93,6 +137,14 @@ public class DialogFormatUtil {
 
         for (int i = 0; i < len && remainingChars > 0; i++) {
             char c = input.charAt(i);
+            if (c == '{') {
+                int closeIdx = input.indexOf('}', i);
+                if (closeIdx != -1) {
+                    sb.append(input, i, closeIdx + 1);
+                    i = closeIdx;
+                    continue;
+                }
+            }
             if ((c == '&' || c == '§') && i + 2 < len && input.charAt(i + 1) == '~' && isCustomEffectChar(input.charAt(i + 2))) {
                 sb.append(c).append(input.charAt(i + 1)).append(input.charAt(i + 2));
                 i += 2;
@@ -106,6 +158,91 @@ public class DialogFormatUtil {
         }
 
         return translateCodes(sb.toString());
+    }
+
+    /**
+     * Builds a syntax-highlighted Component where EVERY raw character is preserved (length and characters are 1:1),
+     * but tags ({pause:...}, {shake}, etc.) and formatting codes (&0-&f, &l, &~s, etc.) are highlighted in distinct colors.
+     */
+    public static Component getSyntaxHighlightedComponent(String input) {
+        if (input == null || input.isEmpty()) return Component.empty();
+        net.minecraft.network.chat.MutableComponent root = Component.empty();
+        int len = input.length();
+        int i = 0;
+        while (i < len) {
+            char c = input.charAt(i);
+
+            // 1. Check for valid tag: {tag...}
+            if (c == '{') {
+                int closeIdx = input.indexOf('}', i);
+                if (closeIdx != -1) {
+                    String tag = input.substring(i, closeIdx + 1);
+                    int tagColor = 0xFFFFB300;
+                    String lowerTag = tag.toLowerCase(java.util.Locale.ROOT);
+                    if (lowerTag.startsWith("{shake") || lowerTag.startsWith("{/shake")) tagColor = 0xFFFF5555;
+                    else if (lowerTag.startsWith("{wave") || lowerTag.startsWith("{/wave")) tagColor = 0xFF55FFFF;
+                    else if (lowerTag.startsWith("{rainbow") || lowerTag.startsWith("{/rainbow")) tagColor = 0xFFFF55FF;
+                    else if (lowerTag.startsWith("{glitch") || lowerTag.startsWith("{/glitch")) tagColor = 0xFF00FFCC;
+                    else if (lowerTag.startsWith("{pulse") || lowerTag.startsWith("{/pulse")) tagColor = 0xFFFFFF55;
+                    else if (lowerTag.startsWith("{pause")) tagColor = 0xFFFFAA00;
+                    else if (lowerTag.startsWith("{sound")) tagColor = 0xFF00FF88;
+                    else if (lowerTag.startsWith("{shake_screen")) tagColor = 0xFFFF3333;
+                    else if (lowerTag.startsWith("{color") || lowerTag.startsWith("{/color")) tagColor = 0xFFFFAA00;
+
+                    final int col = tagColor;
+                    root.append(Component.literal(tag).withStyle(s -> s.withColor(col)));
+                    i = closeIdx + 1;
+                    continue;
+                }
+            }
+
+            // 2. Check for custom animated effect code: &~x
+            if (c == '&' && i + 2 < len && input.charAt(i + 1) == '~' && isCustomEffectChar(input.charAt(i + 2))) {
+                char fx = Character.toLowerCase(input.charAt(i + 2));
+                int fxColor = 0xFF00E5FF;
+                if (fx == 's') fxColor = 0xFFFF5555;
+                else if (fx == 'w') fxColor = 0xFF55FFFF;
+                else if (fx == 'r') fxColor = 0xFFFF55FF;
+                else if (fx == 'g') fxColor = 0xFF00FFCC;
+                else if (fx == 'p') fxColor = 0xFFFFFF55;
+                else if (fx == 'x') fxColor = 0xFFAAAAAA;
+                final int col = fxColor;
+                root.append(Component.literal(input.substring(i, i + 3)).withStyle(s -> s.withColor(col)));
+                i += 3;
+                continue;
+            }
+
+            // 3. Check for standard Minecraft formatting code: &0-&f, &k-&r
+            if (c == '&' && i + 1 < len && isFormatChar(input.charAt(i + 1))) {
+                char next = input.charAt(i + 1);
+                int mcColor = getMinecraftColor(next, 0xFF00E5FF);
+                final int col = mcColor;
+                root.append(Component.literal(input.substring(i, i + 2)).withStyle(s -> s.withColor(col)));
+                i += 2;
+                continue;
+            }
+
+            // 4. Normal text chunk: Consume until next valid tag or format code
+            int start = i;
+            i++; // GUARANTEE: at least 1 character is consumed!
+            while (i < len) {
+                char ch = input.charAt(i);
+                if (ch == '{') {
+                    if (input.indexOf('}', i) != -1) {
+                        break; // Stop before valid tag
+                    }
+                } else if (ch == '&') {
+                    if (i + 2 < len && input.charAt(i + 1) == '~' && isCustomEffectChar(input.charAt(i + 2))) {
+                        break; // Stop before valid custom fx code
+                    } else if (i + 1 < len && isFormatChar(input.charAt(i + 1))) {
+                        break; // Stop before valid format code
+                    }
+                }
+                i++;
+            }
+            root.append(Component.literal(input.substring(start, i)).withStyle(s -> s.withColor(0xFFFFFFFF)));
+        }
+        return root;
     }
 
     private static boolean isFormatChar(char c) {
@@ -201,6 +338,20 @@ public class DialogFormatUtil {
         if (text == null || text.isEmpty()) return;
 
         String formatted = translateCodes(text);
+        if (formatted.isEmpty()) return;
+
+        // FAST PATH: If there are no custom animated effects (wave, shake, rainbow, glitch, pulse),
+        // use Minecraft's native font line-splitter which batches rendering and avoids per-character overhead.
+        if (!formatted.contains("§~")) {
+            List<FormattedCharSequence> wrappedLines = font.split(Component.literal(formatted), maxLineWidth);
+            int lineY = startY;
+            for (FormattedCharSequence line : wrappedLines) {
+                graphics.drawString(font, line, startX, lineY, defaultColor, false);
+                lineY += 12;
+            }
+            return;
+        }
+
         int len = formatted.length();
 
         int cursorX = startX;
@@ -271,7 +422,7 @@ public class DialogFormatUtil {
                 continue;
             }
 
-            String charStr = String.valueOf(c);
+            String charStr = getCharString(c);
             int charW = font.width(charStr);
 
             // Word Wrapping

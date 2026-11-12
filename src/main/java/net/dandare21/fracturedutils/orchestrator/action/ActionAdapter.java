@@ -4,9 +4,12 @@ import com.google.gson.*;
 import java.lang.reflect.Type;
 
 public class ActionAdapter implements JsonSerializer<OrchestratorAction>, JsonDeserializer<OrchestratorAction> {
-    private static final Gson RAW_GSON = new GsonBuilder().create();
+    private static final Gson RAW_GSON = net.dandare21.fracturedutils.util.ModGson.createBuilder().create();
 
     public static GsonBuilder registerAll(GsonBuilder builder) {
+        builder.registerTypeAdapterFactory(net.dandare21.fracturedutils.util.OptionalTypeAdapterFactory.INSTANCE);
+        builder.registerTypeAdapter(net.dandare21.fracturedutils.dialog.DialogLine.class, net.dandare21.fracturedutils.util.DialogLineJsonAdapter.INSTANCE);
+        builder.registerTypeAdapter(net.minecraft.resources.ResourceLocation.class, net.dandare21.fracturedutils.util.ResourceLocationJsonAdapter.INSTANCE);
         ActionAdapter adapter = new ActionAdapter();
         builder.registerTypeAdapter(OrchestratorAction.class, adapter);
         builder.registerTypeAdapter(CommandAction.class, adapter);

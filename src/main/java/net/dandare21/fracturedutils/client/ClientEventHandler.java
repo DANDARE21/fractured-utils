@@ -386,7 +386,10 @@ public class ClientEventHandler {
                 }
             }
         }
-        net.dandare21.fracturedutils.client.gui.DialogHudOverlay.render(event.getGuiGraphics());
+
+        if (event.getOverlay().id().equals(VanillaGuiOverlay.CHAT_PANEL.id())) {
+            net.dandare21.fracturedutils.client.gui.DialogHudOverlay.render(event.getGuiGraphics());
+        }
     }
 
     @SubscribeEvent
@@ -436,9 +439,30 @@ public class ClientEventHandler {
     }
 
     @SubscribeEvent
+    public static void onComputeFovModifier(net.minecraftforge.client.event.ComputeFovModifierEvent event) {
+        if (net.dandare21.fracturedutils.client.gui.DialogHudOverlay.isActive()
+                || net.dandare21.fracturedutils.client.camera.CustomCameraManager.isCameraActive()
+                || ClientCutsceneHandler.getInstance().isCinematicPlaying()) {
+            event.setNewFovModifier(1.0F);
+            return;
+        }
+        if (event.getPlayer() != null) {
+            var slowness = event.getPlayer().getEffect(net.minecraft.world.effect.MobEffects.MOVEMENT_SLOWDOWN);
+            if (slowness != null && slowness.getAmplifier() >= 100) {
+                event.setNewFovModifier(1.0F);
+            }
+        }
+    }
+
+    @SubscribeEvent
     public static void onComputeFov(net.minecraftforge.client.event.ViewportEvent.ComputeFov event) {
         if (net.dandare21.fracturedutils.client.camera.CustomCameraManager.isFovActive()) {
             event.setFOV(net.dandare21.fracturedutils.client.camera.CustomCameraManager.getCustomFov());
+        } else if (net.dandare21.fracturedutils.client.gui.DialogHudOverlay.isActive()) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.options != null && event.usedConfiguredFov()) {
+                event.setFOV(mc.options.fov().get());
+            }
         }
         net.dandare21.fracturedutils.screeneffect.client.ClientScreenEffectHandler.onComputeFov(event);
     }

@@ -1,12 +1,10 @@
 package net.dandare21.fracturedutils.region.network;
 
-import net.dandare21.fracturedutils.region.client.ClientRegionData;
-import net.dandare21.fracturedutils.region.compat.xaero.XaeroMapIntegration;
+import net.dandare21.fracturedutils.region.client.ClientRegionPacketHandler;
 import net.dandare21.fracturedutils.region.data.Region;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
-import net.minecraftforge.fml.ModList;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.*;
@@ -23,9 +21,9 @@ public class S2CSyncRegionsPacket {
     }
 
     public S2CSyncRegionsPacket(FriendlyByteBuf buf) {
-        int regCount = buf.readVarInt();
-        this.regions = new ArrayList<>(regCount);
-        for (int i = 0; i < regCount; i++) {
+        int count = buf.readVarInt();
+        this.regions = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
             this.regions.add(Region.decode(buf));
         }
 
@@ -38,8 +36,8 @@ public class S2CSyncRegionsPacket {
 
     public void encode(FriendlyByteBuf buf) {
         buf.writeVarInt(regions.size());
-        for (Region r : regions) {
-            r.encode(buf);
+        for (Region region : regions) {
+            region.encode(buf);
         }
 
         buf.writeVarInt(activeFlags.size());
@@ -50,15 +48,8 @@ public class S2CSyncRegionsPacket {
 
     public void handle(Supplier<NetworkEvent.Context> ctxSupplier) {
         NetworkEvent.Context ctx = ctxSupplier.get();
-        ctx.enqueueWork(() -> {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-                ClientRegionData.getInstance().update(regions, activeFlags);
-                if (ModList.get().isLoaded("xaeroworldmap")) {
-                    XaeroMapIntegration.onClientRegionsSynced();
-                }
-            });
-        });
+        ctx.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
+                () -> () -> ClientRegionPacketHandler.handle(this.regions, this.activeFlags)));
         ctx.setPacketHandled(true);
     }
 }
-

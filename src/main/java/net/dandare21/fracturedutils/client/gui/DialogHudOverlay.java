@@ -71,8 +71,7 @@ public class DialogHudOverlay {
             boolean waitForInput, boolean useCamera, double cameraX, double cameraY, double cameraZ,
             float cameraYaw, float cameraPitch, double cameraFov, int targetEntityId,
             String anchor, double offsetX, double offsetY, double offsetZ, boolean lookAtTarget,
-            int interpolationTicks, String easing, String styleId
-    ) {
+            int interpolationTicks, String easing, String styleId) {
         activeSpeaker = speaker != null ? speaker : "";
         activeText = text != null ? text : "";
         DialogHudOverlay.delayTicks = Math.max(1, delayTicks);
@@ -86,7 +85,8 @@ public class DialogHudOverlay {
 
         activeStyle = DialogStyleRegistry.get(styleId);
 
-        // Parse text into token stream with rich formatting, mid-text events and punctuation pacing
+        // Parse text into token stream with rich formatting, mid-text events and
+        // punctuation pacing
         parsedTokens = DialogTextParser.parse(activeText, activeStyle.defaultTextColor());
         totalCharCount = DialogTextParser.countVisibleChars(parsedTokens);
         tokenIndex = 0;
@@ -116,8 +116,7 @@ public class DialogHudOverlay {
             CustomCameraManager.setDialogCamera(
                     target, anchor, new Vec3(offsetX, offsetY, offsetZ), lookAtTarget,
                     cameraYaw, cameraPitch, cameraX, cameraY, cameraZ, cameraYaw, cameraPitch, cameraFov,
-                    interpolationTicks, easing
-            );
+                    interpolationTicks, easing);
         } else {
             if (dialogSetCamera && CustomCameraManager.getActiveTrack() == null) {
                 CustomCameraManager.clearCustomCamera();
@@ -126,8 +125,13 @@ public class DialogHudOverlay {
         }
     }
 
-    public static void setActiveDialog(String speaker, String text, int delayTicks, int charSpeedTicks, String letterSound, float letterSoundPitchMin, float letterSoundPitchMax, boolean waitForInput, boolean useCamera, double cameraX, double cameraY, double cameraZ, float cameraYaw, float cameraPitch, double cameraFov) {
-        setActiveDialog(speaker, text, delayTicks, charSpeedTicks, letterSound, letterSoundPitchMin, letterSoundPitchMax, waitForInput, useCamera, cameraX, cameraY, cameraZ, cameraYaw, cameraPitch, cameraFov, -1, "eyes", 0, 0, 0, true, 20, "EASE_IN_OUT_CUBIC", "fractured_utils:cyberpunk");
+    public static void setActiveDialog(String speaker, String text, int delayTicks, int charSpeedTicks,
+            String letterSound, float letterSoundPitchMin, float letterSoundPitchMax, boolean waitForInput,
+            boolean useCamera, double cameraX, double cameraY, double cameraZ, float cameraYaw, float cameraPitch,
+            double cameraFov) {
+        setActiveDialog(speaker, text, delayTicks, charSpeedTicks, letterSound, letterSoundPitchMin,
+                letterSoundPitchMax, waitForInput, useCamera, cameraX, cameraY, cameraZ, cameraYaw, cameraPitch,
+                cameraFov, -1, "eyes", 0, 0, 0, true, 20, "EASE_IN_OUT_CUBIC", "fractured_utils:cyberpunk");
     }
 
     public static void updateReadyPlayers(List<UUID> readyUUIDs) {
@@ -162,11 +166,14 @@ public class DialogHudOverlay {
 
     /**
      * Two-Stage Advance Handler:
-     * Stage 1: If typewriter is printing or in pause, instantly fast-forward text to 100%.
-     * Stage 2: If line is fully printed, send C2SDialogAdvancePacket to advance line.
+     * Stage 1: If typewriter is printing or in pause, instantly fast-forward text
+     * to 100%.
+     * Stage 2: If line is fully printed, send C2SDialogAdvancePacket to advance
+     * line.
      */
     public static boolean handleUserInput() {
-        if (!active || !waitForInput) return false;
+        if (!active || !waitForInput)
+            return false;
 
         // Stage 1: Fast-Forward Typewriter
         if (revealedCharCount < totalCharCount || pauseTicksRemaining > 0) {
@@ -185,7 +192,8 @@ public class DialogHudOverlay {
     }
 
     public static void tick() {
-        if (!active) return;
+        if (!active)
+            return;
 
         if (revealedCharCount < totalCharCount) {
             if (charSpeedTicks == 0) {
@@ -236,25 +244,31 @@ public class DialogHudOverlay {
         if (token instanceof DialogTextToken.Pause p) {
             pauseTicksRemaining = p.ticks();
         } else if (token instanceof DialogTextToken.ScreenShake s) {
-            ClientScreenEffectHandler.playEffect(new ScreenShakeEffect.ScreenShakeInstance(s.durationTicks() * 50, s.intensity(), 20.0f, true));
+            ClientScreenEffectHandler.playEffect(
+                    new ScreenShakeEffect.ScreenShakeInstance(s.durationTicks() * 50, s.intensity(), 20.0f, true));
         } else if (token instanceof DialogTextToken.SoundTrigger st) {
             try {
                 SoundEvent soundEvent = SoundEvent.createVariableRangeEvent(st.sound());
-                Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(soundEvent, st.pitch(), st.volume()));
-            } catch (Exception ignored) {}
+                Minecraft.getInstance().getSoundManager()
+                        .play(SimpleSoundInstance.forUI(soundEvent, st.pitch(), st.volume()));
+            } catch (Exception ignored) {
+            }
         }
     }
 
     private static void playLetterSound() {
         if (letterSound != null && !letterSound.isEmpty()) {
             try {
-                float pitch = letterSoundPitchMin + (float) Math.random() * (Math.max(letterSoundPitchMin, letterSoundPitchMax) - Math.min(letterSoundPitchMin, letterSoundPitchMax));
+                float pitch = letterSoundPitchMin
+                        + (float) Math.random() * (Math.max(letterSoundPitchMin, letterSoundPitchMax)
+                                - Math.min(letterSoundPitchMin, letterSoundPitchMax));
                 pitch = Math.max(0.1f, Math.min(2.0f, pitch));
                 SoundEvent soundEvent = ModSounds.resolveSound(letterSound);
                 if (soundEvent != null) {
                     Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(soundEvent, pitch));
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -268,7 +282,8 @@ public class DialogHudOverlay {
             return;
         }
 
-        // Frame Guard: Ensure we never render more than once per frame even if invoked repeatedly
+        // Frame Guard: Ensure we never render more than once per frame even if invoked
+        // repeatedly
         int currentGuiTicks = mc.gui.getGuiTicks();
         float currentPartialTick = mc.getFrameTime();
         if (currentGuiTicks == lastRenderGuiTicks && currentPartialTick == lastRenderPartialTick) {
@@ -313,7 +328,8 @@ public class DialogHudOverlay {
             guiGraphics.fill(badgeX, badgeY + 1, badgeX + 1, badgeY + badgeH, badgeBorder);
             guiGraphics.fill(badgeX + badgeW - 1, badgeY + 1, badgeX + badgeW, badgeY + badgeH, badgeBorder);
 
-            DialogFormatUtil.renderAnimatedText(guiGraphics, mc.font, activeSpeaker, badgeX + 6, badgeY + 3, badgeW, activeStyle.speakerTextColor());
+            ClientDialogTextRenderer.renderAnimatedText(guiGraphics, mc.font, activeSpeaker, badgeX + 6, badgeY + 3,
+                    badgeW, activeStyle.speakerTextColor());
             currentY += 4;
         }
 
@@ -323,7 +339,8 @@ public class DialogHudOverlay {
             lastActiveText = activeText;
             cachedRevealedText = DialogFormatUtil.getRevealedText(activeText, revealedCharCount);
         }
-        DialogFormatUtil.renderAnimatedText(guiGraphics, mc.font, cachedRevealedText, contentX, currentY, maxTextWidth, activeStyle.defaultTextColor());
+        ClientDialogTextRenderer.renderAnimatedText(guiGraphics, mc.font, cachedRevealedText, contentX, currentY,
+                maxTextWidth, activeStyle.defaultTextColor());
 
         // 4. Render Blinking Advance Prompt Indicator (▼) and Ready Player Heads
         if (revealedCharCount >= totalCharCount) {
@@ -337,7 +354,8 @@ public class DialogHudOverlay {
                 guiGraphics.drawString(mc.font, promptText, promptX, promptY, promptColor);
             }
 
-            // Render Player Face Icons next to the "next" icon for all players who pressed advance
+            // Render Player Face Icons next to the "next" icon for all players who pressed
+            // advance
             if (!readyPlayerUUIDs.isEmpty() && mc.getConnection() != null) {
                 int headSize = 12;
                 int headX = promptX - 16;
@@ -348,7 +366,8 @@ public class DialogHudOverlay {
                     if (info != null) {
                         ResourceLocation skinLoc = info.getSkinLocation();
 
-                        guiGraphics.fill(headX - 1, headY - 1, headX + headSize + 1, headY + headSize + 1, activeStyle.borderColor());
+                        guiGraphics.fill(headX - 1, headY - 1, headX + headSize + 1, headY + headSize + 1,
+                                activeStyle.borderColor());
                         guiGraphics.fill(headX, headY, headX + headSize, headY + headSize, 0xFF000000);
 
                         PlayerFaceRenderer.draw(guiGraphics, skinLoc, headX, headY, headSize);

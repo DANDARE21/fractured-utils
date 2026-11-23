@@ -87,6 +87,15 @@ public class RegionCommands {
                                 .suggests(SUGGEST_REGION_IDS)
                                 .executes(ctx -> teleportToRegion(ctx, StringArgumentType.getString(ctx, "id")))
                         )
+                )
+                .then(Commands.literal("subtitle")
+                        .then(Commands.argument("id", StringArgumentType.word())
+                                .suggests(SUGGEST_REGION_IDS)
+                                .then(Commands.argument("text", StringArgumentType.greedyString())
+                                        .executes(ctx -> setSubtitle(ctx, StringArgumentType.getString(ctx, "id"), StringArgumentType.getString(ctx, "text")))
+                                )
+                                .executes(ctx -> setSubtitle(ctx, StringArgumentType.getString(ctx, "id"), ""))
+                        )
                 );
 
         dispatcher.register(regionCmd);
@@ -233,6 +242,26 @@ public class RegionCommands {
         double targetY = player.getY();
         player.teleportTo(centroid.x(), targetY, centroid.z());
         src.sendSuccess(() -> Component.literal("§a[Region] Teleported to center of §f" + r.getName() + " §7(" + (int)centroid.x() + ", " + (int)centroid.z() + ")"), false);
+        return 1;
+    }
+
+    private static int setSubtitle(CommandContext<CommandSourceStack> ctx, String id, String subtitle) {
+        CommandSourceStack src = ctx.getSource();
+        WorldRegionSavedData data = WorldRegionSavedData.get(src.getServer());
+        Region r = data.getRegion(id);
+        if (r == null) {
+            src.sendFailure(Component.literal("Region not found: " + id));
+            return 0;
+        }
+
+        r.setSubtitle(subtitle);
+        data.setDirty();
+        RegionManager.getInstance().syncToAll();
+        if (subtitle.isEmpty()) {
+            src.sendSuccess(() -> Component.literal("§a[Region] Cleared subtitle for: §f" + r.getName()), true);
+        } else {
+            src.sendSuccess(() -> Component.literal("§a[Region] Set subtitle for §f" + r.getName() + " §ato: §e" + subtitle), true);
+        }
         return 1;
     }
 }

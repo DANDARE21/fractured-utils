@@ -60,16 +60,8 @@ public class ClientRegionHandler {
 
         long now = System.currentTimeMillis();
 
-        // 1. Check Macro-Region (MAP_ZONE) entry
-        if (currentMapZoneId != null && !currentMapZoneId.equals(lastMapZoneId)) {
-            long lastTime = LAST_BANNER_TIMES.getOrDefault(currentMapZoneId, 0L);
-            if (now - lastTime > BANNER_COOLDOWN_MS) {
-                LAST_BANNER_TIMES.put(currentMapZoneId, now);
-                RegionHudOverlay.showBanner(mapZone);
-            }
-        }
-        // 2. Check City / Event entry if primary wasn't already triggered as a map zone
-        else if (primary != null && !primary.getId().equals(lastPrimaryRegionId) && primary.getType() != RegionType.MAP_ZONE) {
+        // Trigger banner whenever player enters a new primary region
+        if (primary != null && !primary.getId().equals(lastPrimaryRegionId)) {
             long lastTime = LAST_BANNER_TIMES.getOrDefault(primary.getId(), 0L);
             if (now - lastTime > BANNER_COOLDOWN_MS) {
                 LAST_BANNER_TIMES.put(primary.getId(), now);

@@ -112,7 +112,8 @@ public class EditActionModalScreen extends Screen {
                 this.actionType = "await_trigger";
             } else if (t.equalsIgnoreCase("play_music_sequence") || t.equalsIgnoreCase("music_sequence")) {
                 this.actionType = "play_music_sequence";
-            } else if (t.equalsIgnoreCase("wait_for_music_sequence") || t.equalsIgnoreCase("wait_music_sequence") || t.equalsIgnoreCase("music_sequence_end")) {
+            } else if (t.equalsIgnoreCase("wait_for_music_sequence") || t.equalsIgnoreCase("wait_music_sequence")
+                    || t.equalsIgnoreCase("music_sequence_end")) {
                 this.actionType = "wait_for_music_sequence";
             } else {
                 this.actionType = t;
@@ -151,7 +152,8 @@ public class EditActionModalScreen extends Screen {
     private double getLayoutScale() {
         int targetW = 468;
         int targetH = 320;
-        if (this.width <= 0 || this.height <= 0) return 1.0;
+        if (this.width <= 0 || this.height <= 0)
+            return 1.0;
         double scaleX = (double) this.width / targetW;
         double scaleY = (double) this.height / targetH;
         return Math.min(1.0, Math.min(scaleX, scaleY));
@@ -172,7 +174,8 @@ public class EditActionModalScreen extends Screen {
     }
 
     private static boolean isValidUUID(String str) {
-        if (str == null || str.isBlank()) return false;
+        if (str == null || str.isBlank())
+            return false;
         try {
             UUID.fromString(str.trim());
             return true;
@@ -191,8 +194,10 @@ public class EditActionModalScreen extends Screen {
         if (sel.contains("type=")) {
             int idx = sel.indexOf("type=");
             int endIdx = sel.indexOf("]", idx);
-            if (endIdx < 0) endIdx = sel.indexOf(",", idx);
-            if (endIdx < 0) endIdx = sel.length();
+            if (endIdx < 0)
+                endIdx = sel.indexOf(",", idx);
+            if (endIdx < 0)
+                endIdx = sel.length();
             typeFilter = sel.substring(idx + 5, endIdx).trim();
         }
 
@@ -236,35 +241,61 @@ public class EditActionModalScreen extends Screen {
 
         // --- 1. Step 01: Action Mode Selection Dropdown (Left Column) ---
         List<CyberpunkDropdown.DropdownEntry<String>> actionEntries = new ArrayList<>();
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("command", Component.literal("Command Action"), Component.literal("Execute console command (%player% supported)")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("checkpoint", Component.literal("Checkpoint Action"), Component.literal("Set checkpoint location; teleports team & rewinds sequence on wipe")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("new_objective", Component.literal("New Objective"), Component.literal("Set mission objective text on HUD with optional active wait tracking")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("end_objective", Component.literal("End Objective"), Component.literal("Clear current active objective on HUD")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("play_music_sequence", Component.literal("Play Music Sequence"), Component.literal("Play a music sequence JSON synced to event music track")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("wait_for_music_sequence", Component.literal("Wait For Music Sequence"), Component.literal("Wait until music sequence finishes on OUT marker")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("wait_until", Component.literal("Wait Until Action"), Component.literal("Pause sequence until condition is met")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("await_trigger", Component.literal("Await Trigger"), Component.literal("Wait for external trigger ID event")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("fork_sequence", Component.literal("Fork Sequence"), Component.literal("Asynchronously start sub-sequence")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("run_sequence", Component.literal("Run Sequence"), Component.literal("Synchronously execute sub-sequence")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("stall_parent", Component.literal("Stall Parent"), Component.literal("Stall execution of parent sequence")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("resume_parent", Component.literal("Resume Parent"), Component.literal("Resume execution of parent sequence")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_action", Component.literal("Execute Puppet Action"), Component.literal("Execute registered puppet attack/routine")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_move_to", Component.literal("Puppet Move To"), Component.literal("Direct puppet pathfinding to coordinates")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_look_at", Component.literal("Puppet Look At"), Component.literal("Direct puppet look angle to target or coordinates")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_suppress_ai", Component.literal("Puppet Suppress AI"), Component.literal("Configure AI aspect suppression flags")));
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_stop_action", Component.literal("Puppet Stop Action"), Component.literal("Stop active action & reset suppression")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("command", Component.literal("Command Action"),
+                Component.literal("Execute console command (%player% supported)")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("checkpoint", Component.literal("Checkpoint Action"),
+                Component.literal("Set checkpoint location; teleports team & rewinds sequence on wipe")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("new_objective", Component.literal("New Objective"),
+                Component.literal("Set mission objective text on HUD with optional active wait tracking")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("end_objective", Component.literal("End Objective"),
+                Component.literal("Clear current active objective on HUD")));
+        actionEntries.add(
+                new CyberpunkDropdown.DropdownEntry<>("play_music_sequence", Component.literal("Play Music Sequence"),
+                        Component.literal("Play a music sequence JSON synced to event music track")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("wait_for_music_sequence",
+                Component.literal("Wait For Music Sequence"),
+                Component.literal("Wait until music sequence finishes on OUT marker")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("wait_until", Component.literal("Wait Until Action"),
+                Component.literal("Pause sequence until condition is met")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("await_trigger", Component.literal("Await Trigger"),
+                Component.literal("Wait for external trigger ID event")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("fork_sequence", Component.literal("Fork Sequence"),
+                Component.literal("Asynchronously start sub-sequence")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("run_sequence", Component.literal("Run Sequence"),
+                Component.literal("Synchronously execute sub-sequence")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("stall_parent", Component.literal("Stall Parent"),
+                Component.literal("Stall execution of parent sequence")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("resume_parent", Component.literal("Resume Parent"),
+                Component.literal("Resume execution of parent sequence")));
+        actionEntries
+                .add(new CyberpunkDropdown.DropdownEntry<>("puppet_action", Component.literal("Execute Puppet Action"),
+                        Component.literal("Execute registered puppet attack/routine")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_move_to", Component.literal("Puppet Move To"),
+                Component.literal("Direct puppet pathfinding to coordinates")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_look_at", Component.literal("Puppet Look At"),
+                Component.literal("Direct puppet look angle to target or coordinates")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_suppress_ai",
+                Component.literal("Puppet Suppress AI"), Component.literal("Configure AI aspect suppression flags")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("puppet_stop_action",
+                Component.literal("Puppet Stop Action"), Component.literal("Stop active action & reset suppression")));
 
-        this.actionTypeDropdown = new CyberpunkDropdown<>(col1Left, top + 46, colWidth, 20, Component.literal("Action Type"));
+        this.actionTypeDropdown = new CyberpunkDropdown<>(col1Left, top + 46, colWidth, 20,
+                Component.literal("Action Type"));
         this.actionTypeDropdown.setOptions(actionEntries);
         this.actionTypeDropdown.selectByValue(actionType);
         this.actionTypeDropdown.setMaxVisibleItems(6);
         this.actionTypeDropdown.setItemHeight(22);
         this.actionTypeDropdown.setOnOpenListener(() -> {
-            if (subActionTypeDropdown != null) subActionTypeDropdown.setOpen(false);
-            if (unitDropdown != null) unitDropdown.setOpen(false);
-            if (musicSequenceDropdown != null) musicSequenceDropdown.setOpen(false);
-            if (nearbyEntityDropdown != null) nearbyEntityDropdown.setOpen(false);
-            if (puppetActionDropdown != null) puppetActionDropdown.setOpen(false);
+            if (subActionTypeDropdown != null)
+                subActionTypeDropdown.setOpen(false);
+            if (unitDropdown != null)
+                unitDropdown.setOpen(false);
+            if (musicSequenceDropdown != null)
+                musicSequenceDropdown.setOpen(false);
+            if (nearbyEntityDropdown != null)
+                nearbyEntityDropdown.setOpen(false);
+            if (puppetActionDropdown != null)
+                puppetActionDropdown.setOpen(false);
         });
         this.actionTypeDropdown.setOnSelect(entry -> {
             String newType = entry.getValue();
@@ -289,12 +320,14 @@ public class EditActionModalScreen extends Screen {
 
         if (isPuppetActionType) {
             List<CyberpunkDropdown.DropdownEntry<String>> nearbyEntries = new ArrayList<>();
-            nearbyEntries.add(new CyberpunkDropdown.DropdownEntry<>("", Component.literal("-- Select Nearby Entity --"), Component.literal("Scans loaded entities within 64 blocks")));
+            nearbyEntries.add(new CyberpunkDropdown.DropdownEntry<>("", Component.literal("-- Select Nearby Entity --"),
+                    Component.literal("Scans loaded entities within 64 blocks")));
 
             if (this.minecraft != null && this.minecraft.level != null && this.minecraft.player != null) {
                 Vec3 pPos = this.minecraft.player.position();
                 AABB area = new AABB(pPos.x - 64, pPos.y - 64, pPos.z - 64, pPos.x + 64, pPos.y + 64, pPos.z + 64);
-                List<Entity> nearby = new ArrayList<>(this.minecraft.level.getEntities((Entity) null, area, e -> e != this.minecraft.player));
+                List<Entity> nearby = new ArrayList<>(
+                        this.minecraft.level.getEntities((Entity) null, area, e -> e != this.minecraft.player));
                 nearby.sort(Comparator.comparingDouble(e -> e.distanceToSqr(this.minecraft.player)));
 
                 for (Entity e : nearby) {
@@ -306,20 +339,27 @@ public class EditActionModalScreen extends Screen {
 
                     String label = String.format(Locale.ROOT, "%s%s (%.1fm)", isPuppet ? "🎭 " : "", name, dist);
                     String details = typeStr + " | " + uuidStr;
-                    nearbyEntries.add(new CyberpunkDropdown.DropdownEntry<>(uuidStr, Component.literal(label), Component.literal(details)));
+                    nearbyEntries.add(new CyberpunkDropdown.DropdownEntry<>(uuidStr, Component.literal(label),
+                            Component.literal(details)));
                 }
             }
 
-            this.nearbyEntityDropdown = new CyberpunkDropdown<>(col2Left, top + 46, colWidth, 20, Component.literal("Select Nearby Entity"));
+            this.nearbyEntityDropdown = new CyberpunkDropdown<>(col2Left, top + 46, colWidth, 20,
+                    Component.literal("Select Nearby Entity"));
             this.nearbyEntityDropdown.setOptions(nearbyEntries);
             this.nearbyEntityDropdown.setMaxVisibleItems(5);
             this.nearbyEntityDropdown.setItemHeight(22);
             this.nearbyEntityDropdown.setOnOpenListener(() -> {
-                if (actionTypeDropdown != null) actionTypeDropdown.setOpen(false);
-                if (subActionTypeDropdown != null) subActionTypeDropdown.setOpen(false);
-                if (unitDropdown != null) unitDropdown.setOpen(false);
-                if (musicSequenceDropdown != null) musicSequenceDropdown.setOpen(false);
-                if (puppetActionDropdown != null) puppetActionDropdown.setOpen(false);
+                if (actionTypeDropdown != null)
+                    actionTypeDropdown.setOpen(false);
+                if (subActionTypeDropdown != null)
+                    subActionTypeDropdown.setOpen(false);
+                if (unitDropdown != null)
+                    unitDropdown.setOpen(false);
+                if (musicSequenceDropdown != null)
+                    musicSequenceDropdown.setOpen(false);
+                if (puppetActionDropdown != null)
+                    puppetActionDropdown.setOpen(false);
             });
             this.nearbyEntityDropdown.setOnSelect(entry -> {
                 String uuidStr = entry.getValue();
@@ -339,7 +379,8 @@ public class EditActionModalScreen extends Screen {
                                     break;
                                 }
                             }
-                        } catch (Exception ignored) {}
+                        } catch (Exception ignored) {
+                        }
                     }
                     refreshPuppetActionSuggestions();
                 }
@@ -347,25 +388,43 @@ public class EditActionModalScreen extends Screen {
             this.addRenderableWidget(this.nearbyEntityDropdown);
         } else if (actionType.equalsIgnoreCase("wait_until")) {
             List<CyberpunkDropdown.DropdownEntry<String>> subEntries = new ArrayList<>();
-            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("delay", Component.literal("Delay Duration"), Component.literal("Wait for specific ticks/seconds/minutes")));
-            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("proximity", Component.literal("Player Proximity Marker"), Component.literal("Spawns marker entity at (X, Y, Z) and waits for player radius")));
-            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("trigger", Component.literal("Event Trigger"), Component.literal("Wait for /orchestrator trigger event")));
-            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("operator_action", Component.literal("Operator Action Button"), Component.literal("Display interactive action button on HUD")));
-            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("dialog", Component.literal("Dialog End"), Component.literal("Wait until active dialog sequence finishes")));
-            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("video", Component.literal("Video / Cutscene End"), Component.literal("Wait until active video/cinematic ends")));
-            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("waiting_room", Component.literal("Waiting Room End"), Component.literal("Wait until active waiting room phase finishes")));
-            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("waiting_room_ready", Component.literal("Waiting Room All Ready"), Component.literal("Wait until all players in waiting room click ready")));
-            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("downloads", Component.literal("Cutscene Downloads End"), Component.literal("Wait until all players finish downloading remaining cutscenes")));
-            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("music_sequence", Component.literal("Music Sequence End"), Component.literal("Wait until active music sequence finishes at OUT marker")));
+            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("delay", Component.literal("Delay Duration"),
+                    Component.literal("Wait for specific ticks/seconds/minutes")));
+            subEntries.add(
+                    new CyberpunkDropdown.DropdownEntry<>("proximity", Component.literal("Player Proximity Marker"),
+                            Component.literal("Spawns marker entity at (X, Y, Z) and waits for player radius")));
+            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("trigger", Component.literal("Event Trigger"),
+                    Component.literal("Wait for /orchestrator trigger event")));
+            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("operator_action",
+                    Component.literal("Operator Action Button"),
+                    Component.literal("Display interactive action button on HUD")));
+            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("dialog", Component.literal("Dialog End"),
+                    Component.literal("Wait until active dialog sequence finishes")));
+            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("video", Component.literal("Video / Cutscene End"),
+                    Component.literal("Wait until active video/cinematic ends")));
+            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("waiting_room", Component.literal("Waiting Room End"),
+                    Component.literal("Wait until active waiting room phase finishes")));
+            subEntries.add(new CyberpunkDropdown.DropdownEntry<>("waiting_room_ready",
+                    Component.literal("Waiting Room All Ready"),
+                    Component.literal("Wait until all players in waiting room click ready")));
+            subEntries
+                    .add(new CyberpunkDropdown.DropdownEntry<>("downloads", Component.literal("Cutscene Downloads End"),
+                            Component.literal("Wait until all players finish downloading remaining cutscenes")));
+            subEntries.add(
+                    new CyberpunkDropdown.DropdownEntry<>("music_sequence", Component.literal("Music Sequence End"),
+                            Component.literal("Wait until active music sequence finishes at OUT marker")));
 
-            this.subActionTypeDropdown = new CyberpunkDropdown<>(col2Left, top + 46, colWidth, 20, Component.literal("Subaction Condition"));
+            this.subActionTypeDropdown = new CyberpunkDropdown<>(col2Left, top + 46, colWidth, 20,
+                    Component.literal("Subaction Condition"));
             this.subActionTypeDropdown.setOptions(subEntries);
             this.subActionTypeDropdown.selectByValue(waitUntilType);
             this.subActionTypeDropdown.setMaxVisibleItems(5);
             this.subActionTypeDropdown.setItemHeight(22);
             this.subActionTypeDropdown.setOnOpenListener(() -> {
-                if (actionTypeDropdown != null) actionTypeDropdown.setOpen(false);
-                if (unitDropdown != null) unitDropdown.setOpen(false);
+                if (actionTypeDropdown != null)
+                    actionTypeDropdown.setOpen(false);
+                if (unitDropdown != null)
+                    unitDropdown.setOpen(false);
             });
             this.subActionTypeDropdown.setOnSelect(entry -> {
                 String newSub = entry.getValue();
@@ -377,7 +436,8 @@ public class EditActionModalScreen extends Screen {
                 this.rebuildWidgets();
             });
             this.addRenderableWidget(this.subActionTypeDropdown);
-        } else if (actionType.equalsIgnoreCase("play_music_sequence") || actionType.equalsIgnoreCase("wait_for_music_sequence")) {
+        } else if (actionType.equalsIgnoreCase("play_music_sequence")
+                || actionType.equalsIgnoreCase("wait_for_music_sequence")) {
             String defaultSeqFile = "";
             if (action instanceof PlayMusicSequenceAction pmsa) {
                 defaultSeqFile = pmsa.getSequenceFile();
@@ -385,7 +445,8 @@ public class EditActionModalScreen extends Screen {
                 defaultSeqFile = wfms.getSequenceFile();
             }
 
-            List<String> availableMusicSeqs = net.dandare21.fracturedutils.sound.sequence.MusicSequenceManager.getInstance().getSequenceFileNames();
+            List<String> availableMusicSeqs = net.dandare21.fracturedutils.sound.sequence.MusicSequenceManager
+                    .getInstance().getSequenceFileNames();
             Set<String> allFiles = new java.util.LinkedHashSet<>();
             if (actionType.equalsIgnoreCase("wait_for_music_sequence")) {
                 allFiles.add("");
@@ -398,22 +459,27 @@ public class EditActionModalScreen extends Screen {
             List<CyberpunkDropdown.DropdownEntry<String>> seqEntries = new ArrayList<>();
             for (String file : allFiles) {
                 if (file.isEmpty()) {
-                    seqEntries.add(new CyberpunkDropdown.DropdownEntry<>("", Component.literal("[Any Active Sequence]"), Component.literal("Wait for any active music sequence")));
+                    seqEntries.add(new CyberpunkDropdown.DropdownEntry<>("", Component.literal("[Any Active Sequence]"),
+                            Component.literal("Wait for any active music sequence")));
                 } else {
-                    seqEntries.add(new CyberpunkDropdown.DropdownEntry<>(file, Component.literal(file), Component.literal("Music Sequence JSON")));
+                    seqEntries.add(new CyberpunkDropdown.DropdownEntry<>(file, Component.literal(file),
+                            Component.literal("Music Sequence JSON")));
                 }
             }
             if (seqEntries.isEmpty()) {
-                seqEntries.add(new CyberpunkDropdown.DropdownEntry<>("new_music_sequence.json", Component.literal("new_music_sequence.json")));
+                seqEntries.add(new CyberpunkDropdown.DropdownEntry<>("new_music_sequence.json",
+                        Component.literal("new_music_sequence.json")));
             }
 
-            this.musicSequenceDropdown = new CyberpunkDropdown<>(col2Left, top + 46, colWidth, 20, Component.literal("Select Music Sequence"));
+            this.musicSequenceDropdown = new CyberpunkDropdown<>(col2Left, top + 46, colWidth, 20,
+                    Component.literal("Select Music Sequence"));
             this.musicSequenceDropdown.setOptions(seqEntries);
             this.musicSequenceDropdown.selectByValue(defaultSeqFile);
             this.musicSequenceDropdown.setMaxVisibleItems(4);
             this.musicSequenceDropdown.setItemHeight(22);
             this.musicSequenceDropdown.setOnOpenListener(() -> {
-                if (actionTypeDropdown != null) actionTypeDropdown.setOpen(false);
+                if (actionTypeDropdown != null)
+                    actionTypeDropdown.setOpen(false);
             });
             this.musicSequenceDropdown.setOnSelect(entry -> {
                 if (this.inputField != null) {
@@ -430,14 +496,16 @@ public class EditActionModalScreen extends Screen {
 
         // --- 3. Body Section & Parameters Setup ---
         int boxH = 18;
-        this.inputField = new EditBox(this.font, left + 14, top + 98, panelWidth - 28, boxH, Component.literal("Input"));
+        this.inputField = new EditBox(this.font, left + 14, top + 98, panelWidth - 28, boxH,
+                Component.literal("Input"));
         this.inputField.setMaxLength(512);
         this.inputField.setBordered(false);
         this.inputField.setTextColor(0xFFFFFFFF);
 
         if (actionType.equalsIgnoreCase("puppet_suppress_ai")) {
             this.commandSuggestions = null;
-            boolean defaultAi = false, defaultNav = false, defaultTargeting = false, defaultLook = false, defaultActions = false, defaultActive = true;
+            boolean defaultAi = false, defaultNav = false, defaultTargeting = false, defaultLook = false,
+                    defaultActions = false, defaultActive = true;
             String defaultUuid = "", defaultSelector = "";
             if (action instanceof PuppetSuppressAction psa) {
                 defaultAi = psa.isSuppressAi();
@@ -456,28 +524,35 @@ public class EditActionModalScreen extends Screen {
             int r2Y = top + 113;
             int r3Y = top + 136;
 
-            this.suppressAiCard = new CyberpunkMatrixCard(col1Left, r1Y, cardW, cardH, Component.literal("Disable Mob AI"), defaultAi, null);
+            this.suppressAiCard = new CyberpunkMatrixCard(col1Left, r1Y, cardW, cardH,
+                    Component.literal("Disable Mob AI"), defaultAi, null);
             this.addRenderableWidget(this.suppressAiCard);
 
-            this.puppetingActiveCard = new CyberpunkMatrixCard(col2Left, r1Y, cardW, cardH, Component.literal("Puppeting Active Flag"), defaultActive, null);
+            this.puppetingActiveCard = new CyberpunkMatrixCard(col2Left, r1Y, cardW, cardH,
+                    Component.literal("Puppeting Active Flag"), defaultActive, null);
             this.addRenderableWidget(this.puppetingActiveCard);
 
-            this.suppressNavCard = new CyberpunkMatrixCard(col1Left, r2Y, cardW, cardH, Component.literal("Suppress Navigation"), defaultNav, null);
+            this.suppressNavCard = new CyberpunkMatrixCard(col1Left, r2Y, cardW, cardH,
+                    Component.literal("Suppress Navigation"), defaultNav, null);
             this.addRenderableWidget(this.suppressNavCard);
 
-            this.suppressTargetingCard = new CyberpunkMatrixCard(col2Left, r2Y, cardW, cardH, Component.literal("Suppress Targeting"), defaultTargeting, null);
+            this.suppressTargetingCard = new CyberpunkMatrixCard(col2Left, r2Y, cardW, cardH,
+                    Component.literal("Suppress Targeting"), defaultTargeting, null);
             this.addRenderableWidget(this.suppressTargetingCard);
 
-            this.suppressLookCard = new CyberpunkMatrixCard(col1Left, r3Y, cardW, cardH, Component.literal("Suppress Look Control"), defaultLook, null);
+            this.suppressLookCard = new CyberpunkMatrixCard(col1Left, r3Y, cardW, cardH,
+                    Component.literal("Suppress Look Control"), defaultLook, null);
             this.addRenderableWidget(this.suppressLookCard);
 
-            this.suppressActionsCard = new CyberpunkMatrixCard(col2Left, r3Y, cardW, cardH, Component.literal("Disable Puppet Actions"), defaultActions, null);
+            this.suppressActionsCard = new CyberpunkMatrixCard(col2Left, r3Y, cardW, cardH,
+                    Component.literal("Disable Puppet Actions"), defaultActions, null);
             this.addRenderableWidget(this.suppressActionsCard);
 
             // Row 4: Entity UUID
             int uuidY = top + 172;
             int uuidW = panelWidth - 146;
-            this.entityUuidField = new EditBox(this.font, left + 14, uuidY + 1, uuidW, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField = new EditBox(this.font, left + 14, uuidY + 1, uuidW, boxH,
+                    Component.literal("Entity UUID"));
             this.entityUuidField.setMaxLength(128);
             this.entityUuidField.setBordered(false);
             this.entityUuidField.setValue(defaultUuid);
@@ -489,19 +564,21 @@ public class EditActionModalScreen extends Screen {
                     b -> {
                         Entity target = getLookedAtEntity();
                         if (target != null) {
-                            if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
+                            if (entityUuidField != null)
+                                entityUuidField.setValue(target.getUUID().toString());
                             if (targetSelectorField != null) {
                                 String typeStr = EntityType.getKey(target.getType()).toString();
                                 targetSelectorField.setValue("@e[type=" + typeStr + ",limit=1,sort=nearest]");
                             }
                         }
-                    }, CYAN_MAIN, false, Component.literal("Capture UUID and selector of entity under player crosshairs")
-            );
+                    }, CYAN_MAIN, false,
+                    Component.literal("Capture UUID and selector of entity under player crosshairs"));
             this.addRenderableWidget(this.pickLookedEntityButton);
 
             // Row 5: Target Selector
             int selY = top + 208;
-            this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH,
+                    Component.literal("Target Selector"));
             this.targetSelectorField.setMaxLength(256);
             this.targetSelectorField.setBordered(false);
             this.targetSelectorField.setValue(defaultSelector);
@@ -520,12 +597,15 @@ public class EditActionModalScreen extends Screen {
             }
 
             // Dropdown for registered puppet actions
-            this.puppetActionDropdown = new CyberpunkDropdown<>(left + 12, top + 90, panelWidth - 24, 20, Component.literal("Select Puppet Action"));
+            this.puppetActionDropdown = new CyberpunkDropdown<>(left + 12, top + 90, panelWidth - 24, 20,
+                    Component.literal("Select Puppet Action"));
             this.puppetActionDropdown.setMaxVisibleItems(4);
             this.puppetActionDropdown.setItemHeight(22);
             this.puppetActionDropdown.setOnOpenListener(() -> {
-                if (actionTypeDropdown != null) actionTypeDropdown.setOpen(false);
-                if (nearbyEntityDropdown != null) nearbyEntityDropdown.setOpen(false);
+                if (actionTypeDropdown != null)
+                    actionTypeDropdown.setOpen(false);
+                if (nearbyEntityDropdown != null)
+                    nearbyEntityDropdown.setOpen(false);
             });
             this.puppetActionDropdown.setOnSelect(entry -> {
                 String actionIdStr = entry.getValue();
@@ -553,13 +633,15 @@ public class EditActionModalScreen extends Screen {
             this.windupTicksField.setValue(String.valueOf(defaultWindup));
             this.addRenderableWidget(this.windupTicksField);
 
-            this.durationTicksField = new EditBox(this.font, left + 350, r2Y + 1, 84, boxH, Component.literal("Duration"));
+            this.durationTicksField = new EditBox(this.font, left + 350, r2Y + 1, 84, boxH,
+                    Component.literal("Duration"));
             this.durationTicksField.setBordered(false);
             this.durationTicksField.setValue(String.valueOf(defaultDuration));
             this.addRenderableWidget(this.durationTicksField);
 
             int uuidY = top + 162;
-            this.entityUuidField = new EditBox(this.font, left + 14, uuidY + 1, panelWidth - 146, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField = new EditBox(this.font, left + 14, uuidY + 1, panelWidth - 146, boxH,
+                    Component.literal("Entity UUID"));
             this.entityUuidField.setMaxLength(128);
             this.entityUuidField.setBordered(false);
             this.entityUuidField.setValue(defaultUuid);
@@ -572,19 +654,20 @@ public class EditActionModalScreen extends Screen {
                     b -> {
                         Entity target = getLookedAtEntity();
                         if (target != null) {
-                            if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
+                            if (entityUuidField != null)
+                                entityUuidField.setValue(target.getUUID().toString());
                             if (targetSelectorField != null) {
                                 String typeStr = EntityType.getKey(target.getType()).toString();
                                 targetSelectorField.setValue("@e[type=" + typeStr + ",limit=1,sort=nearest]");
                             }
                             refreshPuppetActionSuggestions();
                         }
-                    }, CYAN_MAIN, false, Component.literal("Capture UUID and selector of mob under crosshairs")
-            );
+                    }, CYAN_MAIN, false, Component.literal("Capture UUID and selector of mob under crosshairs"));
             this.addRenderableWidget(this.pickLookedEntityButton);
 
             int selY = top + 198;
-            this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH,
+                    Component.literal("Target Selector"));
             this.targetSelectorField.setMaxLength(256);
             this.targetSelectorField.setBordered(false);
             this.targetSelectorField.setValue(defaultSelector);
@@ -636,16 +719,19 @@ public class EditActionModalScreen extends Screen {
                             double px = this.minecraft.player.getX();
                             double py = this.minecraft.player.getY();
                             double pz = this.minecraft.player.getZ();
-                            if (xField != null) xField.setValue(String.format(Locale.US, "%.1f", px));
-                            if (yField != null) yField.setValue(String.format(Locale.US, "%.1f", py));
-                            if (zField != null) zField.setValue(String.format(Locale.US, "%.1f", pz));
+                            if (xField != null)
+                                xField.setValue(String.format(Locale.US, "%.1f", px));
+                            if (yField != null)
+                                yField.setValue(String.format(Locale.US, "%.1f", py));
+                            if (zField != null)
+                                zField.setValue(String.format(Locale.US, "%.1f", pz));
                         }
-                    }, CYAN_MAIN, false, Component.literal("Copy player position into target coordinates")
-            );
+                    }, CYAN_MAIN, false, Component.literal("Copy player position into target coordinates"));
             this.addRenderableWidget(this.setMyPositionButton);
 
             int uuidY = top + 138;
-            this.entityUuidField = new EditBox(this.font, left + 14, uuidY + 1, panelWidth - 146, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField = new EditBox(this.font, left + 14, uuidY + 1, panelWidth - 146, boxH,
+                    Component.literal("Entity UUID"));
             this.entityUuidField.setMaxLength(128);
             this.entityUuidField.setBordered(false);
             this.entityUuidField.setValue(defaultUuid);
@@ -657,18 +743,19 @@ public class EditActionModalScreen extends Screen {
                     b -> {
                         Entity target = getLookedAtEntity();
                         if (target != null) {
-                            if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
+                            if (entityUuidField != null)
+                                entityUuidField.setValue(target.getUUID().toString());
                             if (targetSelectorField != null) {
                                 String typeStr = EntityType.getKey(target.getType()).toString();
                                 targetSelectorField.setValue("@e[type=" + typeStr + ",limit=1,sort=nearest]");
                             }
                         }
-                    }, CYAN_MAIN, false, Component.literal("Capture UUID and selector of mob under crosshairs")
-            );
+                    }, CYAN_MAIN, false, Component.literal("Capture UUID and selector of mob under crosshairs"));
             this.addRenderableWidget(this.pickLookedEntityButton);
 
             int selY = top + 184;
-            this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH,
+                    Component.literal("Target Selector"));
             this.targetSelectorField.setMaxLength(256);
             this.targetSelectorField.setBordered(false);
             this.targetSelectorField.setValue(defaultSelector);
@@ -712,16 +799,19 @@ public class EditActionModalScreen extends Screen {
                             double px = this.minecraft.player.getX();
                             double py = this.minecraft.player.getY();
                             double pz = this.minecraft.player.getZ();
-                            if (xField != null) xField.setValue(String.format(Locale.US, "%.1f", px));
-                            if (yField != null) yField.setValue(String.format(Locale.US, "%.1f", py));
-                            if (zField != null) zField.setValue(String.format(Locale.US, "%.1f", pz));
+                            if (xField != null)
+                                xField.setValue(String.format(Locale.US, "%.1f", px));
+                            if (yField != null)
+                                yField.setValue(String.format(Locale.US, "%.1f", py));
+                            if (zField != null)
+                                zField.setValue(String.format(Locale.US, "%.1f", pz));
                         }
-                    }, CYAN_MAIN, false, Component.literal("Copy player position into target coordinates")
-            );
+                    }, CYAN_MAIN, false, Component.literal("Copy player position into target coordinates"));
             this.addRenderableWidget(this.setMyPositionButton);
 
             int lookY = top + 130;
-            this.lookTargetField = new EditBox(this.font, left + 14, lookY + 1, panelWidth - 146, boxH, Component.literal("Look Target"));
+            this.lookTargetField = new EditBox(this.font, left + 14, lookY + 1, panelWidth - 146, boxH,
+                    Component.literal("Look Target"));
             this.lookTargetField.setMaxLength(256);
             this.lookTargetField.setBordered(false);
             this.lookTargetField.setValue(defaultLookSelector);
@@ -737,12 +827,12 @@ public class EditActionModalScreen extends Screen {
                         } else if (lookTargetField != null) {
                             lookTargetField.setValue("@p");
                         }
-                    }, CYAN_MAIN, false, Component.literal("Set look target to entity under crosshair (or @p)")
-            );
+                    }, CYAN_MAIN, false, Component.literal("Set look target to entity under crosshair (or @p)"));
             this.addRenderableWidget(this.pickLookTargetButton);
 
             int uuidY = top + 168;
-            this.entityUuidField = new EditBox(this.font, left + 14, uuidY + 1, panelWidth - 146, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField = new EditBox(this.font, left + 14, uuidY + 1, panelWidth - 146, boxH,
+                    Component.literal("Entity UUID"));
             this.entityUuidField.setMaxLength(128);
             this.entityUuidField.setBordered(false);
             this.entityUuidField.setValue(defaultUuid);
@@ -754,18 +844,19 @@ public class EditActionModalScreen extends Screen {
                     b -> {
                         Entity target = getLookedAtEntity();
                         if (target != null) {
-                            if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
+                            if (entityUuidField != null)
+                                entityUuidField.setValue(target.getUUID().toString());
                             if (targetSelectorField != null) {
                                 String typeStr = EntityType.getKey(target.getType()).toString();
                                 targetSelectorField.setValue("@e[type=" + typeStr + ",limit=1,sort=nearest]");
                             }
                         }
-                    }, CYAN_MAIN, false, Component.literal("Capture UUID and selector of mob under crosshairs")
-            );
+                    }, CYAN_MAIN, false, Component.literal("Capture UUID and selector of mob under crosshairs"));
             this.addRenderableWidget(this.pickLookedEntityButton);
 
             int selY = top + 206;
-            this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH,
+                    Component.literal("Target Selector"));
             this.targetSelectorField.setMaxLength(256);
             this.targetSelectorField.setBordered(false);
             this.targetSelectorField.setValue(defaultSelector);
@@ -780,7 +871,8 @@ public class EditActionModalScreen extends Screen {
             }
 
             int uuidY = top + 130;
-            this.entityUuidField = new EditBox(this.font, left + 14, uuidY + 1, panelWidth - 146, boxH, Component.literal("Entity UUID"));
+            this.entityUuidField = new EditBox(this.font, left + 14, uuidY + 1, panelWidth - 146, boxH,
+                    Component.literal("Entity UUID"));
             this.entityUuidField.setMaxLength(128);
             this.entityUuidField.setBordered(false);
             this.entityUuidField.setValue(defaultUuid);
@@ -792,18 +884,19 @@ public class EditActionModalScreen extends Screen {
                     b -> {
                         Entity target = getLookedAtEntity();
                         if (target != null) {
-                            if (entityUuidField != null) entityUuidField.setValue(target.getUUID().toString());
+                            if (entityUuidField != null)
+                                entityUuidField.setValue(target.getUUID().toString());
                             if (targetSelectorField != null) {
                                 String typeStr = EntityType.getKey(target.getType()).toString();
                                 targetSelectorField.setValue("@e[type=" + typeStr + ",limit=1,sort=nearest]");
                             }
                         }
-                    }, CYAN_MAIN, false, Component.literal("Capture UUID and selector of mob under crosshairs")
-            );
+                    }, CYAN_MAIN, false, Component.literal("Capture UUID and selector of mob under crosshairs"));
             this.addRenderableWidget(this.pickLookedEntityButton);
 
             int selY = top + 178;
-            this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH,
+                    Component.literal("Target Selector"));
             this.targetSelectorField.setMaxLength(256);
             this.targetSelectorField.setBordered(false);
             this.targetSelectorField.setValue(defaultSelector);
@@ -822,8 +915,7 @@ public class EditActionModalScreen extends Screen {
 
             this.commandSuggestions = new CommandSuggestions(
                     this.minecraft, this, this.inputField, this.font,
-                    true, true, 0, 7, true, 0xEE081622
-            );
+                    true, true, 0, 7, true, 0xEE081622);
             this.commandSuggestions.setAllowSuggestions(true);
             this.commandSuggestions.updateCommandInfo();
 
@@ -836,7 +928,7 @@ public class EditActionModalScreen extends Screen {
             // Clickable Quick Insert Badges
             int snippetY = top + 130;
             int curX = left + 12;
-            String[] tokens = new String[]{"%player%", "@a", "@p", "@s", "/title %player% actionbar", "/playsound"};
+            String[] tokens = new String[] { "%player%", "@a", "@p", "@s", "/title %player% actionbar", "/playsound" };
             for (String tok : tokens) {
                 int btnW = this.font.width(tok) + 12;
                 this.addRenderableWidget(new CyberpunkButton(curX, snippetY, btnW, 16, Component.literal(tok), b -> {
@@ -856,18 +948,24 @@ public class EditActionModalScreen extends Screen {
             if (action instanceof WaitUntilAction wua) {
                 if (waitUntilType.equalsIgnoreCase("delay")) {
                     List<CyberpunkDropdown.DropdownEntry<DelayUnit>> unitEntries = new ArrayList<>();
-                    unitEntries.add(new CyberpunkDropdown.DropdownEntry<>(DelayUnit.TICKS, Component.literal("TICKS"), Component.literal("1 tick = 1/20 sec")));
-                    unitEntries.add(new CyberpunkDropdown.DropdownEntry<>(DelayUnit.SECONDS, Component.literal("SECONDS"), Component.literal("1 sec = 20 ticks")));
-                    unitEntries.add(new CyberpunkDropdown.DropdownEntry<>(DelayUnit.MINUTES, Component.literal("MINUTES"), Component.literal("1 min = 1200 ticks")));
+                    unitEntries.add(new CyberpunkDropdown.DropdownEntry<>(DelayUnit.TICKS, Component.literal("TICKS"),
+                            Component.literal("1 tick = 1/20 sec")));
+                    unitEntries.add(new CyberpunkDropdown.DropdownEntry<>(DelayUnit.SECONDS,
+                            Component.literal("SECONDS"), Component.literal("1 sec = 20 ticks")));
+                    unitEntries.add(new CyberpunkDropdown.DropdownEntry<>(DelayUnit.MINUTES,
+                            Component.literal("MINUTES"), Component.literal("1 min = 1200 ticks")));
 
-                    this.unitDropdown = new CyberpunkDropdown<>(left + panelWidth - 146, top + 98, 134, 20, Component.literal("Unit"));
+                    this.unitDropdown = new CyberpunkDropdown<>(left + panelWidth - 146, top + 98, 134, 20,
+                            Component.literal("Unit"));
                     this.unitDropdown.setOptions(unitEntries);
                     this.unitDropdown.selectByValue(delayUnit);
                     this.unitDropdown.setMaxVisibleItems(3);
                     this.unitDropdown.setItemHeight(20);
                     this.unitDropdown.setOnOpenListener(() -> {
-                        if (actionTypeDropdown != null) actionTypeDropdown.setOpen(false);
-                        if (subActionTypeDropdown != null) subActionTypeDropdown.setOpen(false);
+                        if (actionTypeDropdown != null)
+                            actionTypeDropdown.setOpen(false);
+                        if (subActionTypeDropdown != null)
+                            subActionTypeDropdown.setOpen(false);
                     });
                     this.unitDropdown.setOnSelect(entry -> switchDelayUnit(entry.getValue()));
                     this.addRenderableWidget(this.unitDropdown);
@@ -899,8 +997,11 @@ public class EditActionModalScreen extends Screen {
                     this.inputField.setWidth(panelWidth - 28);
                     this.addRenderableWidget(this.inputField);
 
-                } else if (waitUntilType.equalsIgnoreCase("proximity") || waitUntilType.equalsIgnoreCase("marker") || waitUntilType.equalsIgnoreCase("player_proximity") || waitUntilType.equalsIgnoreCase("area")) {
-                    double defaultX = wua.getX(), defaultY = wua.getY(), defaultZ = wua.getZ(), defaultRadius = wua.getRadius();
+                } else if (waitUntilType.equalsIgnoreCase("proximity") || waitUntilType.equalsIgnoreCase("marker")
+                        || waitUntilType.equalsIgnoreCase("player_proximity")
+                        || waitUntilType.equalsIgnoreCase("area")) {
+                    double defaultX = wua.getX(), defaultY = wua.getY(), defaultZ = wua.getZ(),
+                            defaultRadius = wua.getRadius();
                     boolean defaultRequireAll = wua.isRequireAllPlayers();
                     boolean defaultMarkerOpsOnly = wua.isOpsOnlyVisibility();
                     boolean defaultAreaOpsOnly = wua.isAreaOpsOnlyVisibility();
@@ -924,7 +1025,8 @@ public class EditActionModalScreen extends Screen {
                     this.zField.setValue(String.format(Locale.US, "%.1f", defaultZ));
                     this.addRenderableWidget(this.zField);
 
-                    this.radiusField = new EditBox(this.font, left + 236, r1Y + 1, 62, boxH, Component.literal("Radius"));
+                    this.radiusField = new EditBox(this.font, left + 236, r1Y + 1, 62, boxH,
+                            Component.literal("Radius"));
                     this.radiusField.setBordered(false);
                     this.radiusField.setValue(String.format(Locale.US, "%.1f", defaultRadius));
                     this.addRenderableWidget(this.radiusField);
@@ -937,16 +1039,19 @@ public class EditActionModalScreen extends Screen {
                                     double px = this.minecraft.player.getX();
                                     double py = this.minecraft.player.getY();
                                     double pz = this.minecraft.player.getZ();
-                                    if (xField != null) xField.setValue(String.format(Locale.US, "%.1f", px));
-                                    if (yField != null) yField.setValue(String.format(Locale.US, "%.1f", py));
-                                    if (zField != null) zField.setValue(String.format(Locale.US, "%.1f", pz));
+                                    if (xField != null)
+                                        xField.setValue(String.format(Locale.US, "%.1f", px));
+                                    if (yField != null)
+                                        yField.setValue(String.format(Locale.US, "%.1f", py));
+                                    if (zField != null)
+                                        zField.setValue(String.format(Locale.US, "%.1f", pz));
                                 }
-                            }, CYAN_MAIN, false, Component.literal("Copy player position into target coordinates")
-                    );
+                            }, CYAN_MAIN, false, Component.literal("Copy player position into target coordinates"));
                     this.addRenderableWidget(this.setMyPositionButton);
 
                     int selY = top + 128;
-                    this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH, Component.literal("Target Selector"));
+                    this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH,
+                            Component.literal("Target Selector"));
                     this.targetSelectorField.setMaxLength(256);
                     this.targetSelectorField.setBordered(false);
                     this.targetSelectorField.setValue(defaultTargetSelector != null ? defaultTargetSelector : "@a");
@@ -957,16 +1062,20 @@ public class EditActionModalScreen extends Screen {
                     int m1Y = top + 164;
                     int m2Y = top + 188;
 
-                    this.requireAllPlayersCard = new CyberpunkMatrixCard(col1Left, m1Y, cardW, cardH, Component.literal("Require ALL Players"), defaultRequireAll, null);
+                    this.requireAllPlayersCard = new CyberpunkMatrixCard(col1Left, m1Y, cardW, cardH,
+                            Component.literal("Require ALL Players"), defaultRequireAll, null);
                     this.addRenderableWidget(this.requireAllPlayersCard);
 
-                    this.opsOnlyVisibilityCard = new CyberpunkMatrixCard(col2Left, m1Y, cardW, cardH, Component.literal("Marker Icon: OPS ONLY"), defaultMarkerOpsOnly, null);
+                    this.opsOnlyVisibilityCard = new CyberpunkMatrixCard(col2Left, m1Y, cardW, cardH,
+                            Component.literal("Marker Icon: OPS ONLY"), defaultMarkerOpsOnly, null);
                     this.addRenderableWidget(this.opsOnlyVisibilityCard);
 
-                    this.showRadiusAreaCard = new CyberpunkMatrixCard(col1Left, m2Y, cardW, cardH, Component.literal("Render Cylinder Mesh"), defaultShowArea, null);
+                    this.showRadiusAreaCard = new CyberpunkMatrixCard(col1Left, m2Y, cardW, cardH,
+                            Component.literal("Render Cylinder Mesh"), defaultShowArea, null);
                     this.addRenderableWidget(this.showRadiusAreaCard);
 
-                    this.areaOpsOnlyCard = new CyberpunkMatrixCard(col2Left, m2Y, cardW, cardH, Component.literal("Cylinder Mesh: OPS ONLY"), defaultAreaOpsOnly, null);
+                    this.areaOpsOnlyCard = new CyberpunkMatrixCard(col2Left, m2Y, cardW, cardH,
+                            Component.literal("Cylinder Mesh: OPS ONLY"), defaultAreaOpsOnly, null);
                     this.addRenderableWidget(this.areaOpsOnlyCard);
                 }
             }
@@ -1022,14 +1131,18 @@ public class EditActionModalScreen extends Screen {
                             double pz = this.minecraft.player.getZ();
                             float yaw = this.minecraft.player.getYRot();
                             float pitch = this.minecraft.player.getXRot();
-                            if (xField != null) xField.setValue(String.format(Locale.US, "%.1f", px));
-                            if (yField != null) yField.setValue(String.format(Locale.US, "%.1f", py));
-                            if (zField != null) zField.setValue(String.format(Locale.US, "%.1f", pz));
-                            if (yawField != null) yawField.setValue(String.format(Locale.US, "%.1f", yaw));
-                            if (pitchField != null) pitchField.setValue(String.format(Locale.US, "%.1f", pitch));
+                            if (xField != null)
+                                xField.setValue(String.format(Locale.US, "%.1f", px));
+                            if (yField != null)
+                                yField.setValue(String.format(Locale.US, "%.1f", py));
+                            if (zField != null)
+                                zField.setValue(String.format(Locale.US, "%.1f", pz));
+                            if (yawField != null)
+                                yawField.setValue(String.format(Locale.US, "%.1f", yaw));
+                            if (pitchField != null)
+                                pitchField.setValue(String.format(Locale.US, "%.1f", pitch));
                         }
-                    }, CYAN_MAIN, false, Component.literal("Capture player position & facing angles")
-            );
+                    }, CYAN_MAIN, false, Component.literal("Capture player position & facing angles"));
             this.addRenderableWidget(this.setMyPositionButton);
 
             int r2Y = top + 130;
@@ -1039,7 +1152,8 @@ public class EditActionModalScreen extends Screen {
             this.yawField.setValue(String.format(Locale.US, "%.1f", defaultYaw));
             this.addRenderableWidget(this.yawField);
 
-            this.pitchField = new EditBox(this.font, left + 14 + angleW + 8, r2Y + 1, angleW, boxH, Component.literal("Pitch"));
+            this.pitchField = new EditBox(this.font, left + 14 + angleW + 8, r2Y + 1, angleW, boxH,
+                    Component.literal("Pitch"));
             this.pitchField.setBordered(false);
             this.pitchField.setValue(String.format(Locale.US, "%.1f", defaultPitch));
             this.addRenderableWidget(this.pitchField);
@@ -1051,7 +1165,8 @@ public class EditActionModalScreen extends Screen {
             this.addRenderableWidget(this.labelField);
 
             int selY = top + 172;
-            this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH, Component.literal("Target Selector"));
+            this.targetSelectorField = new EditBox(this.font, left + 14, selY + 1, panelWidth - 28, boxH,
+                    Component.literal("Target Selector"));
             this.targetSelectorField.setMaxLength(256);
             this.targetSelectorField.setBordered(false);
             this.targetSelectorField.setValue(defaultTargetSelector != null ? defaultTargetSelector : "@a");
@@ -1067,19 +1182,22 @@ public class EditActionModalScreen extends Screen {
                 defaultShowWait = noa.isShowActiveWait();
             }
 
-            this.nameField = new EditBox(this.font, left + 14, top + 98, panelWidth - 28, boxH, Component.literal("Name"));
+            this.nameField = new EditBox(this.font, left + 14, top + 98, panelWidth - 28, boxH,
+                    Component.literal("Name"));
             this.nameField.setMaxLength(256);
             this.nameField.setBordered(false);
             this.nameField.setValue(defaultName);
             this.addRenderableWidget(this.nameField);
 
-            this.descriptionField = new EditBox(this.font, left + 14, top + 138, panelWidth - 28, boxH, Component.literal("Description"));
+            this.descriptionField = new EditBox(this.font, left + 14, top + 138, panelWidth - 28, boxH,
+                    Component.literal("Description"));
             this.descriptionField.setMaxLength(256);
             this.descriptionField.setBordered(false);
             this.descriptionField.setValue(defaultDesc);
             this.addRenderableWidget(this.descriptionField);
 
-            this.showActiveWaitCard = new CyberpunkMatrixCard(left + 12, top + 172, panelWidth - 24, 20, Component.literal("Show Active Wait Tracker on HUD"), defaultShowWait, null);
+            this.showActiveWaitCard = new CyberpunkMatrixCard(left + 12, top + 172, panelWidth - 24, 20,
+                    Component.literal("Show Active Wait Tracker on HUD"), defaultShowWait, null);
             this.addRenderableWidget(this.showActiveWaitCard);
 
         } else if (actionType.equalsIgnoreCase("play_music_sequence")) {
@@ -1089,7 +1207,8 @@ public class EditActionModalScreen extends Screen {
                 defaultAwait = pmsa.isAwaitCompletion();
             }
 
-            this.showActiveWaitCard = new CyberpunkMatrixCard(left + 12, top + 104, panelWidth - 24, 22, Component.literal("Block sequence execution until music sequence completes"), defaultAwait, null);
+            this.showActiveWaitCard = new CyberpunkMatrixCard(left + 12, top + 104, panelWidth - 24, 22,
+                    Component.literal("Block sequence execution until music sequence completes"), defaultAwait, null);
             this.addRenderableWidget(this.showActiveWaitCard);
 
         } else if (actionType.equalsIgnoreCase("fork_sequence") || actionType.equalsIgnoreCase("run_sequence")) {
@@ -1108,11 +1227,12 @@ public class EditActionModalScreen extends Screen {
         }
 
         // --- 4. Window Close Button (Top Right) ---
-        this.addRenderableWidget(new CyberpunkButton(left + panelWidth - 24, top + 7, 16, 16, Component.literal("✕"), b -> {
-            if (this.minecraft != null) {
-                this.minecraft.setScreen(parentScreen);
-            }
-        }, 0xFF58849E, false, Component.literal("Close (Discard Changes)")));
+        this.addRenderableWidget(
+                new CyberpunkButton(left + panelWidth - 24, top + 7, 16, 16, Component.literal("✕"), b -> {
+                    if (this.minecraft != null) {
+                        this.minecraft.setScreen(parentScreen);
+                    }
+                }, 0xFF58849E, false, Component.literal("Close (Discard Changes)")));
 
         // --- 5. Save & Cancel Footer Buttons (Matching Image) ---
         int bottomY = top + panelHeight - 28;
@@ -1123,16 +1243,14 @@ public class EditActionModalScreen extends Screen {
                     if (this.minecraft != null) {
                         this.minecraft.setScreen(parentScreen);
                     }
-                }, RED_CANCEL, false, Component.literal("Discard changes and return")
-        );
+                }, RED_CANCEL, false, Component.literal("Discard changes and return"));
         this.addRenderableWidget(this.cancelConfigButton);
 
         this.saveConfigButton = new CyberpunkButton(
                 left + panelWidth - 114, bottomY, 102, 22,
                 Component.literal("✔ SAVE CONFIG"),
                 b -> saveAndExit(),
-                CYAN_MAIN, false, Component.literal("Commit changes and save action")
-        );
+                CYAN_MAIN, false, Component.literal("Commit changes and save action"));
         this.saveConfigButton.setSolidPrimary(true);
         this.addRenderableWidget(this.saveConfigButton);
     }
@@ -1148,7 +1266,8 @@ public class EditActionModalScreen extends Screen {
     }
 
     private void switchDelayUnit(DelayUnit newUnit) {
-        if (this.delayUnit == newUnit) return;
+        if (this.delayUnit == newUnit)
+            return;
         int currentTicks = calculateDelayTicks();
         this.delayUnit = newUnit;
         if (action instanceof WaitUntilAction wua) {
@@ -1160,22 +1279,27 @@ public class EditActionModalScreen extends Screen {
     }
 
     private void updateDelayInputField(int totalTicks) {
-        if (inputField == null) return;
+        if (inputField == null)
+            return;
         if (delayUnit == DelayUnit.MINUTES) {
             double mins = totalTicks / 1200.0;
-            inputField.setValue(mins == (int) mins ? String.valueOf((int) mins) : String.format(Locale.US, "%.2f", mins));
+            inputField
+                    .setValue(mins == (int) mins ? String.valueOf((int) mins) : String.format(Locale.US, "%.2f", mins));
         } else if (delayUnit == DelayUnit.SECONDS) {
             double secs = totalTicks / 20.0;
-            inputField.setValue(secs == (int) secs ? String.valueOf((int) secs) : String.format(Locale.US, "%.1f", secs));
+            inputField
+                    .setValue(secs == (int) secs ? String.valueOf((int) secs) : String.format(Locale.US, "%.1f", secs));
         } else {
             inputField.setValue(String.valueOf(totalTicks));
         }
     }
 
     private int calculateDelayTicks() {
-        if (inputField == null) return 0;
+        if (inputField == null)
+            return 0;
         String val = inputField.getValue().trim();
-        if (val.isEmpty()) return 0;
+        if (val.isEmpty())
+            return 0;
         try {
             double d = Double.parseDouble(val);
             if (delayUnit == DelayUnit.MINUTES) {
@@ -1196,7 +1320,8 @@ public class EditActionModalScreen extends Screen {
             case "new_objective" -> new NewObjectiveAction("New Objective", "Description...", true);
             case "end_objective" -> new EndObjectiveAction();
             case "play_music_sequence", "music_sequence" -> new PlayMusicSequenceAction("music_sequence.json", false);
-            case "wait_for_music_sequence", "wait_music_sequence", "music_sequence_end" -> new WaitForMusicSequenceAction("");
+            case "wait_for_music_sequence", "wait_music_sequence", "music_sequence_end" ->
+                new WaitForMusicSequenceAction("");
             case "wait_until" -> new WaitUntilAction(waitUntilType, 20, "", "Resume Sequence");
             case "await_trigger" -> new AwaitTriggerAction("trigger_1");
             case "fork_sequence" -> new ForkSequenceAction("sub_sequence.json");
@@ -1206,7 +1331,8 @@ public class EditActionModalScreen extends Screen {
             case "puppet_action", "execute_puppet_action" -> new ExecutePuppetAction("", "", "", 20);
             case "puppet_move_to", "puppet_move" -> new PuppetMoveToAction(0.0, 64.0, 0.0, 1.0, "", "");
             case "puppet_look_at", "puppet_look" -> new PuppetLookAtAction(0.0, 64.0, 0.0, "", "", "");
-            case "puppet_suppress_ai", "puppet_suppress" -> new PuppetSuppressAction(false, false, false, false, false, true, "", "");
+            case "puppet_suppress_ai", "puppet_suppress" ->
+                new PuppetSuppressAction(false, false, false, false, false, true, "", "");
             case "puppet_stop_action", "puppet_stop" -> new PuppetStopAction("", "");
             default -> new CommandAction("say Hello %player%");
         };
@@ -1214,24 +1340,51 @@ public class EditActionModalScreen extends Screen {
 
     private void applyInputValue() {
         boolean isProximityMode = actionType.equalsIgnoreCase("wait_until") &&
-                (waitUntilType.equalsIgnoreCase("proximity") || waitUntilType.equalsIgnoreCase("marker") || waitUntilType.equalsIgnoreCase("player_proximity") || waitUntilType.equalsIgnoreCase("area"));
+                (waitUntilType.equalsIgnoreCase("proximity") || waitUntilType.equalsIgnoreCase("marker")
+                        || waitUntilType.equalsIgnoreCase("player_proximity")
+                        || waitUntilType.equalsIgnoreCase("area"));
 
         String val = inputField != null ? inputField.getValue().trim() : "";
 
         if (action instanceof CommandAction ca) {
             ca.setRun(val);
         } else if (action instanceof CheckpointAction cp) {
-            if (xField != null) try { cp.setX(Double.parseDouble(xField.getValue().trim())); } catch (Exception ignored) {}
-            if (yField != null) try { cp.setY(Double.parseDouble(yField.getValue().trim())); } catch (Exception ignored) {}
-            if (zField != null) try { cp.setZ(Double.parseDouble(zField.getValue().trim())); } catch (Exception ignored) {}
-            if (yawField != null) try { cp.setYaw(Float.parseFloat(yawField.getValue().trim())); } catch (Exception ignored) {}
-            if (pitchField != null) try { cp.setPitch(Float.parseFloat(pitchField.getValue().trim())); } catch (Exception ignored) {}
-            if (labelField != null) cp.setLabel(labelField.getValue().trim());
-            if (targetSelectorField != null) cp.setTargetSelector(targetSelectorField.getValue().trim());
+            if (xField != null)
+                try {
+                    cp.setX(Double.parseDouble(xField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (yField != null)
+                try {
+                    cp.setY(Double.parseDouble(yField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (zField != null)
+                try {
+                    cp.setZ(Double.parseDouble(zField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (yawField != null)
+                try {
+                    cp.setYaw(Float.parseFloat(yawField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (pitchField != null)
+                try {
+                    cp.setPitch(Float.parseFloat(pitchField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (labelField != null)
+                cp.setLabel(labelField.getValue().trim());
+            if (targetSelectorField != null)
+                cp.setTargetSelector(targetSelectorField.getValue().trim());
         } else if (action instanceof NewObjectiveAction noa) {
-            if (nameField != null) noa.setName(nameField.getValue().trim());
-            if (descriptionField != null) noa.setDescription(descriptionField.getValue().trim());
-            if (showActiveWaitCard != null) noa.setShowActiveWait(showActiveWaitCard.isChecked());
+            if (nameField != null)
+                noa.setName(nameField.getValue().trim());
+            if (descriptionField != null)
+                noa.setDescription(descriptionField.getValue().trim());
+            if (showActiveWaitCard != null)
+                noa.setShowActiveWait(showActiveWaitCard.isChecked());
         } else if (action instanceof PlayMusicSequenceAction pmsa) {
             if (musicSequenceDropdown != null && musicSequenceDropdown.getSelectedValue() != null) {
                 pmsa.setSequenceFile(musicSequenceDropdown.getSelectedValue());
@@ -1261,11 +1414,28 @@ public class EditActionModalScreen extends Screen {
             } else if (waitUntilType.equalsIgnoreCase("trigger")) {
                 wua.setTriggerId(val);
             } else if (isProximityMode) {
-                if (xField != null) try { wua.setX(Double.parseDouble(xField.getValue().trim())); } catch (Exception ignored) {}
-                if (yField != null) try { wua.setY(Double.parseDouble(yField.getValue().trim())); } catch (Exception ignored) {}
-                if (zField != null) try { wua.setZ(Double.parseDouble(zField.getValue().trim())); } catch (Exception ignored) {}
-                if (radiusField != null) try { wua.setRadius(Double.parseDouble(radiusField.getValue().trim())); } catch (Exception ignored) {}
-                if (targetSelectorField != null) wua.setTargetSelector(targetSelectorField.getValue().trim());
+                if (xField != null)
+                    try {
+                        wua.setX(Double.parseDouble(xField.getValue().trim()));
+                    } catch (Exception ignored) {
+                    }
+                if (yField != null)
+                    try {
+                        wua.setY(Double.parseDouble(yField.getValue().trim()));
+                    } catch (Exception ignored) {
+                    }
+                if (zField != null)
+                    try {
+                        wua.setZ(Double.parseDouble(zField.getValue().trim()));
+                    } catch (Exception ignored) {
+                    }
+                if (radiusField != null)
+                    try {
+                        wua.setRadius(Double.parseDouble(radiusField.getValue().trim()));
+                    } catch (Exception ignored) {
+                    }
+                if (targetSelectorField != null)
+                    wua.setTargetSelector(targetSelectorField.getValue().trim());
                 if (requireAllPlayersCard != null) {
                     wua.setRequireAllPlayers(requireAllPlayersCard.isChecked());
                 }
@@ -1290,36 +1460,89 @@ public class EditActionModalScreen extends Screen {
             parseSubsequenceInput(val, rsa::setFile, rsa::setStartIndex);
         } else if (action instanceof ExecutePuppetAction epa) {
             epa.setActionId(val);
-            if (windupTicksField != null) try { epa.setWindupTicks(Integer.parseInt(windupTicksField.getValue().trim())); } catch (Exception ignored) {}
-            if (durationTicksField != null) try { epa.setDurationTicks(Integer.parseInt(durationTicksField.getValue().trim())); } catch (Exception ignored) {}
-            if (entityUuidField != null) epa.setEntityUuid(entityUuidField.getValue().trim());
-            if (targetSelectorField != null) epa.setTargetSelector(targetSelectorField.getValue().trim());
+            if (windupTicksField != null)
+                try {
+                    epa.setWindupTicks(Integer.parseInt(windupTicksField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (durationTicksField != null)
+                try {
+                    epa.setDurationTicks(Integer.parseInt(durationTicksField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (entityUuidField != null)
+                epa.setEntityUuid(entityUuidField.getValue().trim());
+            if (targetSelectorField != null)
+                epa.setTargetSelector(targetSelectorField.getValue().trim());
         } else if (action instanceof PuppetMoveToAction pmt) {
-            if (xField != null) try { pmt.setX(Double.parseDouble(xField.getValue().trim())); } catch (Exception ignored) {}
-            if (yField != null) try { pmt.setY(Double.parseDouble(yField.getValue().trim())); } catch (Exception ignored) {}
-            if (zField != null) try { pmt.setZ(Double.parseDouble(zField.getValue().trim())); } catch (Exception ignored) {}
-            if (speedField != null) try { pmt.setSpeed(Double.parseDouble(speedField.getValue().trim())); } catch (Exception ignored) {}
-            if (entityUuidField != null) pmt.setEntityUuid(entityUuidField.getValue().trim());
-            if (targetSelectorField != null) pmt.setTargetSelector(targetSelectorField.getValue().trim());
+            if (xField != null)
+                try {
+                    pmt.setX(Double.parseDouble(xField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (yField != null)
+                try {
+                    pmt.setY(Double.parseDouble(yField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (zField != null)
+                try {
+                    pmt.setZ(Double.parseDouble(zField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (speedField != null)
+                try {
+                    pmt.setSpeed(Double.parseDouble(speedField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (entityUuidField != null)
+                pmt.setEntityUuid(entityUuidField.getValue().trim());
+            if (targetSelectorField != null)
+                pmt.setTargetSelector(targetSelectorField.getValue().trim());
         } else if (action instanceof PuppetLookAtAction pla) {
-            if (xField != null) try { pla.setX(Double.parseDouble(xField.getValue().trim())); } catch (Exception ignored) {}
-            if (yField != null) try { pla.setY(Double.parseDouble(yField.getValue().trim())); } catch (Exception ignored) {}
-            if (zField != null) try { pla.setZ(Double.parseDouble(zField.getValue().trim())); } catch (Exception ignored) {}
-            if (lookTargetField != null) pla.setLookTargetSelector(lookTargetField.getValue().trim());
-            if (entityUuidField != null) pla.setEntityUuid(entityUuidField.getValue().trim());
-            if (targetSelectorField != null) pla.setTargetSelector(targetSelectorField.getValue().trim());
+            if (xField != null)
+                try {
+                    pla.setX(Double.parseDouble(xField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (yField != null)
+                try {
+                    pla.setY(Double.parseDouble(yField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (zField != null)
+                try {
+                    pla.setZ(Double.parseDouble(zField.getValue().trim()));
+                } catch (Exception ignored) {
+                }
+            if (lookTargetField != null)
+                pla.setLookTargetSelector(lookTargetField.getValue().trim());
+            if (entityUuidField != null)
+                pla.setEntityUuid(entityUuidField.getValue().trim());
+            if (targetSelectorField != null)
+                pla.setTargetSelector(targetSelectorField.getValue().trim());
         } else if (action instanceof PuppetSuppressAction psa) {
-            if (suppressAiCard != null) psa.setSuppressAi(suppressAiCard.isChecked());
-            if (suppressNavCard != null) psa.setSuppressNavigation(suppressNavCard.isChecked());
-            if (suppressTargetingCard != null) psa.setSuppressTargeting(suppressTargetingCard.isChecked());
-            if (suppressLookCard != null) psa.setSuppressLook(suppressLookCard.isChecked());
-            if (suppressActionsCard != null) psa.setSuppressActions(suppressActionsCard.isChecked());
-            if (puppetingActiveCard != null) psa.setPuppetingActive(puppetingActiveCard.isChecked());
-            if (entityUuidField != null) psa.setEntityUuid(entityUuidField.getValue().trim());
-            if (targetSelectorField != null) psa.setTargetSelector(targetSelectorField.getValue().trim());
+            if (suppressAiCard != null)
+                psa.setSuppressAi(suppressAiCard.isChecked());
+            if (suppressNavCard != null)
+                psa.setSuppressNavigation(suppressNavCard.isChecked());
+            if (suppressTargetingCard != null)
+                psa.setSuppressTargeting(suppressTargetingCard.isChecked());
+            if (suppressLookCard != null)
+                psa.setSuppressLook(suppressLookCard.isChecked());
+            if (suppressActionsCard != null)
+                psa.setSuppressActions(suppressActionsCard.isChecked());
+            if (puppetingActiveCard != null)
+                psa.setPuppetingActive(puppetingActiveCard.isChecked());
+            if (entityUuidField != null)
+                psa.setEntityUuid(entityUuidField.getValue().trim());
+            if (targetSelectorField != null)
+                psa.setTargetSelector(targetSelectorField.getValue().trim());
         } else if (action instanceof PuppetStopAction pst) {
-            if (entityUuidField != null) pst.setEntityUuid(entityUuidField.getValue().trim());
-            if (targetSelectorField != null) pst.setTargetSelector(targetSelectorField.getValue().trim());
+            if (entityUuidField != null)
+                pst.setEntityUuid(entityUuidField.getValue().trim());
+            if (targetSelectorField != null)
+                pst.setTargetSelector(targetSelectorField.getValue().trim());
         }
     }
 
@@ -1336,13 +1559,15 @@ public class EditActionModalScreen extends Screen {
             try {
                 int num = Integer.parseInt(parts[1]);
                 startIndex = Math.max(0, num - 1);
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException ignored) {
+            }
         }
         setStartIndex.accept(startIndex);
     }
 
     private Entity getLookedAtEntity() {
-        if (this.minecraft == null) return null;
+        if (this.minecraft == null)
+            return null;
         if (this.minecraft.crosshairPickEntity != null) {
             return this.minecraft.crosshairPickEntity;
         }
@@ -1369,7 +1594,8 @@ public class EditActionModalScreen extends Screen {
     }
 
     private void refreshPuppetActionSuggestions() {
-        if (this.puppetActionDropdown == null || this.minecraft == null || this.minecraft.level == null) return;
+        if (this.puppetActionDropdown == null || this.minecraft == null || this.minecraft.level == null)
+            return;
 
         List<CyberpunkDropdown.DropdownEntry<String>> actionEntries = new ArrayList<>();
         String currentEntityUuid = entityUuidField != null ? entityUuidField.getValue().trim() : "";
@@ -1386,15 +1612,18 @@ public class EditActionModalScreen extends Screen {
                         specificPuppets.add(puppet);
                     }
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
 
         String typeFilter = null;
         if (!currentSelector.isEmpty() && currentSelector.contains("type=")) {
             int idx = currentSelector.indexOf("type=");
             int endIdx = currentSelector.indexOf("]", idx);
-            if (endIdx < 0) endIdx = currentSelector.indexOf(",", idx);
-            if (endIdx < 0) endIdx = currentSelector.length();
+            if (endIdx < 0)
+                endIdx = currentSelector.indexOf(",", idx);
+            if (endIdx < 0)
+                endIdx = currentSelector.length();
             typeFilter = currentSelector.substring(idx + 5, endIdx).trim();
         }
 
@@ -1427,7 +1656,8 @@ public class EditActionModalScreen extends Screen {
 
         for (IPuppetEntity puppet : targetPuppets) {
             if (puppet.getPuppetController() != null) {
-                Map<net.minecraft.resources.ResourceLocation, PuppetAction> actionsMap = puppet.getPuppetController().getActions();
+                Map<net.minecraft.resources.ResourceLocation, PuppetAction> actionsMap = puppet.getPuppetController()
+                        .getActions();
                 Entity entity = (Entity) puppet;
                 String entityName = entity.getDisplayName().getString();
                 String entityType = EntityType.getKey(entity.getType()).toString();
@@ -1438,27 +1668,34 @@ public class EditActionModalScreen extends Screen {
                         totalFound++;
                         String label = "⚡ " + actionIdStr;
                         String details = entityName + " (" + entityType + ")";
-                        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>(actionIdStr, Component.literal(label), Component.literal(details)));
+                        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>(actionIdStr, Component.literal(label),
+                                Component.literal(details)));
                     }
                 }
             }
         }
 
-        for (net.dandare21.fracturedutils.puppet.fsm.PuppetActionType<?> globalAction :
-                net.dandare21.fracturedutils.puppet.registry.ModPuppetActions.getAll()) {
+        for (net.dandare21.fracturedutils.puppet.fsm.PuppetActionType<?> globalAction : net.dandare21.fracturedutils.puppet.registry.ModPuppetActions
+                .getAll()) {
             String actionIdStr = globalAction.getId().toString();
             if (addedActionIds.add(actionIdStr)) {
                 totalFound++;
                 String label = "⚡ " + actionIdStr;
                 String details = "Global Boss Puppet Action";
-                actionEntries.add(new CyberpunkDropdown.DropdownEntry<>(actionIdStr, Component.literal(label), Component.literal(details)));
+                actionEntries.add(new CyberpunkDropdown.DropdownEntry<>(actionIdStr, Component.literal(label),
+                        Component.literal(details)));
             }
         }
 
         if (actionEntries.isEmpty()) {
-            actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("", Component.literal("-- No Registered Actions Found --"), Component.literal("Select a mob or enter entity selector")));
+            actionEntries.add(
+                    new CyberpunkDropdown.DropdownEntry<>("", Component.literal("-- No Registered Actions Found --"),
+                            Component.literal("Select a mob or enter entity selector")));
         } else {
-            actionEntries.add(0, new CyberpunkDropdown.DropdownEntry<>("", Component.literal("-- Select Puppet Action (" + totalFound + " available) --"), Component.literal("Click to choose action ID")));
+            actionEntries.add(0,
+                    new CyberpunkDropdown.DropdownEntry<>("",
+                            Component.literal("-- Select Puppet Action (" + totalFound + " available) --"),
+                            Component.literal("Click to choose action ID")));
         }
 
         String currentVal = inputField != null ? inputField.getValue().trim() : "";
@@ -1477,7 +1714,8 @@ public class EditActionModalScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (!isDropdownOpen() && this.commandSuggestions != null && this.commandSuggestions.keyPressed(keyCode, scanCode, modifiers)) {
+        if (!isDropdownOpen() && this.commandSuggestions != null
+                && this.commandSuggestions.keyPressed(keyCode, scanCode, modifiers)) {
             return true;
         }
         if (!isDropdownOpen()) {
@@ -1497,12 +1735,18 @@ public class EditActionModalScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
-        if (puppetActionDropdown != null && puppetActionDropdown.mouseScrolled(mouseX, mouseY, amount)) return true;
-        if (nearbyEntityDropdown != null && nearbyEntityDropdown.mouseScrolled(mouseX, mouseY, amount)) return true;
-        if (musicSequenceDropdown != null && musicSequenceDropdown.mouseScrolled(mouseX, mouseY, amount)) return true;
-        if (subActionTypeDropdown != null && subActionTypeDropdown.mouseScrolled(mouseX, mouseY, amount)) return true;
-        if (unitDropdown != null && unitDropdown.mouseScrolled(mouseX, mouseY, amount)) return true;
-        if (actionTypeDropdown != null && actionTypeDropdown.mouseScrolled(mouseX, mouseY, amount)) return true;
+        if (puppetActionDropdown != null && puppetActionDropdown.mouseScrolled(mouseX, mouseY, amount))
+            return true;
+        if (nearbyEntityDropdown != null && nearbyEntityDropdown.mouseScrolled(mouseX, mouseY, amount))
+            return true;
+        if (musicSequenceDropdown != null && musicSequenceDropdown.mouseScrolled(mouseX, mouseY, amount))
+            return true;
+        if (subActionTypeDropdown != null && subActionTypeDropdown.mouseScrolled(mouseX, mouseY, amount))
+            return true;
+        if (unitDropdown != null && unitDropdown.mouseScrolled(mouseX, mouseY, amount))
+            return true;
+        if (actionTypeDropdown != null && actionTypeDropdown.mouseScrolled(mouseX, mouseY, amount))
+            return true;
 
         if (this.commandSuggestions != null && this.commandSuggestions.mouseScrolled(amount)) {
             return true;
@@ -1518,22 +1762,28 @@ public class EditActionModalScreen extends Screen {
             mouseY /= scale;
         }
         if (puppetActionDropdown != null && puppetActionDropdown.isOpen()) {
-            if (puppetActionDropdown.mouseClicked(mouseX, mouseY, button)) return true;
+            if (puppetActionDropdown.mouseClicked(mouseX, mouseY, button))
+                return true;
         }
         if (nearbyEntityDropdown != null && nearbyEntityDropdown.isOpen()) {
-            if (nearbyEntityDropdown.mouseClicked(mouseX, mouseY, button)) return true;
+            if (nearbyEntityDropdown.mouseClicked(mouseX, mouseY, button))
+                return true;
         }
         if (musicSequenceDropdown != null && musicSequenceDropdown.isOpen()) {
-            if (musicSequenceDropdown.mouseClicked(mouseX, mouseY, button)) return true;
+            if (musicSequenceDropdown.mouseClicked(mouseX, mouseY, button))
+                return true;
         }
         if (subActionTypeDropdown != null && subActionTypeDropdown.isOpen()) {
-            if (subActionTypeDropdown.mouseClicked(mouseX, mouseY, button)) return true;
+            if (subActionTypeDropdown.mouseClicked(mouseX, mouseY, button))
+                return true;
         }
         if (unitDropdown != null && unitDropdown.isOpen()) {
-            if (unitDropdown.mouseClicked(mouseX, mouseY, button)) return true;
+            if (unitDropdown.mouseClicked(mouseX, mouseY, button))
+                return true;
         }
         if (actionTypeDropdown != null && actionTypeDropdown.isOpen()) {
-            if (actionTypeDropdown.mouseClicked(mouseX, mouseY, button)) return true;
+            if (actionTypeDropdown.mouseClicked(mouseX, mouseY, button))
+                return true;
         }
 
         if (this.commandSuggestions != null) {
@@ -1555,12 +1805,18 @@ public class EditActionModalScreen extends Screen {
             dragX /= scale;
             dragY /= scale;
         }
-        if (puppetActionDropdown != null && puppetActionDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
-        if (nearbyEntityDropdown != null && nearbyEntityDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
-        if (musicSequenceDropdown != null && musicSequenceDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
-        if (subActionTypeDropdown != null && subActionTypeDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
-        if (unitDropdown != null && unitDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
-        if (actionTypeDropdown != null && actionTypeDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
+        if (puppetActionDropdown != null && puppetActionDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY))
+            return true;
+        if (nearbyEntityDropdown != null && nearbyEntityDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY))
+            return true;
+        if (musicSequenceDropdown != null && musicSequenceDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY))
+            return true;
+        if (subActionTypeDropdown != null && subActionTypeDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY))
+            return true;
+        if (unitDropdown != null && unitDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY))
+            return true;
+        if (actionTypeDropdown != null && actionTypeDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY))
+            return true;
 
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
@@ -1572,12 +1828,18 @@ public class EditActionModalScreen extends Screen {
             mouseX /= scale;
             mouseY /= scale;
         }
-        if (puppetActionDropdown != null && puppetActionDropdown.mouseReleased(mouseX, mouseY, button)) return true;
-        if (nearbyEntityDropdown != null && nearbyEntityDropdown.mouseReleased(mouseX, mouseY, button)) return true;
-        if (musicSequenceDropdown != null && musicSequenceDropdown.mouseReleased(mouseX, mouseY, button)) return true;
-        if (subActionTypeDropdown != null && subActionTypeDropdown.mouseReleased(mouseX, mouseY, button)) return true;
-        if (unitDropdown != null && unitDropdown.mouseReleased(mouseX, mouseY, button)) return true;
-        if (actionTypeDropdown != null && actionTypeDropdown.mouseReleased(mouseX, mouseY, button)) return true;
+        if (puppetActionDropdown != null && puppetActionDropdown.mouseReleased(mouseX, mouseY, button))
+            return true;
+        if (nearbyEntityDropdown != null && nearbyEntityDropdown.mouseReleased(mouseX, mouseY, button))
+            return true;
+        if (musicSequenceDropdown != null && musicSequenceDropdown.mouseReleased(mouseX, mouseY, button))
+            return true;
+        if (subActionTypeDropdown != null && subActionTypeDropdown.mouseReleased(mouseX, mouseY, button))
+            return true;
+        if (unitDropdown != null && unitDropdown.mouseReleased(mouseX, mouseY, button))
+            return true;
+        if (actionTypeDropdown != null && actionTypeDropdown.mouseReleased(mouseX, mouseY, button))
+            return true;
 
         return super.mouseReleased(mouseX, mouseY, button);
     }
@@ -1713,7 +1975,8 @@ public class EditActionModalScreen extends Screen {
 
         if (isPuppet) {
             graphics.drawString(this.font, "02. RADAR PROXIMITY ENTITY", col2Left, top + 35, CYAN_MAIN, false);
-            int detectedCount = nearbyEntityDropdown != null ? Math.max(0, nearbyEntityDropdown.getVisibleItemCount()) : 0;
+            int detectedCount = nearbyEntityDropdown != null ? Math.max(0, nearbyEntityDropdown.getVisibleItemCount())
+                    : 0;
             String radarBadge = "RADAR: 64m";
             int radW = this.font.width(radarBadge);
             graphics.drawString(this.font, radarBadge, col2Left + colWidth - radW, top + 35, TEXT_MUTED, false);
@@ -1722,9 +1985,11 @@ public class EditActionModalScreen extends Screen {
             String waitBadge = "EVENT MATRIX";
             int wbW = this.font.width(waitBadge);
             graphics.drawString(this.font, waitBadge, col2Left + colWidth - wbW, top + 35, TEXT_MUTED, false);
-        } else if (actionType.equalsIgnoreCase("play_music_sequence") || actionType.equalsIgnoreCase("wait_for_music_sequence")) {
+        } else if (actionType.equalsIgnoreCase("play_music_sequence")
+                || actionType.equalsIgnoreCase("wait_for_music_sequence")) {
             graphics.drawString(this.font, "02. MUSIC SEQUENCE FILE", col2Left, top + 35, CYAN_MAIN, false);
-            String audioBadge = actionType.equalsIgnoreCase("wait_for_music_sequence") ? "WAIT OUT MARKER" : "AUDIO SYNC";
+            String audioBadge = actionType.equalsIgnoreCase("wait_for_music_sequence") ? "WAIT OUT MARKER"
+                    : "AUDIO SYNC";
             int abW = this.font.width(audioBadge);
             graphics.drawString(this.font, audioBadge, col2Left + colWidth - abW, top + 35, TEXT_MUTED, false);
         } else if (actionType.equalsIgnoreCase("command")) {
@@ -1737,14 +2002,21 @@ public class EditActionModalScreen extends Screen {
         // --- 3. Body Section Rendering & Field Frames ---
         if (actionType.equalsIgnoreCase("puppet_suppress_ai")) {
             int engagedCount = 0;
-            if (suppressAiCard != null && suppressAiCard.isChecked()) engagedCount++;
-            if (puppetingActiveCard != null && puppetingActiveCard.isChecked()) engagedCount++;
-            if (suppressNavCard != null && suppressNavCard.isChecked()) engagedCount++;
-            if (suppressTargetingCard != null && suppressTargetingCard.isChecked()) engagedCount++;
-            if (suppressLookCard != null && suppressLookCard.isChecked()) engagedCount++;
-            if (suppressActionsCard != null && suppressActionsCard.isChecked()) engagedCount++;
+            if (suppressAiCard != null && suppressAiCard.isChecked())
+                engagedCount++;
+            if (puppetingActiveCard != null && puppetingActiveCard.isChecked())
+                engagedCount++;
+            if (suppressNavCard != null && suppressNavCard.isChecked())
+                engagedCount++;
+            if (suppressTargetingCard != null && suppressTargetingCard.isChecked())
+                engagedCount++;
+            if (suppressLookCard != null && suppressLookCard.isChecked())
+                engagedCount++;
+            if (suppressActionsCard != null && suppressActionsCard.isChecked())
+                engagedCount++;
 
-            graphics.drawString(this.font, "■ BEHAVIOR FLAGS & SUPPRESSION MATRIX", left + 12, top + 77, CYAN_BRIGHT, false);
+            graphics.drawString(this.font, "■ BEHAVIOR FLAGS & SUPPRESSION MATRIX", left + 12, top + 77, CYAN_BRIGHT,
+                    false);
             String matrixBadge = engagedCount + " OF 6 MATRICES ENGAGED";
             int mbW = this.font.width(matrixBadge);
             graphics.drawString(this.font, matrixBadge, left + panelWidth - 12 - mbW, top + 77, TEXT_MUTED, false);
@@ -1757,16 +2029,20 @@ public class EditActionModalScreen extends Screen {
             boolean hasUuid = !uuidVal.isEmpty();
             boolean validUuid = isValidUUID(uuidVal);
 
-            graphics.drawString(this.font, "ENTITY UUID (OPTIONAL // UNIQUE POINTER)", left + 12, top + 161, TEXT_LABEL, false);
+            graphics.drawString(this.font, "ENTITY UUID (OPTIONAL // UNIQUE POINTER)", left + 12, top + 161, TEXT_LABEL,
+                    false);
             if (hasUuid) {
                 if (validUuid) {
-                    drawPillBadge(graphics, left + panelWidth - 12 - this.font.width("• VALID UUID FORMAT") - 8, top + 159, "• VALID UUID FORMAT", GREEN_VALID, GREEN_VALID);
+                    drawPillBadge(graphics, left + panelWidth - 12 - this.font.width("• VALID UUID FORMAT") - 8,
+                            top + 159, "• VALID UUID FORMAT", GREEN_VALID, GREEN_VALID);
                 } else {
-                    drawPillBadge(graphics, left + panelWidth - 12 - this.font.width("⚠ INVALID UUID") - 8, top + 159, "⚠ INVALID UUID", RED_CANCEL, RED_CANCEL);
+                    drawPillBadge(graphics, left + panelWidth - 12 - this.font.width("⚠ INVALID UUID") - 8, top + 159,
+                            "⚠ INVALID UUID", RED_CANCEL, RED_CANCEL);
                 }
             } else {
                 String blankTag = "OPTIONAL // USING SELECTOR";
-                graphics.drawString(this.font, blankTag, left + panelWidth - 12 - this.font.width(blankTag), top + 161, TEXT_MUTED, false);
+                graphics.drawString(this.font, blankTag, left + panelWidth - 12 - this.font.width(blankTag), top + 161,
+                        TEXT_MUTED, false);
             }
             drawInputFrame(graphics, left + 12, uuidY, uuidW, 20, isFocusedUuid, hasUuid && !validUuid);
 
@@ -1776,27 +2052,36 @@ public class EditActionModalScreen extends Screen {
             String selVal = targetSelectorField != null ? targetSelectorField.getValue().trim() : "";
             boolean isFocusedSel = targetSelectorField != null && targetSelectorField.isFocused();
 
-            graphics.drawString(this.font, "TARGET SELECTOR QUERY (e.g. @e[tag=puppet])", left + 12, top + 197, TEXT_LABEL, false);
+            graphics.drawString(this.font, "TARGET SELECTOR QUERY (e.g. @e[tag=puppet])", left + 12, top + 197,
+                    TEXT_LABEL, false);
             int matches = getResolvedMatchesCount(selVal);
-            String matchBadge = !selVal.isEmpty() ? (matches == 1 ? "RESOLVED: 1 MATCH" : "RESOLVED: " + matches + " MATCHES") : "SYNTAX GUIDE";
+            String matchBadge = !selVal.isEmpty()
+                    ? (matches == 1 ? "RESOLVED: 1 MATCH" : "RESOLVED: " + matches + " MATCHES")
+                    : "SYNTAX GUIDE";
             int matchColor = (!selVal.isEmpty() && matches > 0) ? CYAN_MAIN : TEXT_MUTED;
-            drawPillBadge(graphics, left + panelWidth - 12 - this.font.width(matchBadge) - 8, top + 195, matchBadge, matchColor, matchColor);
+            drawPillBadge(graphics, left + panelWidth - 12 - this.font.width(matchBadge) - 8, top + 195, matchBadge,
+                    matchColor, matchColor);
 
             drawInputFrame(graphics, left + 12, selY, selW, 20, isFocusedSel, false);
 
-            graphics.drawString(this.font, "ⓘ Evaluates automatically if Entity UUID field is blank or unreachable.", left + 12, top + 233, TEXT_MUTED, false);
+            graphics.drawString(this.font, "ⓘ Evaluates automatically if Entity UUID field is blank or unreachable.",
+                    left + 12, top + 233, TEXT_MUTED, false);
 
         } else if (actionType.equalsIgnoreCase("puppet_action")) {
-            graphics.drawString(this.font, "■ PUPPET ROUTINE & TIMING PARAMETERS", left + 12, top + 77, CYAN_BRIGHT, false);
+            graphics.drawString(this.font, "■ PUPPET ROUTINE & TIMING PARAMETERS", left + 12, top + 77, CYAN_BRIGHT,
+                    false);
 
             int r2Y = top + 126;
-            graphics.drawString(this.font, "ACTION ID (e.g. fracturedutils:radial_blast)", left + 12, top + 115, TEXT_LABEL, false);
+            graphics.drawString(this.font, "ACTION ID (e.g. fracturedutils:radial_blast)", left + 12, top + 115,
+                    TEXT_LABEL, false);
             graphics.drawString(this.font, "WINDUP", left + 256, top + 115, TEXT_LABEL, false);
             graphics.drawString(this.font, "DURATION", left + 348, top + 115, TEXT_LABEL, false);
 
             drawInputFrame(graphics, left + 12, r2Y, 234, 20, inputField != null && inputField.isFocused(), false);
-            drawInputFrame(graphics, left + 256, r2Y, 82, 20, windupTicksField != null && windupTicksField.isFocused(), false);
-            drawInputFrame(graphics, left + 348, r2Y, 88, 20, durationTicksField != null && durationTicksField.isFocused(), false);
+            drawInputFrame(graphics, left + 256, r2Y, 82, 20, windupTicksField != null && windupTicksField.isFocused(),
+                    false);
+            drawInputFrame(graphics, left + 348, r2Y, 88, 20,
+                    durationTicksField != null && durationTicksField.isFocused(), false);
 
             int uuidY = top + 162;
             int uuidW = panelWidth - 142;
@@ -1805,21 +2090,28 @@ public class EditActionModalScreen extends Screen {
             boolean validUuid = isValidUUID(uuidVal);
 
             graphics.drawString(this.font, "ENTITY UUID (OPTIONAL)", left + 12, top + 151, TEXT_LABEL, false);
-            drawInputFrame(graphics, left + 12, uuidY, uuidW, 20, entityUuidField != null && entityUuidField.isFocused(), hasUuid && !validUuid);
+            drawInputFrame(graphics, left + 12, uuidY, uuidW, 20,
+                    entityUuidField != null && entityUuidField.isFocused(), hasUuid && !validUuid);
 
             int selY = top + 198;
             int selW = panelWidth - 24;
             String selVal = targetSelectorField != null ? targetSelectorField.getValue().trim() : "";
             graphics.drawString(this.font, "TARGET SELECTOR QUERY", left + 12, top + 187, TEXT_LABEL, false);
             int matches = getResolvedMatchesCount(selVal);
-            String matchBadge = !selVal.isEmpty() ? (matches == 1 ? "RESOLVED: 1 MATCH" : "RESOLVED: " + matches + " MATCHES") : "SYNTAX GUIDE";
-            drawPillBadge(graphics, left + panelWidth - 12 - this.font.width(matchBadge) - 8, top + 185, matchBadge, CYAN_MAIN, CYAN_MAIN);
-            drawInputFrame(graphics, left + 12, selY, selW, 20, targetSelectorField != null && targetSelectorField.isFocused(), false);
+            String matchBadge = !selVal.isEmpty()
+                    ? (matches == 1 ? "RESOLVED: 1 MATCH" : "RESOLVED: " + matches + " MATCHES")
+                    : "SYNTAX GUIDE";
+            drawPillBadge(graphics, left + panelWidth - 12 - this.font.width(matchBadge) - 8, top + 185, matchBadge,
+                    CYAN_MAIN, CYAN_MAIN);
+            drawInputFrame(graphics, left + 12, selY, selW, 20,
+                    targetSelectorField != null && targetSelectorField.isFocused(), false);
 
-            graphics.drawString(this.font, "ⓘ Executes registered attack/routine on the designated puppet mob.", left + 12, top + 224, TEXT_MUTED, false);
+            graphics.drawString(this.font, "ⓘ Executes registered attack/routine on the designated puppet mob.",
+                    left + 12, top + 224, TEXT_MUTED, false);
 
         } else if (actionType.equalsIgnoreCase("puppet_move_to")) {
-            graphics.drawString(this.font, "■ NAVIGATION VECTOR & TARGET COORDINATES", left + 12, top + 77, CYAN_BRIGHT, false);
+            graphics.drawString(this.font, "■ NAVIGATION VECTOR & TARGET COORDINATES", left + 12, top + 77, CYAN_BRIGHT,
+                    false);
 
             int r1Y = top + 90;
             graphics.drawString(this.font, "X", left + 12, top + 79, TEXT_LABEL, false);
@@ -1839,18 +2131,24 @@ public class EditActionModalScreen extends Screen {
             boolean validUuid = isValidUUID(uuidVal);
 
             graphics.drawString(this.font, "ENTITY UUID (OPTIONAL)", left + 12, top + 126, TEXT_LABEL, false);
-            drawInputFrame(graphics, left + 12, uuidY, uuidW, 20, entityUuidField != null && entityUuidField.isFocused(), hasUuid && !validUuid);
+            drawInputFrame(graphics, left + 12, uuidY, uuidW, 20,
+                    entityUuidField != null && entityUuidField.isFocused(), hasUuid && !validUuid);
 
             int selY = top + 184;
             int selW = panelWidth - 24;
             String selVal = targetSelectorField != null ? targetSelectorField.getValue().trim() : "";
             graphics.drawString(this.font, "TARGET SELECTOR QUERY", left + 12, top + 172, TEXT_LABEL, false);
             int matches = getResolvedMatchesCount(selVal);
-            String matchBadge = !selVal.isEmpty() ? (matches == 1 ? "RESOLVED: 1 MATCH" : "RESOLVED: " + matches + " MATCHES") : "SYNTAX GUIDE";
-            drawPillBadge(graphics, left + panelWidth - 12 - this.font.width(matchBadge) - 8, top + 170, matchBadge, CYAN_MAIN, CYAN_MAIN);
-            drawInputFrame(graphics, left + 12, selY, selW, 20, targetSelectorField != null && targetSelectorField.isFocused(), false);
+            String matchBadge = !selVal.isEmpty()
+                    ? (matches == 1 ? "RESOLVED: 1 MATCH" : "RESOLVED: " + matches + " MATCHES")
+                    : "SYNTAX GUIDE";
+            drawPillBadge(graphics, left + panelWidth - 12 - this.font.width(matchBadge) - 8, top + 170, matchBadge,
+                    CYAN_MAIN, CYAN_MAIN);
+            drawInputFrame(graphics, left + 12, selY, selW, 20,
+                    targetSelectorField != null && targetSelectorField.isFocused(), false);
 
-            graphics.drawString(this.font, "ⓘ Directs the puppet mob's AI pathfinding towards target coordinates.", left + 12, top + 210, TEXT_MUTED, false);
+            graphics.drawString(this.font, "ⓘ Directs the puppet mob's AI pathfinding towards target coordinates.",
+                    left + 12, top + 210, TEXT_MUTED, false);
 
         } else if (actionType.equalsIgnoreCase("puppet_look_at")) {
             graphics.drawString(this.font, "■ LOOK ORIENTATION & GAZE TARGET", left + 12, top + 77, CYAN_BRIGHT, false);
@@ -1867,7 +2165,8 @@ public class EditActionModalScreen extends Screen {
             int lookY = top + 130;
             int lookW = panelWidth - 142;
             graphics.drawString(this.font, "LOOK AT TARGET (e.g. @p or UUID)", left + 12, top + 118, TEXT_LABEL, false);
-            drawInputFrame(graphics, left + 12, lookY, lookW, 20, lookTargetField != null && lookTargetField.isFocused(), false);
+            drawInputFrame(graphics, left + 12, lookY, lookW, 20,
+                    lookTargetField != null && lookTargetField.isFocused(), false);
 
             int uuidY = top + 168;
             int uuidW = panelWidth - 142;
@@ -1876,15 +2175,18 @@ public class EditActionModalScreen extends Screen {
             boolean validUuid = isValidUUID(uuidVal);
 
             graphics.drawString(this.font, "PUPPET MOB UUID (OPTIONAL)", left + 12, top + 156, TEXT_LABEL, false);
-            drawInputFrame(graphics, left + 12, uuidY, uuidW, 20, entityUuidField != null && entityUuidField.isFocused(), hasUuid && !validUuid);
+            drawInputFrame(graphics, left + 12, uuidY, uuidW, 20,
+                    entityUuidField != null && entityUuidField.isFocused(), hasUuid && !validUuid);
 
             int selY = top + 206;
             int selW = panelWidth - 24;
             String selVal = targetSelectorField != null ? targetSelectorField.getValue().trim() : "";
             graphics.drawString(this.font, "TARGET SELECTOR QUERY", left + 12, top + 194, TEXT_LABEL, false);
-            drawInputFrame(graphics, left + 12, selY, selW, 20, targetSelectorField != null && targetSelectorField.isFocused(), false);
+            drawInputFrame(graphics, left + 12, selY, selW, 20,
+                    targetSelectorField != null && targetSelectorField.isFocused(), false);
 
-            graphics.drawString(this.font, "ⓘ Forces puppet entity to orient its gaze towards coordinates or entity.", left + 12, top + 232, TEXT_MUTED, false);
+            graphics.drawString(this.font, "ⓘ Forces puppet entity to orient its gaze towards coordinates or entity.",
+                    left + 12, top + 232, TEXT_MUTED, false);
 
         } else if (actionType.equalsIgnoreCase("puppet_stop_action")) {
             graphics.drawString(this.font, "■ PUPPET OVERRIDE & RESET", left + 12, top + 77, CYAN_BRIGHT, false);
@@ -1896,7 +2198,8 @@ public class EditActionModalScreen extends Screen {
             graphics.fill(left + 12, cardY + 23, left + panelWidth - 12, cardY + 24, 0xFF24485D);
             graphics.fill(left + 12, cardY, left + 13, cardY + 24, 0xFF24485D);
             graphics.fill(left + panelWidth - 13, cardY, left + panelWidth - 12, cardY + 24, 0xFF24485D);
-            graphics.drawString(this.font, "⚡ Stops any active puppet action and restores default mob AI state.", left + 20, cardY + 8, CYAN_MAIN, false);
+            graphics.drawString(this.font, "⚡ Stops any active puppet action and restores default mob AI state.",
+                    left + 20, cardY + 8, CYAN_MAIN, false);
 
             int uuidY = top + 130;
             int uuidW = panelWidth - 142;
@@ -1905,29 +2208,35 @@ public class EditActionModalScreen extends Screen {
             boolean validUuid = isValidUUID(uuidVal);
 
             graphics.drawString(this.font, "PUPPET MOB UUID (OPTIONAL)", left + 12, top + 118, TEXT_LABEL, false);
-            drawInputFrame(graphics, left + 12, uuidY, uuidW, 20, entityUuidField != null && entityUuidField.isFocused(), hasUuid && !validUuid);
+            drawInputFrame(graphics, left + 12, uuidY, uuidW, 20,
+                    entityUuidField != null && entityUuidField.isFocused(), hasUuid && !validUuid);
 
             int selY = top + 178;
             int selW = panelWidth - 24;
             String selVal = targetSelectorField != null ? targetSelectorField.getValue().trim() : "";
             graphics.drawString(this.font, "TARGET SELECTOR QUERY", left + 12, top + 166, TEXT_LABEL, false);
-            drawInputFrame(graphics, left + 12, selY, selW, 20, targetSelectorField != null && targetSelectorField.isFocused(), false);
+            drawInputFrame(graphics, left + 12, selY, selW, 20,
+                    targetSelectorField != null && targetSelectorField.isFocused(), false);
 
-            graphics.drawString(this.font, "ⓘ Clears running puppet behaviors and releases suppression flags.", left + 12, top + 204, TEXT_MUTED, false);
+            graphics.drawString(this.font, "ⓘ Clears running puppet behaviors and releases suppression flags.",
+                    left + 12, top + 204, TEXT_MUTED, false);
 
         } else if (actionType.equalsIgnoreCase("command")) {
             boolean isCommandInvalid = false;
             if (inputField != null) {
-                isCommandInvalid = !CommandAction.isValidCommand(this.minecraft, inputField.getValue());
+                isCommandInvalid = !net.dandare21.fracturedutils.client.ClientCommandHelper
+                        .isValidCommand(this.minecraft, inputField.getValue());
                 this.inputField.setTextColor(isCommandInvalid ? 0xFFFF5555 : 0xFFFFFFFF);
             }
 
             graphics.drawString(this.font, "■ CONSOLE COMMAND PAYLOAD", left + 12, top + 77, CYAN_BRIGHT, false);
             String cmdStatus = isCommandInvalid ? "⚠ SYNTAX INVALID" : "• SYNTAX VALID";
             int cmdColor = isCommandInvalid ? RED_CANCEL : GREEN_VALID;
-            drawPillBadge(graphics, left + panelWidth - 12 - this.font.width(cmdStatus) - 8, top + 75, cmdStatus, cmdColor, cmdColor);
+            drawPillBadge(graphics, left + panelWidth - 12 - this.font.width(cmdStatus) - 8, top + 75, cmdStatus,
+                    cmdColor, cmdColor);
 
-            drawInputFrame(graphics, left + 12, top + 97, panelWidth - 24, 22, inputField != null && inputField.isFocused(), isCommandInvalid);
+            drawInputFrame(graphics, left + 12, top + 97, panelWidth - 24, 22,
+                    inputField != null && inputField.isFocused(), isCommandInvalid);
 
             graphics.drawString(this.font, "QUICK INSERT TOKENS:", left + 12, top + 121, TEXT_MUTED, false);
 
@@ -1939,25 +2248,34 @@ public class EditActionModalScreen extends Screen {
             graphics.fill(left + panelWidth - 13, infoY, left + panelWidth - 12, infoY + 50, BORDER_MUTED);
 
             graphics.drawString(this.font, "PARAMETER SUBSTITUTIONS:", left + 20, infoY + 6, CYAN_MAIN, false);
-            graphics.drawString(this.font, "%player% - Substituted with the triggering player's username", left + 20, infoY + 20, TEXT_LABEL, false);
-            graphics.drawString(this.font, "%uuid%   - Substituted with the triggering player's UUID string", left + 20, infoY + 34, TEXT_LABEL, false);
+            graphics.drawString(this.font, "%player% - Substituted with the triggering player's username", left + 20,
+                    infoY + 20, TEXT_LABEL, false);
+            graphics.drawString(this.font, "%uuid%   - Substituted with the triggering player's UUID string", left + 20,
+                    infoY + 34, TEXT_LABEL, false);
 
-            graphics.drawString(this.font, "ⓘ Runs with server console/operator permissions.", left + 12, top + 210, TEXT_MUTED, false);
+            graphics.drawString(this.font, "ⓘ Runs with server console/operator permissions.", left + 12, top + 210,
+                    TEXT_MUTED, false);
 
         } else if (actionType.equalsIgnoreCase("wait_until")) {
             graphics.drawString(this.font, "■ TEMPORAL & TRIGGER CONDITIONS", left + 12, top + 77, CYAN_BRIGHT, false);
 
             if (waitUntilType.equalsIgnoreCase("delay")) {
                 int totalTicks = calculateDelayTicks();
-                String summary = String.format(Locale.US, "= %d Ticks  |  %.1fs  |  %.2fm", totalTicks, totalTicks / 20.0f, totalTicks / 1200.0f);
-                drawPillBadge(graphics, left + panelWidth - 12 - this.font.width(summary) - 8, top + 75, summary, CYAN_MAIN, CYAN_MAIN);
+                String summary = String.format(Locale.US, "= %d Ticks  |  %.1fs  |  %.2fm", totalTicks,
+                        totalTicks / 20.0f, totalTicks / 1200.0f);
+                drawPillBadge(graphics, left + panelWidth - 12 - this.font.width(summary) - 8, top + 75, summary,
+                        CYAN_MAIN, CYAN_MAIN);
 
-                graphics.drawString(this.font, "DURATION (" + delayUnit.name() + ")", left + 12, top + 86, TEXT_LABEL, false);
-                drawInputFrame(graphics, left + 12, top + 97, panelWidth - 164, 22, inputField != null && inputField.isFocused(), false);
+                graphics.drawString(this.font, "DURATION (" + delayUnit.name() + ")", left + 12, top + 86, TEXT_LABEL,
+                        false);
+                drawInputFrame(graphics, left + 12, top + 97, panelWidth - 164, 22,
+                        inputField != null && inputField.isFocused(), false);
 
-                graphics.drawString(this.font, "ⓘ Pauses sequence execution. Automatically converts between units.", left + 12, top + 130, TEXT_MUTED, false);
+                graphics.drawString(this.font, "ⓘ Pauses sequence execution. Automatically converts between units.",
+                        left + 12, top + 130, TEXT_MUTED, false);
 
-            } else if (waitUntilType.equalsIgnoreCase("proximity") || waitUntilType.equalsIgnoreCase("marker") || waitUntilType.equalsIgnoreCase("player_proximity") || waitUntilType.equalsIgnoreCase("area")) {
+            } else if (waitUntilType.equalsIgnoreCase("proximity") || waitUntilType.equalsIgnoreCase("marker")
+                    || waitUntilType.equalsIgnoreCase("player_proximity") || waitUntilType.equalsIgnoreCase("area")) {
                 int r1Y = top + 90;
                 graphics.drawString(this.font, "X", left + 12, top + 79, TEXT_LABEL, false);
                 graphics.drawString(this.font, "Y", left + 86, top + 79, TEXT_LABEL, false);
@@ -1967,30 +2285,40 @@ public class EditActionModalScreen extends Screen {
                 drawInputFrame(graphics, left + 12, r1Y, 70, 20, xField != null && xField.isFocused(), false);
                 drawInputFrame(graphics, left + 86, r1Y, 70, 20, yField != null && yField.isFocused(), false);
                 drawInputFrame(graphics, left + 160, r1Y, 70, 20, zField != null && zField.isFocused(), false);
-                drawInputFrame(graphics, left + 234, r1Y, 66, 20, radiusField != null && radiusField.isFocused(), false);
+                drawInputFrame(graphics, left + 234, r1Y, 66, 20, radiusField != null && radiusField.isFocused(),
+                        false);
 
                 graphics.drawString(this.font, "TARGET SELECTOR (e.g. @a)", left + 12, top + 116, TEXT_LABEL, false);
-                drawInputFrame(graphics, left + 12, top + 127, panelWidth - 24, 20, targetSelectorField != null && targetSelectorField.isFocused(), false);
+                drawInputFrame(graphics, left + 12, top + 127, panelWidth - 24, 20,
+                        targetSelectorField != null && targetSelectorField.isFocused(), false);
 
-                graphics.drawString(this.font, "DETECTION MATRIX CONFIGURATION", left + 12, top + 152, TEXT_MUTED, false);
-                graphics.drawString(this.font, "ⓘ Pauses sequence until matching player enters the detection zone.", left + 12, top + 214, TEXT_MUTED, false);
+                graphics.drawString(this.font, "DETECTION MATRIX CONFIGURATION", left + 12, top + 152, TEXT_MUTED,
+                        false);
+                graphics.drawString(this.font, "ⓘ Pauses sequence until matching player enters the detection zone.",
+                        left + 12, top + 214, TEXT_MUTED, false);
 
             } else if (waitUntilType.equalsIgnoreCase("trigger") || waitUntilType.equalsIgnoreCase("await_trigger")) {
                 graphics.drawString(this.font, "TRIGGER ID EVENT NAME", left + 12, top + 86, TEXT_LABEL, false);
-                drawInputFrame(graphics, left + 12, top + 97, panelWidth - 24, 22, inputField != null && inputField.isFocused(), false);
-                graphics.drawString(this.font, "ⓘ Pauses sequence until /orchestrator trigger <id> is invoked.", left + 12, top + 130, TEXT_MUTED, false);
+                drawInputFrame(graphics, left + 12, top + 97, panelWidth - 24, 22,
+                        inputField != null && inputField.isFocused(), false);
+                graphics.drawString(this.font, "ⓘ Pauses sequence until /orchestrator trigger <id> is invoked.",
+                        left + 12, top + 130, TEXT_MUTED, false);
 
             } else if (waitUntilType.equalsIgnoreCase("operator_action")) {
                 graphics.drawString(this.font, "OPERATOR BUTTON HUD LABEL", left + 12, top + 86, TEXT_LABEL, false);
-                drawInputFrame(graphics, left + 12, top + 97, panelWidth - 24, 22, inputField != null && inputField.isFocused(), false);
-                graphics.drawString(this.font, "ⓘ Displays an interactive cyberpunk action prompt button on the operator HUD.", left + 12, top + 130, TEXT_MUTED, false);
+                drawInputFrame(graphics, left + 12, top + 97, panelWidth - 24, 22,
+                        inputField != null && inputField.isFocused(), false);
+                graphics.drawString(this.font,
+                        "ⓘ Displays an interactive cyberpunk action prompt button on the operator HUD.", left + 12,
+                        top + 130, TEXT_MUTED, false);
 
             } else {
                 graphics.drawString(this.font, "EVENT MONITOR", left + 12, top + 86, TEXT_LABEL, false);
                 String info = switch (waitUntilType.toLowerCase()) {
                     case "dialog", "dialog_end" -> "Pauses sequence until active dialog sequence finishes.";
                     case "video", "video_end", "cutscene" -> "Pauses sequence until active cinematic cutscene ends.";
-                    case "waiting_room", "waiting_room_end" -> "Pauses sequence until event waiting room countdown ends.";
+                    case "waiting_room", "waiting_room_end" ->
+                        "Pauses sequence until event waiting room countdown ends.";
                     case "waiting_room_ready" -> "Pauses sequence until all players click ready.";
                     case "downloads" -> "Pauses sequence until all clients finish downloading cutscenes.";
                     default -> "Pauses sequence until event triggers.";
@@ -1999,7 +2327,8 @@ public class EditActionModalScreen extends Screen {
             }
 
         } else if (actionType.equalsIgnoreCase("checkpoint")) {
-            graphics.drawString(this.font, "■ CHECKPOINT TELEPORT & RESTORE POINT", left + 12, top + 77, CYAN_BRIGHT, false);
+            graphics.drawString(this.font, "■ CHECKPOINT TELEPORT & RESTORE POINT", left + 12, top + 77, CYAN_BRIGHT,
+                    false);
 
             int r1Y = top + 90;
             graphics.drawString(this.font, "X", left + 12, top + 79, TEXT_LABEL, false);
@@ -2017,25 +2346,32 @@ public class EditActionModalScreen extends Screen {
             graphics.drawString(this.font, "CHECKPOINT LABEL", col2Left, top + 118, TEXT_LABEL, false);
 
             drawInputFrame(graphics, left + 12, r2Y, angleW, 20, yawField != null && yawField.isFocused(), false);
-            drawInputFrame(graphics, left + 14 + angleW + 8, r2Y, angleW, 20, pitchField != null && pitchField.isFocused(), false);
+            drawInputFrame(graphics, left + 14 + angleW + 8, r2Y, angleW, 20,
+                    pitchField != null && pitchField.isFocused(), false);
             drawInputFrame(graphics, col2Left, r2Y, colWidth, 20, labelField != null && labelField.isFocused(), false);
 
             int selY = top + 172;
             graphics.drawString(this.font, "TARGET SELECTOR QUERY", left + 12, top + 159, TEXT_LABEL, false);
-            drawInputFrame(graphics, left + 12, selY, panelWidth - 24, 20, targetSelectorField != null && targetSelectorField.isFocused(), false);
+            drawInputFrame(graphics, left + 12, selY, panelWidth - 24, 20,
+                    targetSelectorField != null && targetSelectorField.isFocused(), false);
 
-            graphics.drawString(this.font, "ⓘ Teleports players here and rewinds sequence on team wipe.", left + 12, top + 200, TEXT_MUTED, false);
+            graphics.drawString(this.font, "ⓘ Teleports players here and rewinds sequence on team wipe.", left + 12,
+                    top + 200, TEXT_MUTED, false);
 
         } else if (actionType.equalsIgnoreCase("new_objective")) {
             graphics.drawString(this.font, "■ MISSION OBJECTIVE HUD OVERLAY", left + 12, top + 77, CYAN_BRIGHT, false);
 
             graphics.drawString(this.font, "OBJECTIVE TITLE", left + 12, top + 86, TEXT_LABEL, false);
-            drawInputFrame(graphics, left + 12, top + 97, panelWidth - 24, 20, nameField != null && nameField.isFocused(), false);
+            drawInputFrame(graphics, left + 12, top + 97, panelWidth - 24, 20,
+                    nameField != null && nameField.isFocused(), false);
 
-            graphics.drawString(this.font, "OBJECTIVE DESCRIPTION / INSTRUCTIONS", left + 12, top + 126, TEXT_LABEL, false);
-            drawInputFrame(graphics, left + 12, top + 137, panelWidth - 24, 20, descriptionField != null && descriptionField.isFocused(), false);
+            graphics.drawString(this.font, "OBJECTIVE DESCRIPTION / INSTRUCTIONS", left + 12, top + 126, TEXT_LABEL,
+                    false);
+            drawInputFrame(graphics, left + 12, top + 137, panelWidth - 24, 20,
+                    descriptionField != null && descriptionField.isFocused(), false);
 
-            graphics.drawString(this.font, "ⓘ Displays an active objective card and progress on all player screens.", left + 12, top + 200, TEXT_MUTED, false);
+            graphics.drawString(this.font, "ⓘ Displays an active objective card and progress on all player screens.",
+                    left + 12, top + 200, TEXT_MUTED, false);
 
         } else if (actionType.equalsIgnoreCase("end_objective")) {
             graphics.drawString(this.font, "■ CLEAR HUD OBJECTIVE", left + 12, top + 77, CYAN_BRIGHT, false);
@@ -2045,26 +2381,37 @@ public class EditActionModalScreen extends Screen {
             graphics.fill(left + 12, cardY + 35, left + panelWidth - 12, cardY + 36, 0xFF24485D);
             graphics.fill(left + 12, cardY, left + 13, cardY + 36, 0xFF24485D);
             graphics.fill(left + panelWidth - 13, cardY, left + panelWidth - 12, cardY + 36, 0xFF24485D);
-            graphics.drawString(this.font, "Clears the active mission objective from the HUD overlay.", left + 20, cardY + 14, CYAN_MAIN, false);
+            graphics.drawString(this.font, "Clears the active mission objective from the HUD overlay.", left + 20,
+                    cardY + 14, CYAN_MAIN, false);
 
         } else if (actionType.equalsIgnoreCase("play_music_sequence")) {
             graphics.drawString(this.font, "■ SOUNDTRACK & EVENT MUSIC SYNC", left + 12, top + 77, CYAN_BRIGHT, false);
-            graphics.drawString(this.font, "ⓘ Coordinates musical cues and beats synced to audio waveforms.", left + 12, top + 136, TEXT_MUTED, false);
+            graphics.drawString(this.font, "ⓘ Coordinates musical cues and beats synced to audio waveforms.", left + 12,
+                    top + 136, TEXT_MUTED, false);
 
         } else if (actionType.equalsIgnoreCase("wait_for_music_sequence")) {
-            graphics.drawString(this.font, "■ WAIT FOR MUSIC SEQUENCE OUT MARKER", left + 12, top + 77, CYAN_BRIGHT, false);
-            graphics.drawString(this.font, "ⓘ Pauses orchestrator execution until music sequence reaches its OUT marker and finishes.", left + 12, top + 104, CYAN_MAIN, false);
+            graphics.drawString(this.font, "■ WAIT FOR MUSIC SEQUENCE OUT MARKER", left + 12, top + 77, CYAN_BRIGHT,
+                    false);
+            graphics.drawString(this.font,
+                    "ⓘ Pauses orchestrator execution until music sequence reaches its OUT marker and finishes.",
+                    left + 12, top + 104, CYAN_MAIN, false);
 
         } else if (actionType.equalsIgnoreCase("fork_sequence") || actionType.equalsIgnoreCase("run_sequence")) {
             graphics.drawString(this.font, "■ SEQUENCE SUBROUTINE EXECUTION", left + 12, top + 77, CYAN_BRIGHT, false);
-            graphics.drawString(this.font, "SUBSEQUENCE FILE NAME & [START ACTION INDEX]", left + 12, top + 86, TEXT_LABEL, false);
-            drawInputFrame(graphics, left + 12, top + 97, panelWidth - 24, 20, inputField != null && inputField.isFocused(), false);
-            String modeStr = actionType.equalsIgnoreCase("fork_sequence") ? "Asynchronously forks sub-sequence in parallel." : "Synchronously runs sub-sequence and blocks until finished.";
+            graphics.drawString(this.font, "SUBSEQUENCE FILE NAME & [START ACTION INDEX]", left + 12, top + 86,
+                    TEXT_LABEL, false);
+            drawInputFrame(graphics, left + 12, top + 97, panelWidth - 24, 20,
+                    inputField != null && inputField.isFocused(), false);
+            String modeStr = actionType.equalsIgnoreCase("fork_sequence")
+                    ? "Asynchronously forks sub-sequence in parallel."
+                    : "Synchronously runs sub-sequence and blocks until finished.";
             graphics.drawString(this.font, "ⓘ " + modeStr, left + 12, top + 130, TEXT_MUTED, false);
 
         } else if (actionType.equalsIgnoreCase("stall_parent") || actionType.equalsIgnoreCase("resume_parent")) {
             graphics.drawString(this.font, "■ PARENT FLOW CONTROL", left + 12, top + 77, CYAN_BRIGHT, false);
-            String modeStr = actionType.equalsIgnoreCase("stall_parent") ? "Stalls the execution of the parent sequence until resumed." : "Wakes up and resumes execution of a stalled parent sequence.";
+            String modeStr = actionType.equalsIgnoreCase("stall_parent")
+                    ? "Stalls the execution of the parent sequence until resumed."
+                    : "Wakes up and resumes execution of a stalled parent sequence.";
             graphics.drawString(this.font, "ⓘ " + modeStr, left + 12, top + 104, CYAN_MAIN, false);
         }
 
@@ -2104,12 +2451,18 @@ public class EditActionModalScreen extends Screen {
         }
 
         // Render Dropdown overlays on top of everything!
-        if (actionTypeDropdown != null) actionTypeDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
-        if (subActionTypeDropdown != null) subActionTypeDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
-        if (unitDropdown != null) unitDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
-        if (musicSequenceDropdown != null) musicSequenceDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
-        if (nearbyEntityDropdown != null) nearbyEntityDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
-        if (puppetActionDropdown != null) puppetActionDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
+        if (actionTypeDropdown != null)
+            actionTypeDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
+        if (subActionTypeDropdown != null)
+            subActionTypeDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
+        if (unitDropdown != null)
+            unitDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
+        if (musicSequenceDropdown != null)
+            musicSequenceDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
+        if (nearbyEntityDropdown != null)
+            nearbyEntityDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
+        if (puppetActionDropdown != null)
+            puppetActionDropdown.renderOverlay(graphics, scaledMouseX, scaledMouseY);
 
         graphics.pose().popPose();
     }

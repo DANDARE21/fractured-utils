@@ -1,9 +1,6 @@
 package net.dandare21.fracturedutils.dialog;
 
-import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.FormattedCharSequence;
 
 import java.util.List;
 
@@ -30,32 +27,48 @@ public class DialogFormatUtil {
     }
 
     /**
-     * Translates '&' color and custom formatting codes into '§' section symbols without regex allocations.
+     * Translates '&' color and custom formatting codes into '§' section symbols
+     * without regex allocations.
      */
     public static String translateCodes(String input) {
-        if (input == null || input.isEmpty()) return "";
-        if (input.indexOf('{') == -1 && input.indexOf('&') == -1) return input;
+        if (input == null || input.isEmpty())
+            return "";
+        if (input.indexOf('{') == -1 && input.indexOf('&') == -1)
+            return input;
         int len = input.length();
         StringBuilder sb = new StringBuilder(len);
         for (int i = 0; i < len; i++) {
             char c = input.charAt(i);
 
-            // Translate BBCode inline tags: {shake}, {wave}, {rainbow}, {glitch}, {pulse}, {/shake}, etc.
+            // Translate BBCode inline tags: {shake}, {wave}, {rainbow}, {glitch}, {pulse},
+            // {/shake}, etc.
             if (c == '{') {
                 int closeIdx = input.indexOf('}', i);
                 if (closeIdx != -1) {
                     String tag = input.substring(i + 1, closeIdx).trim().toLowerCase(java.util.Locale.ROOT);
-                    if (tag.equals("shake")) { sb.append('§').append('~').append('s'); }
-                    else if (tag.equals("/shake")) { sb.append('§').append('~').append('x'); }
-                    else if (tag.equals("wave")) { sb.append('§').append('~').append('w'); }
-                    else if (tag.equals("/wave")) { sb.append('§').append('~').append('x'); }
-                    else if (tag.equals("rainbow")) { sb.append('§').append('~').append('r'); }
-                    else if (tag.equals("/rainbow")) { sb.append('§').append('~').append('x'); }
-                    else if (tag.equals("glitch")) { sb.append('§').append('~').append('g'); }
-                    else if (tag.equals("/glitch")) { sb.append('§').append('~').append('x'); }
-                    else if (tag.equals("pulse")) { sb.append('§').append('~').append('p'); }
-                    else if (tag.equals("/pulse")) { sb.append('§').append('~').append('x'); }
-                    // Action tags like {pause:N}, {shake_screen:...}, {sound:...} are stripped from display text
+                    if (tag.equals("shake")) {
+                        sb.append('§').append('~').append('s');
+                    } else if (tag.equals("/shake")) {
+                        sb.append('§').append('~').append('x');
+                    } else if (tag.equals("wave")) {
+                        sb.append('§').append('~').append('w');
+                    } else if (tag.equals("/wave")) {
+                        sb.append('§').append('~').append('x');
+                    } else if (tag.equals("rainbow")) {
+                        sb.append('§').append('~').append('r');
+                    } else if (tag.equals("/rainbow")) {
+                        sb.append('§').append('~').append('x');
+                    } else if (tag.equals("glitch")) {
+                        sb.append('§').append('~').append('g');
+                    } else if (tag.equals("/glitch")) {
+                        sb.append('§').append('~').append('x');
+                    } else if (tag.equals("pulse")) {
+                        sb.append('§').append('~').append('p');
+                    } else if (tag.equals("/pulse")) {
+                        sb.append('§').append('~').append('x');
+                    }
+                    // Action tags like {pause:N}, {shake_screen:...}, {sound:...} are stripped from
+                    // display text
                     i = closeIdx;
                     continue;
                 }
@@ -100,10 +113,12 @@ public class DialogFormatUtil {
     }
 
     /**
-     * Counts visible characters, ignoring standard formatting (&0-&f, &k-&r) and custom effect codes (&~s, &~w, &~r, &~g, &~p, &~x).
+     * Counts visible characters, ignoring standard formatting (&0-&f, &k-&r) and
+     * custom effect codes (&~s, &~w, &~r, &~g, &~p, &~x).
      */
     public static int getVisibleCharCount(String input) {
-        if (input == null || input.isEmpty()) return 0;
+        if (input == null || input.isEmpty())
+            return 0;
         int count = 0;
         int len = input.length();
         for (int i = 0; i < len; i++) {
@@ -115,7 +130,8 @@ public class DialogFormatUtil {
                     continue;
                 }
             }
-            if ((c == '&' || c == '§') && i + 2 < len && input.charAt(i + 1) == '~' && isCustomEffectChar(input.charAt(i + 2))) {
+            if ((c == '&' || c == '§') && i + 2 < len && input.charAt(i + 1) == '~'
+                    && isCustomEffectChar(input.charAt(i + 2))) {
                 i += 2; // Skip 3-char custom code (&~s)
             } else if ((c == '&' || c == '§') && i + 1 < len && isFormatChar(input.charAt(i + 1))) {
                 i += 1; // Skip 2-char standard code (&a)
@@ -127,10 +143,12 @@ public class DialogFormatUtil {
     }
 
     /**
-     * Reveals up to visibleCharCount characters of formatted text without breaking standard or custom effect codes.
+     * Reveals up to visibleCharCount characters of formatted text without breaking
+     * standard or custom effect codes.
      */
     public static String getRevealedText(String input, int visibleCharCount) {
-        if (input == null || input.isEmpty() || visibleCharCount <= 0) return "";
+        if (input == null || input.isEmpty() || visibleCharCount <= 0)
+            return "";
         StringBuilder sb = new StringBuilder();
         int remainingChars = visibleCharCount;
         int len = input.length();
@@ -145,7 +163,8 @@ public class DialogFormatUtil {
                     continue;
                 }
             }
-            if ((c == '&' || c == '§') && i + 2 < len && input.charAt(i + 1) == '~' && isCustomEffectChar(input.charAt(i + 2))) {
+            if ((c == '&' || c == '§') && i + 2 < len && input.charAt(i + 1) == '~'
+                    && isCustomEffectChar(input.charAt(i + 2))) {
                 sb.append(c).append(input.charAt(i + 1)).append(input.charAt(i + 2));
                 i += 2;
             } else if ((c == '&' || c == '§') && i + 1 < len && isFormatChar(input.charAt(i + 1))) {
@@ -161,11 +180,14 @@ public class DialogFormatUtil {
     }
 
     /**
-     * Builds a syntax-highlighted Component where EVERY raw character is preserved (length and characters are 1:1),
-     * but tags ({pause:...}, {shake}, etc.) and formatting codes (&0-&f, &l, &~s, etc.) are highlighted in distinct colors.
+     * Builds a syntax-highlighted Component where EVERY raw character is preserved
+     * (length and characters are 1:1),
+     * but tags ({pause:...}, {shake}, etc.) and formatting codes (&0-&f, &l, &~s,
+     * etc.) are highlighted in distinct colors.
      */
     public static Component getSyntaxHighlightedComponent(String input) {
-        if (input == null || input.isEmpty()) return Component.empty();
+        if (input == null || input.isEmpty())
+            return Component.empty();
         net.minecraft.network.chat.MutableComponent root = Component.empty();
         int len = input.length();
         int i = 0;
@@ -179,15 +201,24 @@ public class DialogFormatUtil {
                     String tag = input.substring(i, closeIdx + 1);
                     int tagColor = 0xFFFFB300;
                     String lowerTag = tag.toLowerCase(java.util.Locale.ROOT);
-                    if (lowerTag.startsWith("{shake") || lowerTag.startsWith("{/shake")) tagColor = 0xFFFF5555;
-                    else if (lowerTag.startsWith("{wave") || lowerTag.startsWith("{/wave")) tagColor = 0xFF55FFFF;
-                    else if (lowerTag.startsWith("{rainbow") || lowerTag.startsWith("{/rainbow")) tagColor = 0xFFFF55FF;
-                    else if (lowerTag.startsWith("{glitch") || lowerTag.startsWith("{/glitch")) tagColor = 0xFF00FFCC;
-                    else if (lowerTag.startsWith("{pulse") || lowerTag.startsWith("{/pulse")) tagColor = 0xFFFFFF55;
-                    else if (lowerTag.startsWith("{pause")) tagColor = 0xFFFFAA00;
-                    else if (lowerTag.startsWith("{sound")) tagColor = 0xFF00FF88;
-                    else if (lowerTag.startsWith("{shake_screen")) tagColor = 0xFFFF3333;
-                    else if (lowerTag.startsWith("{color") || lowerTag.startsWith("{/color")) tagColor = 0xFFFFAA00;
+                    if (lowerTag.startsWith("{shake") || lowerTag.startsWith("{/shake"))
+                        tagColor = 0xFFFF5555;
+                    else if (lowerTag.startsWith("{wave") || lowerTag.startsWith("{/wave"))
+                        tagColor = 0xFF55FFFF;
+                    else if (lowerTag.startsWith("{rainbow") || lowerTag.startsWith("{/rainbow"))
+                        tagColor = 0xFFFF55FF;
+                    else if (lowerTag.startsWith("{glitch") || lowerTag.startsWith("{/glitch"))
+                        tagColor = 0xFF00FFCC;
+                    else if (lowerTag.startsWith("{pulse") || lowerTag.startsWith("{/pulse"))
+                        tagColor = 0xFFFFFF55;
+                    else if (lowerTag.startsWith("{pause"))
+                        tagColor = 0xFFFFAA00;
+                    else if (lowerTag.startsWith("{sound"))
+                        tagColor = 0xFF00FF88;
+                    else if (lowerTag.startsWith("{shake_screen"))
+                        tagColor = 0xFFFF3333;
+                    else if (lowerTag.startsWith("{color") || lowerTag.startsWith("{/color"))
+                        tagColor = 0xFFFFAA00;
 
                     final int col = tagColor;
                     root.append(Component.literal(tag).withStyle(s -> s.withColor(col)));
@@ -200,12 +231,18 @@ public class DialogFormatUtil {
             if (c == '&' && i + 2 < len && input.charAt(i + 1) == '~' && isCustomEffectChar(input.charAt(i + 2))) {
                 char fx = Character.toLowerCase(input.charAt(i + 2));
                 int fxColor = 0xFF00E5FF;
-                if (fx == 's') fxColor = 0xFFFF5555;
-                else if (fx == 'w') fxColor = 0xFF55FFFF;
-                else if (fx == 'r') fxColor = 0xFFFF55FF;
-                else if (fx == 'g') fxColor = 0xFF00FFCC;
-                else if (fx == 'p') fxColor = 0xFFFFFF55;
-                else if (fx == 'x') fxColor = 0xFFAAAAAA;
+                if (fx == 's')
+                    fxColor = 0xFFFF5555;
+                else if (fx == 'w')
+                    fxColor = 0xFF55FFFF;
+                else if (fx == 'r')
+                    fxColor = 0xFFFF55FF;
+                else if (fx == 'g')
+                    fxColor = 0xFF00FFCC;
+                else if (fx == 'p')
+                    fxColor = 0xFFFFFF55;
+                else if (fx == 'x')
+                    fxColor = 0xFFAAAAAA;
                 final int col = fxColor;
                 root.append(Component.literal(input.substring(i, i + 3)).withStyle(s -> s.withColor(col)));
                 i += 3;
@@ -245,7 +282,7 @@ public class DialogFormatUtil {
         return root;
     }
 
-    private static boolean isFormatChar(char c) {
+    public static boolean isFormatChar(char c) {
         return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
                 || (c >= 'k' && c <= 'o') || (c >= 'K' && c <= 'O') || c == 'r' || c == 'R';
     }
@@ -257,23 +294,40 @@ public class DialogFormatUtil {
 
     public static int getMinecraftColor(char code, int defaultColor) {
         switch (Character.toLowerCase(code)) {
-            case '0': return 0xFF000000;
-            case '1': return 0xFF0000AA;
-            case '2': return 0xFF00AA00;
-            case '3': return 0xFF00AAAA;
-            case '4': return 0xFFAA0000;
-            case '5': return 0xFFAA00AA;
-            case '6': return 0xFFFFAA00;
-            case '7': return 0xFFAAAAAA;
-            case '8': return 0xFF555555;
-            case '9': return 0xFF5555FF;
-            case 'a': return 0xFF55FF55;
-            case 'b': return 0xFF55FFFF;
-            case 'c': return 0xFFFF5555;
-            case 'd': return 0xFFFF55FF;
-            case 'e': return 0xFFFFFF55;
-            case 'f': return 0xFFFFFFFF;
-            default: return defaultColor;
+            case '0':
+                return 0xFF000000;
+            case '1':
+                return 0xFF0000AA;
+            case '2':
+                return 0xFF00AA00;
+            case '3':
+                return 0xFF00AAAA;
+            case '4':
+                return 0xFFAA0000;
+            case '5':
+                return 0xFFAA00AA;
+            case '6':
+                return 0xFFFFAA00;
+            case '7':
+                return 0xFFAAAAAA;
+            case '8':
+                return 0xFF555555;
+            case '9':
+                return 0xFF5555FF;
+            case 'a':
+                return 0xFF55FF55;
+            case 'b':
+                return 0xFF55FFFF;
+            case 'c':
+                return 0xFFFF5555;
+            case 'd':
+                return 0xFFFF55FF;
+            case 'e':
+                return 0xFFFFFF55;
+            case 'f':
+                return 0xFFFFFFFF;
+            default:
+                return defaultColor;
         }
     }
 
@@ -293,8 +347,12 @@ public class DialogFormatUtil {
         int minB = (int) (b * 0.25);
 
         if (r < 30 && g < 30 && b < 30) {
-            r = 0; g = 229; b = 255;
-            minR = 0; minG = 50; minB = 80;
+            r = 0;
+            g = 229;
+            b = 255;
+            minR = 0;
+            minG = 50;
+            minB = 80;
         }
 
         int finalR = (int) (minR + (r - minR) * pulse);
@@ -312,14 +370,38 @@ public class DialogFormatUtil {
         float q = v * (1 - f * s);
         float t = v * (1 - (1 - f) * s);
         switch ((int) i % 6) {
-            case 0 -> { r = v; g = t; b = p; }
-            case 1 -> { r = q; g = v; b = p; }
-            case 2 -> { r = p; g = v; b = t; }
-            case 3 -> { r = p; g = q; b = v; }
-            case 4 -> { r = t; g = p; b = v; }
-            case 5 -> { r = v; g = p; b = q; }
+            case 0 -> {
+                r = v;
+                g = t;
+                b = p;
+            }
+            case 1 -> {
+                r = q;
+                g = v;
+                b = p;
+            }
+            case 2 -> {
+                r = p;
+                g = v;
+                b = t;
+            }
+            case 3 -> {
+                r = p;
+                g = q;
+                b = v;
+            }
+            case 4 -> {
+                r = t;
+                g = p;
+                b = v;
+            }
+            case 5 -> {
+                r = v;
+                g = p;
+                b = q;
+            }
         }
-        return ((int)(r * 255) << 16) | ((int)(g * 255) << 8) | (int)(b * 255);
+        return ((int) (r * 255) << 16) | ((int) (g * 255) << 8) | (int) (b * 255);
     }
 
     private static float fastNoise(long time, int index) {
@@ -328,170 +410,5 @@ public class DialogFormatUtil {
         hash = (hash ^ (hash >>> 16)) * 0x45d9f3bL;
         hash = hash ^ (hash >>> 16);
         return ((hash & 0xFFFF) / 65535.0f);
-    }
-
-    /**
-     * Renders animated RPG text efficiently with run batching for non-effect text segments
-     * and fast primitive math for animated per-character Shake, Wave, Rainbow, Glitch, and Pulse effects.
-     */
-    public static void renderAnimatedText(GuiGraphics graphics, Font font, String text, int startX, int startY, int maxLineWidth, int defaultColor) {
-        if (text == null || text.isEmpty()) return;
-
-        String formatted = translateCodes(text);
-        if (formatted.isEmpty()) return;
-
-        // FAST PATH: If there are no custom animated effects (wave, shake, rainbow, glitch, pulse),
-        // use Minecraft's native font line-splitter which batches rendering and avoids per-character overhead.
-        if (!formatted.contains("§~")) {
-            List<FormattedCharSequence> wrappedLines = font.split(Component.literal(formatted), maxLineWidth);
-            int lineY = startY;
-            for (FormattedCharSequence line : wrappedLines) {
-                graphics.drawString(font, line, startX, lineY, defaultColor, false);
-                lineY += 12;
-            }
-            return;
-        }
-
-        int len = formatted.length();
-
-        int cursorX = startX;
-        int cursorY = startY;
-        int activeColor = defaultColor;
-        CustomEffect activeEffect = CustomEffect.NONE;
-
-        int visibleCharIdx = 0;
-        int lineMaxH = 12;
-
-        long now = System.currentTimeMillis();
-
-        StringBuilder batchSb = new StringBuilder();
-        int batchStartX = cursorX;
-
-        for (int i = 0; i < len; i++) {
-            char c = formatted.charAt(i);
-
-            // Check Custom Effect code: §~s, §~w, §~r, §~g, §~p, §~x
-            if (c == '§' && i + 2 < len && formatted.charAt(i + 1) == '~' && isCustomEffectChar(formatted.charAt(i + 2))) {
-                // Flush existing batch before changing effect
-                if (batchSb.length() > 0) {
-                    graphics.drawString(font, batchSb.toString(), batchStartX, cursorY, activeColor, false);
-                    batchSb.setLength(0);
-                }
-                char codeChar = Character.toLowerCase(formatted.charAt(i + 2));
-                switch (codeChar) {
-                    case 's': activeEffect = CustomEffect.SHAKE; break;
-                    case 'w': activeEffect = CustomEffect.WAVE; break;
-                    case 'r': activeEffect = CustomEffect.RAINBOW; break;
-                    case 'g': activeEffect = CustomEffect.GLITCH; break;
-                    case 'p': activeEffect = CustomEffect.PULSE; break;
-                    case 'x': activeEffect = CustomEffect.NONE; break;
-                }
-                i += 2;
-                batchStartX = cursorX;
-                continue;
-            }
-
-            // Check Standard Minecraft Format code: §0 - §f, §r
-            if (c == '§' && i + 1 < len && isFormatChar(formatted.charAt(i + 1))) {
-                // Flush existing batch before changing color
-                if (batchSb.length() > 0) {
-                    graphics.drawString(font, batchSb.toString(), batchStartX, cursorY, activeColor, false);
-                    batchSb.setLength(0);
-                }
-                char codeChar = Character.toLowerCase(formatted.charAt(i + 1));
-                if (codeChar == 'r') {
-                    activeColor = defaultColor;
-                    activeEffect = CustomEffect.NONE;
-                } else if ((codeChar >= '0' && codeChar <= '9') || (codeChar >= 'a' && codeChar <= 'f')) {
-                    activeColor = getMinecraftColor(codeChar, defaultColor);
-                }
-                i += 1;
-                batchStartX = cursorX;
-                continue;
-            }
-
-            // Newline character
-            if (c == '\n') {
-                if (batchSb.length() > 0) {
-                    graphics.drawString(font, batchSb.toString(), batchStartX, cursorY, activeColor, false);
-                    batchSb.setLength(0);
-                }
-                cursorX = startX;
-                cursorY += lineMaxH;
-                batchStartX = cursorX;
-                continue;
-            }
-
-            String charStr = getCharString(c);
-            int charW = font.width(charStr);
-
-            // Word Wrapping
-            if ((c == ' ' && cursorX + charW > startX + maxLineWidth) || (cursorX + charW > startX + maxLineWidth && cursorX > startX)) {
-                if (batchSb.length() > 0) {
-                    graphics.drawString(font, batchSb.toString(), batchStartX, cursorY, activeColor, false);
-                    batchSb.setLength(0);
-                }
-                cursorX = startX;
-                cursorY += lineMaxH;
-                batchStartX = cursorX;
-                if (c == ' ') continue;
-            }
-
-            // If active effect is NONE, accumulate character into run batch for single drawString call!
-            if (activeEffect == CustomEffect.NONE) {
-                if (batchSb.length() == 0) {
-                    batchStartX = cursorX;
-                }
-                batchSb.append(c);
-                cursorX += charW;
-                visibleCharIdx++;
-                continue;
-            }
-
-            // If active effect is active (SHAKE, WAVE, RAINBOW, GLITCH, PULSE), render individual animated character
-            if (batchSb.length() > 0) {
-                graphics.drawString(font, batchSb.toString(), batchStartX, cursorY, activeColor, false);
-                batchSb.setLength(0);
-            }
-
-            double drawX = cursorX;
-            double drawY = cursorY;
-            int drawColor = activeColor;
-
-            switch (activeEffect) {
-                case SHAKE:
-                    drawX += (fastNoise(now, visibleCharIdx * 2) - 0.5f) * 2.2f;
-                    drawY += (fastNoise(now, visibleCharIdx * 2 + 1) - 0.5f) * 2.2f;
-                    break;
-                case WAVE:
-                    drawY += Math.sin((now / 130.0) + visibleCharIdx * 0.45) * 2.5;
-                    break;
-                case RAINBOW:
-                    drawColor = getRainbowColor(visibleCharIdx);
-                    break;
-                case GLITCH:
-                    if (fastNoise(now / 100L, visibleCharIdx) < 0.14f) {
-                        drawX += (fastNoise(now, visibleCharIdx + 99) - 0.5f) * 4.0f;
-                    }
-                    if (fastNoise(now / 120L, visibleCharIdx + 42) < 0.10f) {
-                        drawColor = 0xFF00FFCC;
-                    }
-                    break;
-                case PULSE:
-                    drawColor = getPulseColor(activeColor, visibleCharIdx);
-                    break;
-                default:
-                    break;
-            }
-
-            graphics.drawString(font, charStr, (int) Math.round(drawX), (int) Math.round(drawY), drawColor, false);
-            cursorX += charW;
-            visibleCharIdx++;
-        }
-
-        // Flush any remaining batched text run at end of string
-        if (batchSb.length() > 0) {
-            graphics.drawString(font, batchSb.toString(), batchStartX, cursorY, activeColor, false);
-        }
     }
 }

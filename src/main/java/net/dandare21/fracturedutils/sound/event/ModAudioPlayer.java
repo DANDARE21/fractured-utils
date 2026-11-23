@@ -7,6 +7,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.openal.AL10;
+import org.lwjgl.openal.AL11;
 import org.lwjgl.stb.STBVorbis;
 import org.lwjgl.stb.STBVorbisInfo;
 import org.lwjgl.system.MemoryStack;
@@ -15,6 +16,8 @@ import org.lwjgl.system.MemoryUtil;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 @OnlyIn(Dist.CLIENT)
 public class ModAudioPlayer {
@@ -39,6 +42,44 @@ public class ModAudioPlayer {
     private float targetVolume = 1.0f;
     private float currentVolume = 1.0f;
     private float pitch = 1.0f;
+    private volatile float currentRmsEnergy = 0.0f;
+    private volatile float currentBassEnergy = 0.0f;
+
+    // 2nd-order IIR Low-Pass Filter state (fc ~ 160Hz for sub-bass & kick drums)
+    private double lpB0 = 0.0, lpB1 = 0.0, lpB2 = 0.0;
+    private double lpA1 = 0.0, lpA2 = 0.0;
+    private double lpX1 = 0.0, lpX2 = 0.0;
+    private double lpY1 = 0.0, lpY2 = 0.0;
+    private int filterSampleRate = 0;
+
+    // Hardware-synchronized playback timeline & energy tracking
+    private static final int SLICE_SIZE = 1024; // ~23ms at 44.1kHz
+    private static class BufferMeta {
+        final int bufferId;
+        final long startFrame;
+        final int frameCount;
+        BufferMeta(int bufferId, long startFrame, int frameCount) {
+            this.bufferId = bufferId;
+            this.startFrame = startFrame;
+            this.frameCount = frameCount;
+        }
+    }
+    private static class EnergySlice {
+        final long frameStart;
+        final long frameEnd;
+        final float rms;
+        final float bass;
+        EnergySlice(long frameStart, long frameEnd, float rms, float bass) {
+            this.frameStart = frameStart;
+            this.frameEnd = frameEnd;
+            this.rms = rms;
+            this.bass = bass;
+        }
+    }
+    private final Deque<BufferMeta> activeBufferQueue = new ArrayDeque<>();
+    private final Deque<EnergySlice> energySlices = new ArrayDeque<>();
+    private long currentFrameCursor = 0L;
+    private volatile long currentPlaybackFrame = 0L;
 
     // Fading state
     private boolean isFading = false;
@@ -103,6 +144,11 @@ public class ModAudioPlayer {
             }
 
             // 5. Pre-fill OpenAL queued buffers
+            this.activeBufferQueue.clear();
+            this.energySlices.clear();
+            this.currentFrameCursor = (startOffsetMs > 50L) ? (long) ((startOffsetMs / 1000.0) * sampleRate) : 0L;
+            this.currentPlaybackFrame = this.currentFrameCursor;
+
             int format = (channels == 1) ? AL10.AL_FORMAT_MONO16 : AL10.AL_FORMAT_STEREO16;
             ShortBuffer pcmBuffer = BufferUtils.createShortBuffer(BUFFER_SIZE);
 
@@ -112,8 +158,11 @@ public class ModAudioPlayer {
                 int samplesRead = STBVorbis.stb_vorbis_get_samples_short_interleaved(vorbisDecoder, channels, pcmBuffer);
                 if (samplesRead > 0) {
                     pcmBuffer.limit(samplesRead * channels);
+                    recordEnergySlices(pcmBuffer, samplesRead, currentFrameCursor);
                     AL10.alBufferData(openAlBuffers[i], format, pcmBuffer, sampleRate);
                     AL10.alSourceQueueBuffers(openAlSource, openAlBuffers[i]);
+                    activeBufferQueue.add(new BufferMeta(openAlBuffers[i], currentFrameCursor, samplesRead));
+                    currentFrameCursor += samplesRead;
                     queuedCount++;
                 }
             }
@@ -184,6 +233,7 @@ public class ModAudioPlayer {
             while (processed > 0) {
                 int bufferId = AL10.alSourceUnqueueBuffers(openAlSource);
                 processed--;
+                activeBufferQueue.poll();
 
                 pcmBuffer.clear();
                 int samplesRead = STBVorbis.stb_vorbis_get_samples_short_interleaved(vorbisDecoder, channels, pcmBuffer);
@@ -193,12 +243,16 @@ public class ModAudioPlayer {
                     STBVorbis.stb_vorbis_seek(vorbisDecoder, 0);
                     pcmBuffer.clear();
                     samplesRead = STBVorbis.stb_vorbis_get_samples_short_interleaved(vorbisDecoder, channels, pcmBuffer);
+                    currentFrameCursor = 0L;
                 }
 
                 if (samplesRead > 0) {
                     pcmBuffer.limit(samplesRead * channels);
+                    recordEnergySlices(pcmBuffer, samplesRead, currentFrameCursor);
                     AL10.alBufferData(bufferId, format, pcmBuffer, sampleRate);
                     AL10.alSourceQueueBuffers(openAlSource, bufferId);
+                    activeBufferQueue.add(new BufferMeta(bufferId, currentFrameCursor, samplesRead));
+                    currentFrameCursor += samplesRead;
                 }
             }
 
@@ -209,7 +263,11 @@ public class ModAudioPlayer {
             } else if (state != AL10.AL_PLAYING && !looping) {
                 // End of track reached
                 stopTrackImmediately();
+                return;
             }
+
+            // Update energy synchronized to actual hardware playback frame
+            updateCurrentPlaybackEnergy();
 
         } catch (Exception e) {
             FracturedUtils.LOGGER.error("[ModAudioPlayer] Error in audio player tick", e);
@@ -241,6 +299,11 @@ public class ModAudioPlayer {
             }
 
             // Re-fill OpenAL queued buffers
+            this.activeBufferQueue.clear();
+            this.energySlices.clear();
+            this.currentFrameCursor = (long) ((offsetMs / 1000.0) * sampleRate);
+            this.currentPlaybackFrame = this.currentFrameCursor;
+
             int format = (channels == 1) ? AL10.AL_FORMAT_MONO16 : AL10.AL_FORMAT_STEREO16;
             ShortBuffer pcmBuffer = BufferUtils.createShortBuffer(BUFFER_SIZE);
 
@@ -250,8 +313,11 @@ public class ModAudioPlayer {
                 int samplesRead = STBVorbis.stb_vorbis_get_samples_short_interleaved(vorbisDecoder, channels, pcmBuffer);
                 if (samplesRead > 0) {
                     pcmBuffer.limit(samplesRead * channels);
+                    recordEnergySlices(pcmBuffer, samplesRead, currentFrameCursor);
                     AL10.alBufferData(openAlBuffers[i], format, pcmBuffer, sampleRate);
                     AL10.alSourceQueueBuffers(openAlSource, openAlBuffers[i]);
+                    activeBufferQueue.add(new BufferMeta(openAlBuffers[i], currentFrameCursor, samplesRead));
+                    currentFrameCursor += samplesRead;
                     count++;
                 }
             }
@@ -284,6 +350,16 @@ public class ModAudioPlayer {
     public synchronized void stopTrackImmediately() {
         this.isPlaying = false;
         this.isFading = false;
+        this.activeBufferQueue.clear();
+        this.energySlices.clear();
+        this.currentFrameCursor = 0L;
+        this.currentPlaybackFrame = 0L;
+        this.currentRmsEnergy = 0.0f;
+        this.currentBassEnergy = 0.0f;
+        this.lpX1 = 0.0;
+        this.lpX2 = 0.0;
+        this.lpY1 = 0.0;
+        this.lpY2 = 0.0;
 
         if (openAlSource != 0) {
             try {
@@ -339,5 +415,140 @@ public class ModAudioPlayer {
 
     public String getCurrentTrackId() {
         return currentTrackId;
+    }
+
+    private void updateFilterCoefficients(int rate) {
+        if (rate <= 0) rate = 44100;
+        if (this.filterSampleRate == rate) return;
+        this.filterSampleRate = rate;
+
+        double cutoff = 160.0; // 160 Hz cutoff isolating sub-bass and kick drums
+        double q = 0.7071; // Butterworth Q factor
+        double omega = 2.0 * Math.PI * cutoff / rate;
+        double sinOmega = Math.sin(omega);
+        double cosOmega = Math.cos(omega);
+        double alpha = sinOmega / (2.0 * q);
+
+        double b0 = (1.0 - cosOmega) / 2.0;
+        double b1 = 1.0 - cosOmega;
+        double b2 = (1.0 - cosOmega) / 2.0;
+        double a0 = 1.0 + alpha;
+        double a1 = -2.0 * cosOmega;
+        double a2 = 1.0 - alpha;
+
+        this.lpB0 = b0 / a0;
+        this.lpB1 = b1 / a0;
+        this.lpB2 = b2 / a0;
+        this.lpA1 = a1 / a0;
+        this.lpA2 = a2 / a0;
+
+        this.lpX1 = 0.0;
+        this.lpX2 = 0.0;
+        this.lpY1 = 0.0;
+        this.lpY2 = 0.0;
+    }
+
+    private void recordEnergySlices(ShortBuffer buffer, int samplesRead, long startFrame) {
+        if (samplesRead <= 0 || buffer == null) return;
+        updateFilterCoefficients(this.sampleRate);
+
+        int ch = Math.max(1, this.channels);
+        int totalFrames = samplesRead;
+        int frameIndex = 0;
+
+        while (frameIndex < totalFrames) {
+            int sliceFrames = Math.min(SLICE_SIZE, totalFrames - frameIndex);
+            long sliceStartFrame = startFrame + frameIndex;
+            long sliceEndFrame = sliceStartFrame + sliceFrames;
+
+            long sumSq = 0;
+            double bassSumSq = 0;
+
+            for (int f = 0; f < sliceFrames; f++) {
+                int baseIndex = (frameIndex + f) * ch;
+                double monoSample = 0.0;
+                for (int c = 0; c < ch; c++) {
+                    short s = buffer.get(baseIndex + c);
+                    sumSq += (long) s * s;
+                    monoSample += s;
+                }
+                monoSample /= ch;
+
+                // Direct Form I IIR Biquad Low-Pass Filter
+                double y = lpB0 * monoSample + lpB1 * lpX1 + lpB2 * lpX2 - lpA1 * lpY1 - lpA2 * lpY2;
+                lpX2 = lpX1;
+                lpX1 = monoSample;
+                lpY2 = lpY1;
+                lpY1 = y;
+
+                bassSumSq += y * y;
+            }
+
+            float sliceRms = (float) Math.sqrt((double) sumSq / (sliceFrames * ch)) / 32768.0F;
+            float sliceBass = (float) Math.sqrt(bassSumSq / sliceFrames) / 32768.0F;
+
+            energySlices.addLast(new EnergySlice(sliceStartFrame, sliceEndFrame, sliceRms, sliceBass));
+            frameIndex += sliceFrames;
+        }
+    }
+
+    public synchronized void updateCurrentPlaybackEnergy() {
+        if (!isPlaying || openAlSource == 0 || activeBufferQueue.isEmpty()) {
+            this.currentRmsEnergy = 0.0F;
+            this.currentBassEnergy = 0.0F;
+            this.currentPlaybackFrame = 0L;
+            return;
+        }
+
+        BufferMeta currentBuf = activeBufferQueue.peek();
+        if (currentBuf == null) return;
+
+        int sampleOffset = 0;
+        try {
+            sampleOffset = AL10.alGetSourcei(openAlSource, AL11.AL_SAMPLE_OFFSET);
+        } catch (Exception ignored) {
+        }
+        if (sampleOffset < 0 || sampleOffset > currentBuf.frameCount) {
+            sampleOffset = 0;
+        }
+
+        long playFrame = currentBuf.startFrame + sampleOffset;
+        this.currentPlaybackFrame = playFrame;
+
+        // Prune old slices older than playFrame - 44100 (1 second behind)
+        while (!energySlices.isEmpty() && energySlices.peekFirst().frameEnd < (playFrame - 44100L)) {
+            energySlices.pollFirst();
+        }
+
+        // Find slice for current playing frame
+        EnergySlice matched = null;
+        for (EnergySlice slice : energySlices) {
+            if (playFrame >= slice.frameStart && playFrame < slice.frameEnd) {
+                matched = slice;
+                break;
+            }
+        }
+
+        if (matched != null) {
+            this.currentRmsEnergy = matched.rms;
+            this.currentBassEnergy = matched.bass;
+        }
+    }
+
+    public long getCurrentPlaybackFrame() {
+        return currentPlaybackFrame;
+    }
+
+    public double getCurrentPlaybackSeconds() {
+        if (!isPlaying || sampleRate <= 0) return 0.0;
+        return (double) currentPlaybackFrame / (double) sampleRate;
+    }
+
+    public float getCurrentRmsEnergy() {
+        return currentRmsEnergy;
+    }
+
+    public float getCurrentBassEnergy() {
+        return currentBassEnergy;
     }
 }

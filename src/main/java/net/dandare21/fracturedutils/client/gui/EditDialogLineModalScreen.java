@@ -275,7 +275,8 @@ public class EditDialogLineModalScreen extends Screen {
             this.addRenderableWidget(cBtn);
         }
 
-        // 5. Custom Animated FX Palette Buttons (Row 3, with Live In-Button Animations!)
+        // 5. Custom Animated FX Palette Buttons (Row 3, with Live In-Button
+        // Animations!)
         int fxY = colorY + colorBtnH + 3;
         int fxBtnW = 76;
         int fxBtnH = 14;
@@ -1057,7 +1058,8 @@ public class EditDialogLineModalScreen extends Screen {
             guiGraphics.fill(badgeX + badgeW - 1, badgeY, badgeX + badgeW, badgeY + badgeH,
                     previewStyle.speakerBadgeBorderColor());
 
-            DialogFormatUtil.renderAnimatedText(guiGraphics, this.font, speakerVal, badgeX + 6, badgeY + 2, badgeW,
+            ClientDialogTextRenderer.renderAnimatedText(guiGraphics, this.font, speakerVal, badgeX + 6, badgeY + 2,
+                    badgeW,
                     previewStyle.speakerTextColor());
         }
 
@@ -1071,7 +1073,8 @@ public class EditDialogLineModalScreen extends Screen {
         int contentX = boxX + 14;
         int currentTextY = boxY + 8;
         int maxTextWidth = boxW - 28;
-        DialogFormatUtil.renderAnimatedText(guiGraphics, this.font, displayText, contentX, currentTextY, maxTextWidth,
+        ClientDialogTextRenderer.renderAnimatedText(guiGraphics, this.font, displayText, contentX, currentTextY,
+                maxTextWidth,
                 previewStyle.defaultTextColor());
 
         // Next line prompt or delay indicator
@@ -1091,8 +1094,10 @@ public class EditDialogLineModalScreen extends Screen {
         // Form labels & Character count / RPG box overflow counter
         int halfW = (panelWidth - 32 - 12) / 2;
         guiGraphics.drawString(this.font, Component.literal("Speaker Tag:"), panelLeft + 16, panelTop + 71, 0xAAAAAA);
-        guiGraphics.drawString(this.font, Component.literal("Dialog Box Style (Frame & Theme):"), panelLeft + 16 + halfW + 12, panelTop + 71, CYAN_MAIN);
-        guiGraphics.drawString(this.font, Component.literal("Dialog Text (editable with style tags):"), panelLeft + 16, panelTop + 101, 0xAAAAAA);
+        guiGraphics.drawString(this.font, Component.literal("Dialog Box Style (Frame & Theme):"),
+                panelLeft + 16 + halfW + 12, panelTop + 71, CYAN_MAIN);
+        guiGraphics.drawString(this.font, Component.literal("Dialog Text (editable with style tags):"), panelLeft + 16,
+                panelTop + 101, 0xAAAAAA);
 
         Component textComp = DialogFormatUtil.formatText(rawText);
         List<FormattedCharSequence> rpgLines = this.font.split(textComp, 298);
@@ -1195,7 +1200,8 @@ public class EditDialogLineModalScreen extends Screen {
     public static class CyberpunkAnimatedFxButton extends CyberpunkButton {
         private final String animatedPreviewText;
 
-        public CyberpunkAnimatedFxButton(int x, int y, int width, int height, String animatedPreviewText, OnPress onPress, int accentColor) {
+        public CyberpunkAnimatedFxButton(int x, int y, int width, int height, String animatedPreviewText,
+                OnPress onPress, int accentColor) {
             super(x, y, width, height, Component.literal(""), onPress, accentColor, false);
             this.animatedPreviewText = animatedPreviewText;
         }
@@ -1208,7 +1214,8 @@ public class EditDialogLineModalScreen extends Screen {
             int textX = this.getX() + (this.width - textW) / 2;
             int textY = this.getY() + (this.height - 8) / 2;
 
-            DialogFormatUtil.renderAnimatedText(guiGraphics, font, animatedPreviewText, textX, textY, this.width, 0xFFFFFFFF);
+            ClientDialogTextRenderer.renderAnimatedText(guiGraphics, font, animatedPreviewText, textX, textY,
+                    this.width, 0xFFFFFFFF);
         }
     }
 }

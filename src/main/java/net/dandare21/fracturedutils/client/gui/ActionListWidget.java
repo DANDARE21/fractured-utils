@@ -19,7 +19,8 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
     private double dragMouseY = 0;
     private int targetDropIndex = -1;
 
-    public ActionListWidget(OrchestratorScreen screen, Minecraft minecraft, int width, int height, int top, int bottom, int itemHeight) {
+    public ActionListWidget(OrchestratorScreen screen, Minecraft minecraft, int width, int height, int top, int bottom,
+            int itemHeight) {
         super(minecraft, width, height, top, bottom, itemHeight);
         this.screen = screen;
         this.topPos = top;
@@ -124,13 +125,13 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
 
         double scale = screen.getLayoutScale();
 
-        // Enable scaled scissor region so item contents adapt to screen dimensions on all resolutions
+        // Enable scaled scissor region so item contents adapt to screen dimensions on
+        // all resolutions
         graphics.enableScissor(
-            (int) Math.round(listLeft * scale),
-            (int) Math.round(listTop * scale),
-            (int) Math.round((listLeft + listWidth + 12) * scale),
-            (int) Math.round(listBottom * scale)
-        );
+                (int) Math.round(listLeft * scale),
+                (int) Math.round(listTop * scale),
+                (int) Math.round((listLeft + listWidth + 12) * scale),
+                (int) Math.round(listBottom * scale));
 
         int count = this.children().size();
         int scroll = (int) this.getScrollAmount();
@@ -141,8 +142,10 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
 
             if (itemBottom >= listTop && itemTop <= listBottom) {
                 ActionEntry entry = this.children().get(i);
-                boolean isHovered = (mouseX >= listLeft && mouseX <= listLeft + listWidth && mouseY >= itemTop && mouseY < itemBottom && mouseY >= listTop && mouseY <= listBottom);
-                entry.render(graphics, i, itemTop, listLeft, listWidth, this.itemHeight, mouseX, mouseY, isHovered, partialTick);
+                boolean isHovered = (mouseX >= listLeft && mouseX <= listLeft + listWidth && mouseY >= itemTop
+                        && mouseY < itemBottom && mouseY >= listTop && mouseY <= listBottom);
+                entry.render(graphics, i, itemTop, listLeft, listWidth, this.itemHeight, mouseX, mouseY, isHovered,
+                        partialTick);
             }
         }
 
@@ -210,7 +213,8 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
             // Track Background & Borders
             graphics.fill(scrollbarX, scrollbarY, scrollbarX + scrollbarW, scrollbarY + scrollbarH, 0x77050B10);
             graphics.fill(scrollbarX, scrollbarY, scrollbarX + 1, scrollbarY + scrollbarH, 0xAA00E5FF);
-            graphics.fill(scrollbarX + scrollbarW - 1, scrollbarY, scrollbarX + scrollbarW, scrollbarY + scrollbarH, 0xAA00E5FF);
+            graphics.fill(scrollbarX + scrollbarW - 1, scrollbarY, scrollbarX + scrollbarW, scrollbarY + scrollbarH,
+                    0xAA00E5FF);
 
             int totalContentH = count * this.itemHeight;
             int thumbH = Math.max(16, (int) ((float) scrollbarH / totalContentH * scrollbarH));
@@ -239,17 +243,21 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
         }
 
         @Override
-        public void render(GuiGraphics graphics, int index, int top, int left, int width, int height, int mouseX, int mouseY, boolean isHovered, float partialTick) {
+        public void render(GuiGraphics graphics, int index, int top, int left, int width, int height, int mouseX,
+                int mouseY, boolean isHovered, float partialTick) {
             Font font = Minecraft.getInstance().font;
 
-            boolean isBeingDragged = (screen.getActionListWidget() != null && screen.getActionListWidget().getDraggingIndex() == index);
+            boolean isBeingDragged = (screen.getActionListWidget() != null
+                    && screen.getActionListWidget().getDraggingIndex() == index);
 
             boolean isInvalidCommand = false;
             if (action instanceof CommandAction ca) {
-                isInvalidCommand = !CommandAction.isValidCommand(Minecraft.getInstance(), ca.getRun());
+                isInvalidCommand = !net.dandare21.fracturedutils.client.ClientCommandHelper
+                        .isValidCommand(Minecraft.getInstance(), ca.getRun());
             }
 
-            net.dandare21.fracturedutils.network.packet.S2CSyncSequenceTelemetryPacket.SequenceTelemetryData telemetry = screen.getActiveTelemetry();
+            net.dandare21.fracturedutils.network.packet.S2CSyncSequenceTelemetryPacket.SequenceTelemetryData telemetry = screen
+                    .getActiveTelemetry();
             boolean isExecuted = false;
             boolean isCurrentAction = false;
             if (telemetry != null) {
@@ -298,7 +306,8 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
             graphics.fill(left + 2, top + 2, left + 5, top + height - 4, accentColor);
 
             // Drag Handle Icon ≡
-            graphics.drawString(font, Component.literal("≡"), left + 8, top + (height - 8) / 2, isHovered ? 0xFF00E5FF : 0x8800E5FF, false);
+            graphics.drawString(font, Component.literal("≡"), left + 8, top + (height - 8) / 2,
+                    isHovered ? 0xFF00E5FF : 0x8800E5FF, false);
 
             // Header Text (Action Index + Type Name)
             String typeText = "[" + (index + 1) + "] " + action.getType().toUpperCase();
@@ -341,7 +350,8 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
             // Render Tooltips for Mini Buttons / Drag Handle on Hover
             if (mouseY >= btnY && mouseY < btnY + btnH) {
                 if (mouseX >= playX && mouseX < playX + btnW) {
-                    graphics.renderTooltip(font, Component.literal("Start sequence from Action #" + (index + 1)), mouseX, mouseY);
+                    graphics.renderTooltip(font, Component.literal("Start sequence from Action #" + (index + 1)),
+                            mouseX, mouseY);
                 } else if (mouseX >= editX && mouseX < editX + btnW) {
                     graphics.renderTooltip(font, Component.literal("Edit action"), mouseX, mouseY);
                 } else if (mouseX >= deleteX && mouseX < deleteX + btnW) {
@@ -358,7 +368,8 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
         public boolean mouseClicked(double mouseX, double mouseY, int button) {
             if (button == 0 && screen.getActionListWidget() != null) {
                 int listTop = screen.getActionListWidget().getTopPos();
-                int rowTop = listTop + (this.index * screen.getActionListWidget().getItemHeight()) - (int) screen.getActionListWidget().getScrollAmount();
+                int rowTop = listTop + (this.index * screen.getActionListWidget().getItemHeight())
+                        - (int) screen.getActionListWidget().getScrollAmount();
                 int btnY = rowTop + 5;
                 int btnH = 18;
                 int btnW = 20;
@@ -386,7 +397,8 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
             return false;
         }
 
-        private void renderCyberpunkMiniBtn(GuiGraphics graphics, String text, int x, int y, int w, int h, int baseColor, int mouseX, int mouseY) {
+        private void renderCyberpunkMiniBtn(GuiGraphics graphics, String text, int x, int y, int w, int h,
+                int baseColor, int mouseX, int mouseY) {
             boolean hovered = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
             int borderColor = hovered ? 0xFFFFFFFF : baseColor;
             int bg = hovered ? 0xEE082535 : 0xEE060C12;
@@ -418,7 +430,9 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
                 case "run_sequence" -> 0xFF00E5FF;
                 case "stall_parent" -> 0xFFFF3355;
                 case "resume_parent" -> 0xFF55FF55;
-                case "puppet_action", "execute_puppet_action", "puppet_move_to", "puppet_move", "puppet_look_at", "puppet_look", "puppet_suppress_ai", "puppet_suppress", "puppet_stop_action", "puppet_stop" -> 0xFFFF8800;
+                case "puppet_action", "execute_puppet_action", "puppet_move_to", "puppet_move", "puppet_look_at",
+                        "puppet_look", "puppet_suppress_ai", "puppet_suppress", "puppet_stop_action", "puppet_stop" ->
+                    0xFFFF8800;
                 default -> 0xFF00E5FF;
             };
         }
@@ -428,33 +442,46 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
                 String r = ca.getRun();
                 return r.length() > 36 ? r.substring(0, 33) + "..." : r;
             } else if (action instanceof net.dandare21.fracturedutils.orchestrator.action.CheckpointAction cp) {
-                return String.format(java.util.Locale.ROOT, "🚩 Checkpoint %s (%.1f, %.1f, %.1f)", cp.getTargetSelector(), cp.getX(), cp.getY(), cp.getZ());
+                return String.format(java.util.Locale.ROOT, "🚩 Checkpoint %s (%.1f, %.1f, %.1f)",
+                        cp.getTargetSelector(), cp.getX(), cp.getY(), cp.getZ());
             } else if (action instanceof WaitUntilAction wua) {
                 String mode = wua.getWaitType().toLowerCase();
                 if (mode.equals("delay")) {
-                    return "Delay " + wua.getTicks() + " ticks (" + String.format("%.1fs", wua.getTicks() / 20.0f) + ")";
+                    return "Delay " + wua.getTicks() + " ticks (" + String.format("%.1fs", wua.getTicks() / 20.0f)
+                            + ")";
                 } else if (mode.equals("operator_action")) {
                     String lbl = wua.getLabel();
                     return "Operator Action: " + (lbl.isEmpty() ? wua.getTriggerId() : lbl);
-                } else if (mode.equals("proximity") || mode.equals("marker") || mode.equals("player_proximity") || mode.equals("area")) {
+                } else if (mode.equals("proximity") || mode.equals("marker") || mode.equals("player_proximity")
+                        || mode.equals("area")) {
                     String reqText = wua.isRequireAllPlayers() ? "ALL players" : "ANY player";
                     String markerVisText = wua.isOpsOnlyVisibility() ? "Marker: Ops" : "Marker: All";
-                    String areaText = wua.isShowRadiusArea() ? ("Area On (" + (wua.isAreaOpsOnlyVisibility() ? "Ops" : "All") + ")") : "Area Off";
-                    return String.format(java.util.Locale.ROOT, "Marker (%.1f, %.1f, %.1f) r=%.1fm [%s, %s, %s]", wua.getX(), wua.getY(), wua.getZ(), wua.getRadius(), reqText, markerVisText, areaText);
-                } else if (mode.equals("video") || mode.equals("video_end") || mode.equals("cutscene") || mode.equals("cinematic")) {
+                    String areaText = wua.isShowRadiusArea()
+                            ? ("Area On (" + (wua.isAreaOpsOnlyVisibility() ? "Ops" : "All") + ")")
+                            : "Area Off";
+                    return String.format(java.util.Locale.ROOT, "Marker (%.1f, %.1f, %.1f) r=%.1fm [%s, %s, %s]",
+                            wua.getX(), wua.getY(), wua.getZ(), wua.getRadius(), reqText, markerVisText, areaText);
+                } else if (mode.equals("video") || mode.equals("video_end") || mode.equals("cutscene")
+                        || mode.equals("cinematic")) {
                     return "Wait for active video to end";
-                } else if (mode.equals("dialog") || mode.equals("dialog_end") || mode.equals("dialogs_end") || mode.equals("dialog_sequence") || mode.equals("dialog_finish")) {
+                } else if (mode.equals("dialog") || mode.equals("dialog_end") || mode.equals("dialogs_end")
+                        || mode.equals("dialog_sequence") || mode.equals("dialog_finish")) {
                     if (wua.getTriggerId() != null && !wua.getTriggerId().isBlank()) {
                         return "Wait for dialog \"" + wua.getTriggerId() + "\" to end";
                     }
                     return "Wait for active dialog to end";
-                } else if (mode.equals("waiting_room") || mode.equals("waiting_room_end") || mode.equals("waitingroom")) {
+                } else if (mode.equals("waiting_room") || mode.equals("waiting_room_end")
+                        || mode.equals("waitingroom")) {
                     return "Wait for active waiting room to end";
-                } else if (mode.equals("waiting_room_ready") || mode.equals("waiting_room_all_ready") || mode.equals("waitingroom_ready")) {
+                } else if (mode.equals("waiting_room_ready") || mode.equals("waiting_room_all_ready")
+                        || mode.equals("waitingroom_ready")) {
                     return "Wait until all players in waiting room are ready";
-                } else if (mode.equals("downloads") || mode.equals("downloads_end") || mode.equals("cutscene_downloads") || mode.equals("video_downloads")) {
+                } else if (mode.equals("downloads") || mode.equals("downloads_end") || mode.equals("cutscene_downloads")
+                        || mode.equals("video_downloads")) {
                     return "Wait for cutscene downloads to complete";
-                } else if (mode.equals("music_sequence") || mode.equals("wait_music_sequence") || mode.equals("wait_for_music_sequence") || mode.equals("music_sequence_end") || mode.equals("music_end")) {
+                } else if (mode.equals("music_sequence") || mode.equals("wait_music_sequence")
+                        || mode.equals("wait_for_music_sequence") || mode.equals("music_sequence_end")
+                        || mode.equals("music_end")) {
                     if (wua.getTriggerId() != null && !wua.getTriggerId().isBlank()) {
                         return "🎵 Wait for music sequence \"" + wua.getTriggerId() + "\" to end on OUT marker";
                     }
@@ -463,7 +490,8 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
                     return "Trigger Signal: \"" + wua.getTriggerId() + "\"";
                 }
             } else if (action instanceof DelayAction da) {
-                return "Stall for " + da.getTicks() + " server ticks (" + String.format("%.1fs", da.getTicks() / 20.0f) + ")";
+                return "Stall for " + da.getTicks() + " server ticks (" + String.format("%.1fs", da.getTicks() / 20.0f)
+                        + ")";
             } else if (action instanceof AwaitTriggerAction ata) {
                 return "Await trigger signal: \"" + ata.getTriggerId() + "\"";
             } else if (action instanceof ForkSequenceAction fsa) {
@@ -488,21 +516,33 @@ public class ActionListWidget extends ObjectSelectionList<ActionListWidget.Actio
                 }
                 return "🎵 Wait for active music sequence to end on OUT marker";
             } else if (action instanceof ExecutePuppetAction epa) {
-                String targetInfo = !epa.getEntityUuid().isBlank() ? ("UUID: " + epa.getEntityUuid()) : (!epa.getTargetSelector().isBlank() ? epa.getTargetSelector() : "All Puppets");
-                String timing = epa.getWindupTicks() > 0 ? (epa.getWindupTicks() + "t windup + " + epa.getDurationTicks() + "t dur") : (epa.getDurationTicks() + "t dur");
+                String targetInfo = !epa.getEntityUuid().isBlank() ? ("UUID: " + epa.getEntityUuid())
+                        : (!epa.getTargetSelector().isBlank() ? epa.getTargetSelector() : "All Puppets");
+                String timing = epa.getWindupTicks() > 0
+                        ? (epa.getWindupTicks() + "t windup + " + epa.getDurationTicks() + "t dur")
+                        : (epa.getDurationTicks() + "t dur");
                 return "🎭 Puppet Action: \"" + epa.getActionId() + "\" (" + timing + ") [" + targetInfo + "]";
             } else if (action instanceof PuppetMoveToAction pmt) {
-                String targetInfo = !pmt.getEntityUuid().isBlank() ? ("UUID: " + pmt.getEntityUuid()) : (!pmt.getTargetSelector().isBlank() ? pmt.getTargetSelector() : "All Puppets");
-                return String.format(java.util.Locale.ROOT, "🎭 Puppet Move To (%.1f, %.1f, %.1f) spd=%.1f [%s]", pmt.getX(), pmt.getY(), pmt.getZ(), pmt.getSpeed(), targetInfo);
+                String targetInfo = !pmt.getEntityUuid().isBlank() ? ("UUID: " + pmt.getEntityUuid())
+                        : (!pmt.getTargetSelector().isBlank() ? pmt.getTargetSelector() : "All Puppets");
+                return String.format(java.util.Locale.ROOT, "🎭 Puppet Move To (%.1f, %.1f, %.1f) spd=%.1f [%s]",
+                        pmt.getX(), pmt.getY(), pmt.getZ(), pmt.getSpeed(), targetInfo);
             } else if (action instanceof PuppetLookAtAction pla) {
-                String lookTarget = !pla.getLookTargetSelector().isBlank() ? pla.getLookTargetSelector() : String.format(java.util.Locale.ROOT, "(%.1f, %.1f, %.1f)", pla.getX(), pla.getY(), pla.getZ());
-                String targetInfo = !pla.getEntityUuid().isBlank() ? ("UUID: " + pla.getEntityUuid()) : (!pla.getTargetSelector().isBlank() ? pla.getTargetSelector() : "All Puppets");
+                String lookTarget = !pla.getLookTargetSelector().isBlank() ? pla.getLookTargetSelector()
+                        : String.format(java.util.Locale.ROOT, "(%.1f, %.1f, %.1f)", pla.getX(), pla.getY(),
+                                pla.getZ());
+                String targetInfo = !pla.getEntityUuid().isBlank() ? ("UUID: " + pla.getEntityUuid())
+                        : (!pla.getTargetSelector().isBlank() ? pla.getTargetSelector() : "All Puppets");
                 return "🎭 Puppet Look At " + lookTarget + " [" + targetInfo + "]";
             } else if (action instanceof PuppetSuppressAction psa) {
-                String targetInfo = !psa.getEntityUuid().isBlank() ? ("UUID: " + psa.getEntityUuid()) : (!psa.getTargetSelector().isBlank() ? psa.getTargetSelector() : "All Puppets");
-                return String.format(java.util.Locale.ROOT, "🎭 Puppet AI Suppress (ai=%b, nav=%b, tgt=%b, look=%b) [%s]", psa.isSuppressAi(), psa.isSuppressNavigation(), psa.isSuppressTargeting(), psa.isSuppressLook(), targetInfo);
+                String targetInfo = !psa.getEntityUuid().isBlank() ? ("UUID: " + psa.getEntityUuid())
+                        : (!psa.getTargetSelector().isBlank() ? psa.getTargetSelector() : "All Puppets");
+                return String.format(java.util.Locale.ROOT,
+                        "🎭 Puppet AI Suppress (ai=%b, nav=%b, tgt=%b, look=%b) [%s]", psa.isSuppressAi(),
+                        psa.isSuppressNavigation(), psa.isSuppressTargeting(), psa.isSuppressLook(), targetInfo);
             } else if (action instanceof PuppetStopAction pst) {
-                String targetInfo = !pst.getEntityUuid().isBlank() ? ("UUID: " + pst.getEntityUuid()) : (!pst.getTargetSelector().isBlank() ? pst.getTargetSelector() : "All Puppets");
+                String targetInfo = !pst.getEntityUuid().isBlank() ? ("UUID: " + pst.getEntityUuid())
+                        : (!pst.getTargetSelector().isBlank() ? pst.getTargetSelector() : "All Puppets");
                 return "🎭 Puppet Stop Action [" + targetInfo + "]";
             }
             return "";

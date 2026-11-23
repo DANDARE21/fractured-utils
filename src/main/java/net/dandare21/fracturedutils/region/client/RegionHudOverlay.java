@@ -6,12 +6,10 @@ import net.dandare21.fracturedutils.region.data.RegionType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
-import net.minecraft.sounds.SoundEvents;
 
 /**
- * Renders tiered open-world entry banners and the persistent location watermark.
+ * Renders unified open-world entry banners and the persistent location watermark.
  */
 public class RegionHudOverlay {
 
@@ -27,16 +25,6 @@ public class RegionHudOverlay {
         if (region == null) return;
         activeBannerRegion = region;
         bannerStartTime = System.currentTimeMillis();
-
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player != null) {
-            // Play atmospheric chime
-            if (region.getType() == RegionType.MAP_ZONE) {
-                mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, 0.85f, 0.4f));
-            } else {
-                mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.EXPERIENCE_ORB_PICKUP, 0.7f, 0.5f));
-            }
-        }
     }
 
     public static void render(GuiGraphics guiGraphics, float partialTick) {
@@ -101,24 +89,24 @@ public class RegionHudOverlay {
         int screenWidth = mc.getWindow().getGuiScaledWidth();
         Font font = mc.font;
 
-        if (activeBannerRegion.getType() == RegionType.MAP_ZONE) {
-            renderMacroBanner(guiGraphics, font, screenWidth, alphaBits, activeBannerRegion);
-        } else {
-            renderSubBanner(guiGraphics, font, screenWidth, alphaBits, activeBannerRegion);
-        }
+        renderBigBanner(guiGraphics, font, screenWidth, alphaBits, activeBannerRegion);
     }
 
-    private static void renderMacroBanner(GuiGraphics guiGraphics, Font font, int screenWidth, int alphaBits, Region region) {
+    private static void renderBigBanner(GuiGraphics guiGraphics, Font font, int screenWidth, int alphaBits, Region region) {
+        boolean hasSubtitle = region.getSubtitle() != null && !region.getSubtitle().trim().isEmpty();
         int centerY = 50;
+
+        int bandTop = centerY - 18;
+        int bandBottom = hasSubtitle ? (centerY + 30) : (centerY + 18);
 
         // Background dark gradient band
         int bandColor = (Math.min(alphaBits, 180) << 24) | 0x0A0A0E;
-        guiGraphics.fill(0, centerY - 18, screenWidth, centerY + 30, bandColor);
+        guiGraphics.fill(0, bandTop, screenWidth, bandBottom, bandColor);
 
         // Gold ornamental border lines
         int goldBorder = (alphaBits << 24) | 0xE6C364;
-        guiGraphics.fill(screenWidth / 2 - 120, centerY - 18, screenWidth / 2 + 120, centerY - 17, goldBorder);
-        guiGraphics.fill(screenWidth / 2 - 120, centerY + 29, screenWidth / 2 + 120, centerY + 30, goldBorder);
+        guiGraphics.fill(screenWidth / 2 - 120, bandTop, screenWidth / 2 + 120, bandTop + 1, goldBorder);
+        guiGraphics.fill(screenWidth / 2 - 120, bandBottom - 1, screenWidth / 2 + 120, bandBottom, goldBorder);
 
         // Large title text
         String title = region.getName().toUpperCase();
@@ -132,35 +120,11 @@ public class RegionHudOverlay {
         guiGraphics.drawString(font, title, 0, 0, titleColor, true);
         pose.popPose();
 
-        // Subtitle or territory designation
-        String sub = !region.getSubtitle().isEmpty() ? region.getSubtitle() : "TERRITORY UNLOCKED";
-        int subColor = (alphaBits << 24) | 0xCCCCCC;
-        guiGraphics.drawCenteredString(font, "—  " + sub + "  —", screenWidth / 2, centerY + 14, subColor);
-    }
-
-    private static void renderSubBanner(GuiGraphics guiGraphics, Font font, int screenWidth, int alphaBits, Region region) {
-        int centerY = 65;
-
-        // Background pill
-        int pillW = 200;
-        int pillH = 34;
-        int pillX = (screenWidth - pillW) / 2;
-        int pillY = centerY - 14;
-
-        int bgColor = (Math.min(alphaBits, 190) << 24) | 0x111116;
-        guiGraphics.fill(pillX, pillY, pillX + pillW, pillY + pillH, bgColor);
-
-        // Accent indicator
-        int accentColor = (alphaBits << 24) | (region.getColor() & 0x00FFFFFF);
-        guiGraphics.fill(pillX, pillY, pillX + 3, pillY + pillH, accentColor);
-
-        // District title
-        String typeLabel = region.getType() == RegionType.CITY ? "SETTLEMENT" : "ZONE";
-        int labelColor = (alphaBits << 24) | 0xAAAAAA;
-        guiGraphics.drawCenteredString(font, typeLabel, screenWidth / 2, centerY - 9, labelColor);
-
-        int titleColor = (alphaBits << 24) | 0xFFFFFF;
-        guiGraphics.drawCenteredString(font, region.getName(), screenWidth / 2, centerY + 3, titleColor);
+        // Subtitle (only rendered if non-empty; no default territory text)
+        if (hasSubtitle) {
+            int subColor = (alphaBits << 24) | 0xCCCCCC;
+            guiGraphics.drawCenteredString(font, "—  " + region.getSubtitle().trim() + "  —", screenWidth / 2, centerY + 14, subColor);
+        }
     }
 }
 

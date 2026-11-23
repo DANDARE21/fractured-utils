@@ -5,7 +5,9 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 
 import java.util.*;
@@ -69,6 +71,10 @@ public class WorldRegionSavedData extends SavedData {
                 WorldRegionSavedData::new,
                 FILE_NAME
         );
+    }
+
+    public static WorldRegionSavedData get(ServerLevel level) {
+        return get(level.getServer());
     }
 
     public Map<String, Region> getRegions() {
@@ -178,6 +184,28 @@ public class WorldRegionSavedData extends SavedData {
         if (bestEvent != null) return bestEvent;
         if (bestCity != null) return bestCity;
         return bestMapZone;
+    }
+
+    /**
+     * Resolves the CITY polygon region at (x, z), selecting the smallest enclosing area if nested.
+     */
+    public Region getCityAt(double x, double z) {
+        Region bestCity = null;
+        for (Region r : regions.values()) {
+            if (r.getType() == RegionType.CITY && r.getPolygon() != null && r.getPolygon().contains(x, z)) {
+                if (bestCity == null || (bestCity.getPolygon() != null && r.getPolygon().getArea() < bestCity.getPolygon().getArea())) {
+                    bestCity = r;
+                }
+            }
+        }
+        return bestCity;
+    }
+
+    /**
+     * Resolves the CITY polygon region at the given block position.
+     */
+    public Region getCityAt(BlockPos pos) {
+        return getCityAt(pos.getX() + 0.5D, pos.getZ() + 0.5D);
     }
 
     /**

@@ -19,6 +19,7 @@ public class Region {
     private int color;
     private String subtitle;
     private String ambientMusic;
+    private int citizenCap = 15;
 
     public Region(String id, String name, RegionType type, String parentId, Polygon2D polygon,
                   boolean locked, String requiredFlag, String deniedMessage, int color,
@@ -124,6 +125,14 @@ public class Region {
         this.ambientMusic = ambientMusic != null ? ambientMusic : "";
     }
 
+    public int getCitizenCap() {
+        return citizenCap > 0 ? citizenCap : 15;
+    }
+
+    public void setCitizenCap(int citizenCap) {
+        this.citizenCap = citizenCap > 0 ? citizenCap : 15;
+    }
+
     public CompoundTag toNbt() {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", id != null ? id : "");
@@ -139,6 +148,7 @@ public class Region {
         tag.putInt("color", color);
         tag.putString("subtitle", subtitle != null ? subtitle : "");
         tag.putString("ambientMusic", ambientMusic != null ? ambientMusic : "");
+        tag.putInt("citizenCap", citizenCap);
         return tag;
     }
 
@@ -155,7 +165,11 @@ public class Region {
         String subtitle = tag.getString("subtitle");
         String ambientMusic = tag.getString("ambientMusic");
 
-        return new Region(id, name, type, parentId, polygon, locked, requiredFlag, deniedMsg, color, subtitle, ambientMusic);
+        Region region = new Region(id, name, type, parentId, polygon, locked, requiredFlag, deniedMsg, color, subtitle, ambientMusic);
+        if (tag.contains("citizenCap")) {
+            region.setCitizenCap(tag.getInt("citizenCap"));
+        }
+        return region;
     }
 
     public void encode(FriendlyByteBuf buf) {
@@ -174,6 +188,7 @@ public class Region {
         buf.writeInt(color);
         buf.writeUtf(subtitle != null ? subtitle : "");
         buf.writeUtf(ambientMusic != null ? ambientMusic : "");
+        buf.writeInt(citizenCap);
     }
 
     public static Region decode(FriendlyByteBuf buf) {
@@ -188,8 +203,11 @@ public class Region {
         int color = buf.readInt();
         String subtitle = buf.readUtf();
         String ambientMusic = buf.readUtf();
+        int citizenCap = buf.readInt();
 
-        return new Region(id, name, type, parentId, polygon, locked, requiredFlag, deniedMsg, color, subtitle, ambientMusic);
+        Region region = new Region(id, name, type, parentId, polygon, locked, requiredFlag, deniedMsg, color, subtitle, ambientMusic);
+        region.setCitizenCap(citizenCap);
+        return region;
     }
 }
 

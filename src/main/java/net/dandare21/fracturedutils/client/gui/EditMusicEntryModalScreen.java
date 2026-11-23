@@ -51,9 +51,9 @@ public class EditMusicEntryModalScreen extends Screen {
     private static final int CARD_BORDER = 0x5500E5FF;
 
     // Phase Colors for segmented duration
-    private static final int COLOR_WINDUP = 0xFFFF9900;   // Amber / Orange
-    private static final int COLOR_JUMP = 0xFF4A69BD;     // Indigo / Deep Sky Blue
-    private static final int COLOR_ACTIVE = 0xFFAA55FF;   // Purple / Magenta
+    private static final int COLOR_WINDUP = 0xFFFF9900; // Amber / Orange
+    private static final int COLOR_JUMP = 0xFF4A69BD; // Indigo / Deep Sky Blue
+    private static final int COLOR_ACTIVE = 0xFFAA55FF; // Purple / Magenta
     private static final int COLOR_RECOVERY = 0xFF00E5FF; // Teal / Cyan
 
     public enum PuppetSubAction {
@@ -194,12 +194,13 @@ public class EditMusicEntryModalScreen extends Screen {
     private int actionParamsCardHeight = 60;
     private int customParamCounter = 1;
 
-    public EditMusicEntryModalScreen(Screen parentScreen, MusicSequenceEntry entry, Consumer<MusicSequenceEntry> onSave) {
+    public EditMusicEntryModalScreen(Screen parentScreen, MusicSequenceEntry entry,
+            Consumer<MusicSequenceEntry> onSave) {
         this(parentScreen, entry, null, onSave, null);
     }
 
     public EditMusicEntryModalScreen(Screen parentScreen, MusicSequenceEntry entry, MusicSequenceChannel channel,
-                                     Consumer<MusicSequenceEntry> onSave, Runnable onDelete) {
+            Consumer<MusicSequenceEntry> onSave, Runnable onDelete) {
         super(Component.literal("Edit Sequence Entry"));
         this.parentScreen = parentScreen;
         this.entry = entry != null ? entry.copy() : new MusicSequenceEntry();
@@ -207,21 +208,29 @@ public class EditMusicEntryModalScreen extends Screen {
         this.onSave = onSave;
         this.onDelete = onDelete;
 
-        boolean channelIsPuppet = channel != null && channel.getType().equalsIgnoreCase(MusicSequenceChannel.TYPE_PUPPET);
+        boolean channelIsPuppet = channel != null
+                && channel.getType().equalsIgnoreCase(MusicSequenceChannel.TYPE_PUPPET);
         boolean entryIsPuppet = "PUPPET".equalsIgnoreCase(this.entry.getActionType());
         this.isPuppet = channelIsPuppet || entryIsPuppet;
 
-        boolean channelIsDialog = channel != null && channel.getType().equalsIgnoreCase(MusicSequenceChannel.TYPE_DIALOG);
+        boolean channelIsDialog = channel != null
+                && channel.getType().equalsIgnoreCase(MusicSequenceChannel.TYPE_DIALOG);
         boolean entryIsDialog = "DIALOG".equalsIgnoreCase(this.entry.getActionType());
         this.isDialog = !this.isPuppet && (channelIsDialog || entryIsDialog);
 
-        boolean channelIsCamera = channel != null && channel.getType().equalsIgnoreCase(MusicSequenceChannel.TYPE_CAMERA);
+        boolean channelIsCamera = channel != null
+                && channel.getType().equalsIgnoreCase(MusicSequenceChannel.TYPE_CAMERA);
         boolean entryIsCamera = "CAMERA".equalsIgnoreCase(this.entry.getActionType());
         this.isCamera = !this.isPuppet && !this.isDialog && (channelIsCamera || entryIsCamera);
 
-        boolean channelIsScreenEffect = channel != null && (channel.getType().equalsIgnoreCase(MusicSequenceChannel.TYPE_SCREEN_EFFECT) || channel.getType().equalsIgnoreCase(MusicSequenceChannel.TYPE_OBJECTIVE));
-        boolean entryIsScreenEffect = "SCREEN_EFFECT".equalsIgnoreCase(this.entry.getActionType()) || "SCREEN_EFFECTS".equalsIgnoreCase(this.entry.getActionType()) || "OBJECTIVE".equalsIgnoreCase(this.entry.getActionType());
-        this.isScreenEffect = !this.isPuppet && !this.isDialog && !this.isCamera && (channelIsScreenEffect || entryIsScreenEffect);
+        boolean channelIsScreenEffect = channel != null
+                && (channel.getType().equalsIgnoreCase(MusicSequenceChannel.TYPE_SCREEN_EFFECT)
+                        || channel.getType().equalsIgnoreCase(MusicSequenceChannel.TYPE_OBJECTIVE));
+        boolean entryIsScreenEffect = "SCREEN_EFFECT".equalsIgnoreCase(this.entry.getActionType())
+                || "SCREEN_EFFECTS".equalsIgnoreCase(this.entry.getActionType())
+                || "OBJECTIVE".equalsIgnoreCase(this.entry.getActionType());
+        this.isScreenEffect = !this.isPuppet && !this.isDialog && !this.isCamera
+                && (channelIsScreenEffect || entryIsScreenEffect);
 
         initEntryState();
     }
@@ -243,14 +252,17 @@ public class EditMusicEntryModalScreen extends Screen {
         }
         if (entry.getSubAction() != null && !entry.getSubAction().isBlank()) {
             String sub = entry.getSubAction().toUpperCase(Locale.ROOT);
-            if (sub.equals("INVERT_COLORS") || sub.equals("STROBE") || sub.equals("SCREEN_SHAKE") || sub.equals("HUE_SHIFT") || sub.equals("IMPACT_FRAME") || sub.equals("CINEMATIC_BARS")) {
+            if (sub.equals("INVERT_COLORS") || sub.equals("STROBE") || sub.equals("SCREEN_SHAKE")
+                    || sub.equals("HUE_SHIFT") || sub.equals("IMPACT_FRAME") || sub.equals("CINEMATIC_BARS")) {
                 this.activeScreenEffectMode = sub;
             }
         }
         this.screenEffectDecay = entry.isScreenEffectDecay();
         this.screenEffectSmooth = entry.isScreenEffectSmooth();
         this.screenEffectPulse = entry.isScreenEffectPulse();
-        this.screenEffectSecondaryColor = entry.getScreenEffectSecondaryColor() != 0 ? entry.getScreenEffectSecondaryColor() : 0xFF000000;
+        this.screenEffectSecondaryColor = entry.getScreenEffectSecondaryColor() != 0
+                ? entry.getScreenEffectSecondaryColor()
+                : 0xFF000000;
         this.screenEffectContinuous = entry.isScreenEffectContinuous();
         this.screenEffectAngle = entry.getScreenEffectAngle();
         this.screenEffectStyle = entry.getScreenEffectStyle();
@@ -258,7 +270,8 @@ public class EditMusicEntryModalScreen extends Screen {
             this.screenEffectStyle = "DRAW";
         }
         if (entry.getScreenEffectColor() == 0) {
-            entry.setScreenEffectColor("CINEMATIC_BARS".equalsIgnoreCase(activeScreenEffectMode) ? 0xFF000000 : 0xFFFFFFFF);
+            entry.setScreenEffectColor(
+                    "CINEMATIC_BARS".equalsIgnoreCase(activeScreenEffectMode) ? 0xFF000000 : 0xFFFFFFFF);
         }
         if (entry.getDurationMs() <= 0 && entry.getTotalDurationMs() <= 0) {
             entry.setDurationMs(1000);
@@ -322,7 +335,8 @@ public class EditMusicEntryModalScreen extends Screen {
             initScreenEffectState();
             return;
         }
-        if (!isPuppet) return;
+        if (!isPuppet)
+            return;
 
         String sub = entry.getSubAction();
         if ("SPAWN".equalsIgnoreCase(sub)) {
@@ -357,7 +371,8 @@ public class EditMusicEntryModalScreen extends Screen {
         if (entry.getCommand().contains("NoAI:1b") || entry.getCommand().contains("NoAI:1")) {
             this.spawnDisableAi = true;
         }
-        if (entry.getCommand().contains("CustomNameVisible:1b") || entry.getCommand().contains("CustomNameVisible:1") || entry.isShowNametag() || "true".equalsIgnoreCase(entry.getPuppetParam("showNametag", "false"))) {
+        if (entry.getCommand().contains("CustomNameVisible:1b") || entry.getCommand().contains("CustomNameVisible:1")
+                || entry.isShowNametag() || "true".equalsIgnoreCase(entry.getPuppetParam("showNametag", "false"))) {
             this.showNametag = true;
         } else {
             this.showNametag = false;
@@ -370,7 +385,8 @@ public class EditMusicEntryModalScreen extends Screen {
             try {
                 this.spawnYaw = Float.parseFloat(entry.getPuppetParam("spawnYaw", "0.0"));
                 this.spawnPitch = Float.parseFloat(entry.getPuppetParam("spawnPitch", "0.0"));
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         } else {
             String c = entry.getCommand().trim();
             if (c.contains("Rotation:[")) {
@@ -381,13 +397,16 @@ public class EditMusicEntryModalScreen extends Screen {
                         String rotStr = c.substring(start, end);
                         String[] rotParts = rotStr.split(",");
                         if (rotParts.length >= 1) {
-                            this.spawnYaw = Float.parseFloat(rotParts[0].trim().replace("f", "").replace("F", "").replace(',', '.'));
+                            this.spawnYaw = Float
+                                    .parseFloat(rotParts[0].trim().replace("f", "").replace("F", "").replace(',', '.'));
                         }
                         if (rotParts.length >= 2) {
-                            this.spawnPitch = Float.parseFloat(rotParts[1].trim().replace("f", "").replace("F", "").replace(',', '.'));
+                            this.spawnPitch = Float
+                                    .parseFloat(rotParts[1].trim().replace("f", "").replace("F", "").replace(',', '.'));
                         }
                     }
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             } else if (this.minecraft != null && this.minecraft.player != null) {
                 this.spawnYaw = this.minecraft.player.getYRot();
                 this.spawnPitch = 0.0f;
@@ -405,7 +424,8 @@ public class EditMusicEntryModalScreen extends Screen {
             this.currentPuppetParams.putAll(entry.getPuppetParams());
         }
 
-        // Parse action id, combat target, embedded timings, and custom parameters from command string
+        // Parse action id, combat target, embedded timings, and custom parameters from
+        // command string
         String cmd = entry.getCommand().trim();
         if (cmd.startsWith("puppet_action")) {
             if (cmd.contains("action:")) {
@@ -415,13 +435,25 @@ public class EditMusicEntryModalScreen extends Screen {
                     } else if (part.startsWith("target:")) {
                         this.combatTarget = part.substring(7).trim();
                     } else if (part.startsWith("windup:")) {
-                        try { this.windupMs = Math.max(0, Integer.parseInt(part.substring(7).trim())); } catch (Exception ignored) {}
+                        try {
+                            this.windupMs = Math.max(0, Integer.parseInt(part.substring(7).trim()));
+                        } catch (Exception ignored) {
+                        }
                     } else if (part.startsWith("jump:")) {
-                        try { this.jumpMs = Math.max(0, Integer.parseInt(part.substring(5).trim())); } catch (Exception ignored) {}
+                        try {
+                            this.jumpMs = Math.max(0, Integer.parseInt(part.substring(5).trim()));
+                        } catch (Exception ignored) {
+                        }
                     } else if (part.startsWith("duration:")) {
-                        try { this.durationMs = Math.max(0, Integer.parseInt(part.substring(9).trim())); } catch (Exception ignored) {}
+                        try {
+                            this.durationMs = Math.max(0, Integer.parseInt(part.substring(9).trim()));
+                        } catch (Exception ignored) {
+                        }
                     } else if (part.startsWith("recovery:")) {
-                        try { this.recoveryMs = Math.max(0, Integer.parseInt(part.substring(9).trim())); } catch (Exception ignored) {}
+                        try {
+                            this.recoveryMs = Math.max(0, Integer.parseInt(part.substring(9).trim()));
+                        } catch (Exception ignored) {
+                        }
                     } else if (part.startsWith("tag:")) {
                         // Actor tag handled separately
                     } else if (part.contains(":")) {
@@ -442,7 +474,8 @@ public class EditMusicEntryModalScreen extends Screen {
                     this.combatTarget = parts[2].trim();
                 }
             }
-        } else if (!cmd.isBlank() && !cmd.startsWith("summon") && !cmd.startsWith("kill") && !cmd.startsWith("puppet_")) {
+        } else if (!cmd.isBlank() && !cmd.startsWith("summon") && !cmd.startsWith("kill")
+                && !cmd.startsWith("puppet_")) {
             this.selectedActionId = cmd;
         }
 
@@ -478,25 +511,34 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private int getPanelWidth() {
-        if (isDialog) return 520;
-        if (isCamera) return 490;
-        if (isScreenEffect) return 490;
-        if (isPuppet) return 520;
+        if (isDialog)
+            return 520;
+        if (isCamera)
+            return 490;
+        if (isScreenEffect)
+            return 490;
+        if (isPuppet)
+            return 520;
         return 430;
     }
 
     private int getPanelHeight() {
-        if (isDialog) return 450;
-        if (isCamera) return 336;
-        if (isScreenEffect) return 260;
-        if (isPuppet) return 450;
+        if (isDialog)
+            return 450;
+        if (isCamera)
+            return 336;
+        if (isScreenEffect)
+            return 260;
+        if (isPuppet)
+            return 450;
         return 202;
     }
 
     private double getLayoutScale() {
         int targetW = getPanelWidth() + 20;
         int targetH = getPanelHeight() + 20;
-        if (this.width <= 0 || this.height <= 0) return 1.0;
+        if (this.width <= 0 || this.height <= 0)
+            return 1.0;
         double scaleX = (double) this.width / targetW;
         double scaleY = (double) this.height / targetH;
         return Math.min(1.0, Math.min(scaleX, scaleY));
@@ -543,27 +585,38 @@ public class EditMusicEntryModalScreen extends Screen {
         int tabW = (contentW - 15) / 6;
         CyberpunkButton shakeTab = new CyberpunkButton(contentX, currentY, tabW, 20, Component.literal("⚡ SHAKE"),
                 b -> switchScreenEffectMode("SCREEN_SHAKE"),
-                MusicSequenceChannel.COLOR_SCREEN_EFFECT, "SCREEN_SHAKE".equalsIgnoreCase(activeScreenEffectMode), Component.literal("Camera shake & rotational tremor"));
+                MusicSequenceChannel.COLOR_SCREEN_EFFECT, "SCREEN_SHAKE".equalsIgnoreCase(activeScreenEffectMode),
+                Component.literal("Camera shake & rotational tremor"));
 
-        CyberpunkButton invertTab = new CyberpunkButton(contentX + tabW + 3, currentY, tabW, 20, Component.literal("🔄 INVERT"),
+        CyberpunkButton invertTab = new CyberpunkButton(contentX + tabW + 3, currentY, tabW, 20,
+                Component.literal("🔄 INVERT"),
                 b -> switchScreenEffectMode("INVERT_COLORS"),
-                0xFF00FFCC, "INVERT_COLORS".equalsIgnoreCase(activeScreenEffectMode), Component.literal("Invert screen colors (solid or pulse)"));
+                0xFF00FFCC, "INVERT_COLORS".equalsIgnoreCase(activeScreenEffectMode),
+                Component.literal("Invert screen colors (solid or pulse)"));
 
-        CyberpunkButton strobeTab = new CyberpunkButton(contentX + (tabW + 3) * 2, currentY, tabW, 20, Component.literal("✨ STROBE"),
+        CyberpunkButton strobeTab = new CyberpunkButton(contentX + (tabW + 3) * 2, currentY, tabW, 20,
+                Component.literal("✨ STROBE"),
                 b -> switchScreenEffectMode("STROBE"),
-                0xFFFFD700, "STROBE".equalsIgnoreCase(activeScreenEffectMode), Component.literal("High-intensity flashing or smooth pulsating strobe"));
+                0xFFFFD700, "STROBE".equalsIgnoreCase(activeScreenEffectMode),
+                Component.literal("High-intensity flashing or smooth pulsating strobe"));
 
-        CyberpunkButton hueTab = new CyberpunkButton(contentX + (tabW + 3) * 3, currentY, tabW, 20, Component.literal("🌈 HUE"),
+        CyberpunkButton hueTab = new CyberpunkButton(contentX + (tabW + 3) * 3, currentY, tabW, 20,
+                Component.literal("🌈 HUE"),
                 b -> switchScreenEffectMode("HUE_SHIFT"),
-                0xFF33CCFF, "HUE_SHIFT".equalsIgnoreCase(activeScreenEffectMode), Component.literal("Dynamic color grading & continuous/static hue shift"));
+                0xFF33CCFF, "HUE_SHIFT".equalsIgnoreCase(activeScreenEffectMode),
+                Component.literal("Dynamic color grading & continuous/static hue shift"));
 
-        CyberpunkButton impactTab = new CyberpunkButton(contentX + (tabW + 3) * 4, currentY, tabW, 20, Component.literal("💥 IMPACT"),
+        CyberpunkButton impactTab = new CyberpunkButton(contentX + (tabW + 3) * 4, currentY, tabW, 20,
+                Component.literal("💥 IMPACT"),
                 b -> switchScreenEffectMode("IMPACT_FRAME"),
-                0xFFFF2255, "IMPACT_FRAME".equalsIgnoreCase(activeScreenEffectMode), Component.literal("Action cuts, shock frames & silhouettes"));
+                0xFFFF2255, "IMPACT_FRAME".equalsIgnoreCase(activeScreenEffectMode),
+                Component.literal("Action cuts, shock frames & silhouettes"));
 
-        CyberpunkButton barsTab = new CyberpunkButton(contentX + (tabW + 3) * 5, currentY, tabW, 20, Component.literal("🎬 BARS"),
+        CyberpunkButton barsTab = new CyberpunkButton(contentX + (tabW + 3) * 5, currentY, tabW, 20,
+                Component.literal("🎬 BARS"),
                 b -> switchScreenEffectMode("CINEMATIC_BARS"),
-                0xFFAA55FF, "CINEMATIC_BARS".equalsIgnoreCase(activeScreenEffectMode), Component.literal("Cinematic letterbox bars with slide-in animation"));
+                0xFFAA55FF, "CINEMATIC_BARS".equalsIgnoreCase(activeScreenEffectMode),
+                Component.literal("Cinematic letterbox bars with slide-in animation"));
 
         this.addRenderableWidget(shakeTab);
         this.addRenderableWidget(invertTab);
@@ -590,25 +643,31 @@ public class EditMusicEntryModalScreen extends Screen {
 
         // 3. Timing Section Card (Height = 32)
         int card2Y = card1Y + 74;
-        this.timestampBox = new EditBox(this.font, contentX + 66, card2Y + 5, 64, 18, Component.literal("Timestamp (ms)"));
+        this.timestampBox = new EditBox(this.font, contentX + 66, card2Y + 5, 64, 18,
+                Component.literal("Timestamp (ms)"));
         this.timestampBox.setMaxLength(10);
         this.timestampBox.setValue(String.valueOf(entry.getTimestampMs()));
         this.addRenderableWidget(this.timestampBox);
 
-        this.screenEffectDurationBox = new EditBox(this.font, contentX + 192, card2Y + 5, 56, 18, Component.literal("Duration (ms)"));
+        this.screenEffectDurationBox = new EditBox(this.font, contentX + 192, card2Y + 5, 56, 18,
+                Component.literal("Duration (ms)"));
         this.screenEffectDurationBox.setMaxLength(10);
         this.screenEffectDurationBox.setValue(String.valueOf(entry.getDurationMs() > 0 ? entry.getDurationMs() : 1000));
         this.addRenderableWidget(this.screenEffectDurationBox);
 
         int qx = contentX + 260;
         int btnW = 32;
-        this.addRenderableWidget(new CyberpunkButton(qx, card2Y + 5, btnW, 18, Component.literal("+1s"), b -> adjustTimestamp(1000)));
-        this.addRenderableWidget(new CyberpunkButton(qx + btnW + 2, card2Y + 5, btnW, 18, Component.literal("+2s"), b -> adjustTimestamp(2000)));
-        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 2, card2Y + 5, btnW, 18, Component.literal("+5s"), b -> adjustTimestamp(5000)));
+        this.addRenderableWidget(
+                new CyberpunkButton(qx, card2Y + 5, btnW, 18, Component.literal("+1s"), b -> adjustTimestamp(1000)));
+        this.addRenderableWidget(new CyberpunkButton(qx + btnW + 2, card2Y + 5, btnW, 18, Component.literal("+2s"),
+                b -> adjustTimestamp(2000)));
+        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 2, card2Y + 5, btnW, 18,
+                Component.literal("+5s"), b -> adjustTimestamp(5000)));
 
         // 4. Description Box
         int descY = card2Y + 38;
-        this.descriptionBox = new EditBox(this.font, contentX, descY + 12, contentW, 18, Component.literal("Description / Note"));
+        this.descriptionBox = new EditBox(this.font, contentX, descY + 12, contentW, 18,
+                Component.literal("Description / Note"));
         this.descriptionBox.setMaxLength(128);
         this.descriptionBox.setValue(entry.getDescription());
         this.descriptionBox.setHint(Component.literal("Optional note or label for timeline"));
@@ -617,7 +676,8 @@ public class EditMusicEntryModalScreen extends Screen {
         // 5. Footer Buttons
         int footerY = panelTop + 230;
         CyberpunkButton saveBtn = new CyberpunkButton(panelLeft + panelWidth - 14 - 120, footerY, 120, 20,
-                Component.literal("✓ Save Effect"), b -> saveScreenEffectEntry(), MusicSequenceChannel.COLOR_SCREEN_EFFECT, false);
+                Component.literal("✓ Save Effect"), b -> saveScreenEffectEntry(),
+                MusicSequenceChannel.COLOR_SCREEN_EFFECT, false);
         this.addRenderableWidget(saveBtn);
 
         CyberpunkButton cancelBtn = new CyberpunkButton(panelLeft + 14, footerY, 80, 20,
@@ -627,21 +687,25 @@ public class EditMusicEntryModalScreen extends Screen {
         if (onDelete != null) {
             CyberpunkButton deleteBtn = new CyberpunkButton(panelLeft + 98, footerY, 80, 20,
                     Component.literal("🗑 Delete"), b -> {
-                onDelete.run();
-                this.onClose();
-            }, RED_CANCEL, false);
+                        onDelete.run();
+                        this.onClose();
+                    }, RED_CANCEL, false);
             this.addRenderableWidget(deleteBtn);
         }
     }
 
     private void initShakeControls(int contentX, int card1Y, int contentW) {
         int y1 = card1Y + 8;
-        this.screenEffectIntensityBox = new EditBox(this.font, contentX + 68, y1, 46, 18, Component.literal("Intensity"));
-        this.screenEffectIntensityBox.setValue(String.format(Locale.US, "%.1f", entry.getScreenEffectIntensity() > 0 ? entry.getScreenEffectIntensity() : 2.0f));
+        this.screenEffectIntensityBox = new EditBox(this.font, contentX + 68, y1, 46, 18,
+                Component.literal("Intensity"));
+        this.screenEffectIntensityBox.setValue(String.format(Locale.US, "%.1f",
+                entry.getScreenEffectIntensity() > 0 ? entry.getScreenEffectIntensity() : 2.0f));
         this.addRenderableWidget(this.screenEffectIntensityBox);
 
-        this.screenEffectFrequencyBox = new EditBox(this.font, contentX + 186, y1, 46, 18, Component.literal("Frequency"));
-        this.screenEffectFrequencyBox.setValue(String.format(Locale.US, "%.0f", entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 20.0f));
+        this.screenEffectFrequencyBox = new EditBox(this.font, contentX + 186, y1, 46, 18,
+                Component.literal("Frequency"));
+        this.screenEffectFrequencyBox.setValue(String.format(Locale.US, "%.0f",
+                entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 20.0f));
         this.addRenderableWidget(this.screenEffectFrequencyBox);
 
         CyberpunkButton decayBtn = new CyberpunkButton(contentX + 246, y1, contentW - 252, 18,
@@ -653,7 +717,8 @@ public class EditMusicEntryModalScreen extends Screen {
                         cb.setAccentColor(screenEffectDecay ? 0xFF00FF88 : 0xFF8899AA);
                     }
                 },
-                screenEffectDecay ? 0xFF00FF88 : 0xFF8899AA, false, Component.literal("Taper shake amplitude towards end of duration"));
+                screenEffectDecay ? 0xFF00FF88 : 0xFF8899AA, false,
+                Component.literal("Taper shake amplitude towards end of duration"));
         this.addRenderableWidget(decayBtn);
     }
 
@@ -668,11 +733,14 @@ public class EditMusicEntryModalScreen extends Screen {
                         cb.setAccentColor(screenEffectPulse ? 0xFF00FFCC : 0xFF8899AA);
                     }
                 },
-                screenEffectPulse ? 0xFF00FFCC : 0xFF8899AA, false, Component.literal("Toggle continuous inversion vs rhythmic pulses"));
+                screenEffectPulse ? 0xFF00FFCC : 0xFF8899AA, false,
+                Component.literal("Toggle continuous inversion vs rhythmic pulses"));
         this.addRenderableWidget(pulseBtn);
 
-        this.screenEffectFrequencyBox = new EditBox(this.font, contentX + 235, y1, 50, 18, Component.literal("Pulse Freq"));
-        this.screenEffectFrequencyBox.setValue(String.format(Locale.US, "%.1f", entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 2.0f));
+        this.screenEffectFrequencyBox = new EditBox(this.font, contentX + 235, y1, 50, 18,
+                Component.literal("Pulse Freq"));
+        this.screenEffectFrequencyBox.setValue(String.format(Locale.US, "%.1f",
+                entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 2.0f));
         this.addRenderableWidget(this.screenEffectFrequencyBox);
     }
 
@@ -680,7 +748,8 @@ public class EditMusicEntryModalScreen extends Screen {
         int y1 = card1Y + 8;
         int y2 = card1Y + 36;
         this.screenEffectFrequencyBox = new EditBox(this.font, contentX + 54, y1, 46, 18, Component.literal("Speed"));
-        this.screenEffectFrequencyBox.setValue(String.format(Locale.US, "%.1f", entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 10.0f));
+        this.screenEffectFrequencyBox.setValue(String.format(Locale.US, "%.1f",
+                entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 10.0f));
         this.addRenderableWidget(this.screenEffectFrequencyBox);
 
         CyberpunkButton smoothBtn = new CyberpunkButton(contentX + 108, y1, 136, 18,
@@ -692,21 +761,24 @@ public class EditMusicEntryModalScreen extends Screen {
                         cb.setAccentColor(screenEffectSmooth ? 0xFFFFD700 : 0xFF8899AA);
                     }
                 },
-                screenEffectSmooth ? 0xFFFFD700 : 0xFF8899AA, false, Component.literal("Smooth sinusoidal pulse vs abrupt square flash"));
+                screenEffectSmooth ? 0xFFFFD700 : 0xFF8899AA, false,
+                Component.literal("Smooth sinusoidal pulse vs abrupt square flash"));
         this.addRenderableWidget(smoothBtn);
 
         this.screenEffectColorBox = new EditBox(this.font, contentX + 44, y2, 60, 18, Component.literal("Hex"));
         this.screenEffectColorBox.setValue(String.format("#%06X", entry.getScreenEffectColor() & 0x00FFFFFF));
         this.addRenderableWidget(this.screenEffectColorBox);
 
-        this.screenEffectIntensityBox = new EditBox(this.font, contentX + 180, y2, 46, 18, Component.literal("Opacity"));
+        this.screenEffectIntensityBox = new EditBox(this.font, contentX + 180, y2, 46, 18,
+                Component.literal("Opacity"));
         float curAlpha = entry.getScreenEffectMaxAlpha() > 0 ? entry.getScreenEffectMaxAlpha() : 0.85f;
         this.screenEffectIntensityBox.setValue(String.format(Locale.US, "%.2f", curAlpha));
         this.addRenderableWidget(this.screenEffectIntensityBox);
 
-        this.screenEffectColorPicker = new CyberpunkColorPicker(contentX + 254, card1Y + 6, entry.getScreenEffectColor(), c -> {
-            entry.setScreenEffectColor(c);
-        });
+        this.screenEffectColorPicker = new CyberpunkColorPicker(contentX + 254, card1Y + 6,
+                entry.getScreenEffectColor(), c -> {
+                    entry.setScreenEffectColor(c);
+                });
         this.screenEffectColorPicker.bindHexBox(this.screenEffectColorBox);
         this.addRenderableWidget(this.screenEffectColorPicker);
     }
@@ -719,40 +791,57 @@ public class EditMusicEntryModalScreen extends Screen {
                 Component.literal(screenEffectContinuous ? "MODE: CYCLE SPECTRUM" : "MODE: FIXED ANGLE"),
                 b -> {
                     screenEffectContinuous = !screenEffectContinuous;
-                    b.setMessage(Component.literal(screenEffectContinuous ? "MODE: CYCLE SPECTRUM" : "MODE: FIXED ANGLE"));
+                    b.setMessage(
+                            Component.literal(screenEffectContinuous ? "MODE: CYCLE SPECTRUM" : "MODE: FIXED ANGLE"));
                     if (b instanceof CyberpunkButton cb) {
                         cb.setAccentColor(screenEffectContinuous ? 0xFF00E5FF : 0xFFFFD700);
                     }
                     this.init();
                 },
-                screenEffectContinuous ? 0xFF00E5FF : 0xFFFFD700, false, Component.literal("Toggle continuous spectrum rotation vs fixed hue angle"));
+                screenEffectContinuous ? 0xFF00E5FF : 0xFFFFD700, false,
+                Component.literal("Toggle continuous spectrum rotation vs fixed hue angle"));
         this.addRenderableWidget(contBtn);
 
         if (screenEffectContinuous) {
-            this.screenEffectFrequencyBox = new EditBox(this.font, contentX + 252, y1, 46, 18, Component.literal("Speed"));
-            this.screenEffectFrequencyBox.setValue(String.format(Locale.US, "%.1f", entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 0.5f));
+            this.screenEffectFrequencyBox = new EditBox(this.font, contentX + 252, y1, 46, 18,
+                    Component.literal("Speed"));
+            this.screenEffectFrequencyBox.setValue(String.format(Locale.US, "%.1f",
+                    entry.getScreenEffectFrequency() > 0 ? entry.getScreenEffectFrequency() : 0.5f));
             this.addRenderableWidget(this.screenEffectFrequencyBox);
         } else {
-            this.screenEffectFrequencyBox = new EditBox(this.font, contentX + 232, y1, 46, 18, Component.literal("Angle"));
-            this.screenEffectFrequencyBox.setValue(String.format(Locale.US, "%.0f", entry.getScreenEffectAngle() > 0 ? entry.getScreenEffectAngle() : 180.0f));
+            this.screenEffectFrequencyBox = new EditBox(this.font, contentX + 232, y1, 46, 18,
+                    Component.literal("Angle"));
+            this.screenEffectFrequencyBox.setValue(String.format(Locale.US, "%.0f",
+                    entry.getScreenEffectAngle() > 0 ? entry.getScreenEffectAngle() : 180.0f));
             this.addRenderableWidget(this.screenEffectFrequencyBox);
 
             CyberpunkButton b90 = new CyberpunkButton(contentX + 284, y1, 38, 18, Component.literal("90°"),
-                    b -> { if (screenEffectFrequencyBox != null) screenEffectFrequencyBox.setValue("90"); },
+                    b -> {
+                        if (screenEffectFrequencyBox != null)
+                            screenEffectFrequencyBox.setValue("90");
+                    },
                     0xFF00E5FF, false, Component.literal("Rotate hue by 90° (Warm / Alien shift)"));
             CyberpunkButton b180 = new CyberpunkButton(contentX + 326, y1, 42, 18, Component.literal("180°"),
-                    b -> { if (screenEffectFrequencyBox != null) screenEffectFrequencyBox.setValue("180"); },
+                    b -> {
+                        if (screenEffectFrequencyBox != null)
+                            screenEffectFrequencyBox.setValue("180");
+                    },
                     0xFFFF00CC, false, Component.literal("Invert hue angle (180° complementary colors)"));
             CyberpunkButton b270 = new CyberpunkButton(contentX + 372, y1, 42, 18, Component.literal("270°"),
-                    b -> { if (screenEffectFrequencyBox != null) screenEffectFrequencyBox.setValue("270"); },
+                    b -> {
+                        if (screenEffectFrequencyBox != null)
+                            screenEffectFrequencyBox.setValue("270");
+                    },
                     0xFFFFD700, false, Component.literal("Rotate hue by 270° (Cool shift)"));
             this.addRenderableWidget(b90);
             this.addRenderableWidget(b180);
             this.addRenderableWidget(b270);
         }
 
-        this.screenEffectIntensityBox = new EditBox(this.font, contentX + 74, y2, 46, 18, Component.literal("Intensity"));
-        this.screenEffectIntensityBox.setValue(String.format(Locale.US, "%.2f", entry.getScreenEffectIntensity() > 0 ? entry.getScreenEffectIntensity() : 1.0f));
+        this.screenEffectIntensityBox = new EditBox(this.font, contentX + 74, y2, 46, 18,
+                Component.literal("Intensity"));
+        this.screenEffectIntensityBox.setValue(String.format(Locale.US, "%.2f",
+                entry.getScreenEffectIntensity() > 0 ? entry.getScreenEffectIntensity() : 1.0f));
         this.addRenderableWidget(this.screenEffectIntensityBox);
     }
 
@@ -773,7 +862,8 @@ public class EditMusicEntryModalScreen extends Screen {
                     };
                     b.setMessage(Component.literal("STYLE: " + screenEffectStyle));
                 },
-                0xFFFF2255, false, Component.literal("Cycle impact style: Noir (Inversion), Chromatic Burst, Thermal Speedlines, Hybrid, Draw"));
+                0xFFFF2255, false, Component.literal(
+                        "Cycle impact style: Noir (Inversion), Chromatic Burst, Thermal Speedlines, Hybrid, Draw"));
         this.addRenderableWidget(styleBtn);
 
         CyberpunkButton invertBtn = new CyberpunkButton(contentX + 118, y1, 74, 18,
@@ -785,7 +875,8 @@ public class EditMusicEntryModalScreen extends Screen {
                         cb.setAccentColor(screenEffectPulse ? 0xFF00FFCC : 0xFF8899AA);
                     }
                 },
-                screenEffectPulse ? 0xFF00FFCC : 0xFF8899AA, false, Component.literal("Toggle negative/inverted cut flashes in sequence"));
+                screenEffectPulse ? 0xFF00FFCC : 0xFF8899AA, false,
+                Component.literal("Toggle negative/inverted cut flashes in sequence"));
         this.addRenderableWidget(invertBtn);
 
         this.screenEffectFrequencyBox = new EditBox(this.font, contentX + 50, y2, 40, 18, Component.literal("Cut FPS"));
@@ -814,7 +905,8 @@ public class EditMusicEntryModalScreen extends Screen {
                         screenEffectColorPicker.setColor(cur);
                     }
                 },
-                impactEditingSecondary ? 0xFFFF00CC : 0xFF00E5FF, false, Component.literal("Toggle editing Paper / Light color vs Ink / Dark shadow color"));
+                impactEditingSecondary ? 0xFFFF00CC : 0xFF00E5FF, false,
+                Component.literal("Toggle editing Paper / Light color vs Ink / Dark shadow color"));
         this.addRenderableWidget(colorTargetBtn);
 
         this.screenEffectColorPicker = new CyberpunkColorPicker(contentX + 284, card1Y + 6, activeColor, c -> {
@@ -836,12 +928,15 @@ public class EditMusicEntryModalScreen extends Screen {
         this.screenEffectSlideInBox.setValue(String.valueOf(entry.getScreenEffectTransitionInMs()));
         this.addRenderableWidget(this.screenEffectSlideInBox);
 
-        this.screenEffectSlideOutBox = new EditBox(this.font, contentX + 154, y1, 46, 18, Component.literal("Slide Out"));
+        this.screenEffectSlideOutBox = new EditBox(this.font, contentX + 154, y1, 46, 18,
+                Component.literal("Slide Out"));
         this.screenEffectSlideOutBox.setValue(String.valueOf(entry.getScreenEffectTransitionOutMs()));
         this.addRenderableWidget(this.screenEffectSlideOutBox);
 
-        this.screenEffectBarHeightBox = new EditBox(this.font, contentX + 56, y2, 40, 18, Component.literal("Height %"));
-        this.screenEffectBarHeightBox.setValue(String.format(Locale.US, "%.1f", entry.getScreenEffectBarHeight() * 100.0f));
+        this.screenEffectBarHeightBox = new EditBox(this.font, contentX + 56, y2, 40, 18,
+                Component.literal("Height %"));
+        this.screenEffectBarHeightBox
+                .setValue(String.format(Locale.US, "%.1f", entry.getScreenEffectBarHeight() * 100.0f));
         this.addRenderableWidget(this.screenEffectBarHeightBox);
 
         this.screenEffectColorBox = new EditBox(this.font, contentX + 132, y2, 68, 18, Component.literal("Hex"));
@@ -860,7 +955,8 @@ public class EditMusicEntryModalScreen extends Screen {
         long ts = 0L;
         try {
             ts = Math.max(0L, Long.parseLong(this.timestampBox.getValue().trim()));
-        } catch (NumberFormatException ignored) {}
+        } catch (NumberFormatException ignored) {
+        }
         entry.setTimestampMs(ts);
         entry.setActionType(MusicSequenceChannel.TYPE_SCREEN_EFFECT);
         if (channel != null) {
@@ -872,7 +968,8 @@ public class EditMusicEntryModalScreen extends Screen {
             if (screenEffectDurationBox != null && !screenEffectDurationBox.getValue().trim().isEmpty()) {
                 duration = Math.max(0, Integer.parseInt(screenEffectDurationBox.getValue().trim()));
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
         entry.setDurationMs(duration);
         entry.setWindupMs(0);
         entry.setJumpMs(0);
@@ -908,14 +1005,16 @@ public class EditMusicEntryModalScreen extends Screen {
                     if (cStr.length() <= 6) {
                         clr = 0xFF000000 | clr;
                     }
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
             entry.setScreenEffectColor(clr);
             entry.setCommand("screeneffect strobe " + duration + " " + freq);
             if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
                 entry.setDescription(descriptionBox.getValue().trim());
             } else {
-                entry.setDescription("Strobe Flash (" + freq + "Hz, " + (int)(entry.getScreenEffectMaxAlpha() * 100) + "% op, " + duration + "ms)");
+                entry.setDescription("Strobe Flash (" + freq + "Hz, " + (int) (entry.getScreenEffectMaxAlpha() * 100)
+                        + "% op, " + duration + "ms)");
             }
         } else if ("HUE_SHIFT".equalsIgnoreCase(activeScreenEffectMode)) {
             entry.setScreenEffectId("fractured_utils:hue_shift");
@@ -929,11 +1028,15 @@ public class EditMusicEntryModalScreen extends Screen {
             }
             float intensity = parseFloat(screenEffectIntensityBox, 1.0f);
             entry.setScreenEffectIntensity(Math.max(0.05f, Math.min(1.0f, intensity)));
-            entry.setCommand("screeneffect hue_shift " + duration + (screenEffectContinuous ? " cycle " + entry.getScreenEffectFrequency() : " angle " + entry.getScreenEffectAngle()));
+            entry.setCommand("screeneffect hue_shift " + duration
+                    + (screenEffectContinuous ? " cycle " + entry.getScreenEffectFrequency()
+                            : " angle " + entry.getScreenEffectAngle()));
             if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
                 entry.setDescription(descriptionBox.getValue().trim());
             } else {
-                entry.setDescription("Hue Shift (" + (screenEffectContinuous ? entry.getScreenEffectFrequency() + " rot/s" : (int)entry.getScreenEffectAngle() + "°") + ", " + duration + "ms)");
+                entry.setDescription(
+                        "Hue Shift (" + (screenEffectContinuous ? entry.getScreenEffectFrequency() + " rot/s"
+                                : (int) entry.getScreenEffectAngle() + "°") + ", " + duration + "ms)");
             }
         } else if ("IMPACT_FRAME".equalsIgnoreCase(activeScreenEffectMode)) {
             entry.setScreenEffectId("fractured_utils:impact_frame");
@@ -946,7 +1049,9 @@ public class EditMusicEntryModalScreen extends Screen {
             int secondary = screenEffectSecondaryColor != 0 ? screenEffectSecondaryColor : 0xFF000000;
             entry.setScreenEffectColor(primary);
             entry.setScreenEffectSecondaryColor(secondary);
-            entry.setCommand("screeneffect impact_frame " + duration + " " + String.format("#%06X", primary & 0x00FFFFFF) + " " + String.format("#%06X", secondary & 0x00FFFFFF));
+            entry.setCommand(
+                    "screeneffect impact_frame " + duration + " " + String.format("#%06X", primary & 0x00FFFFFF) + " "
+                            + String.format("#%06X", secondary & 0x00FFFFFF));
             if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
                 entry.setDescription(descriptionBox.getValue().trim());
             } else {
@@ -970,14 +1075,16 @@ public class EditMusicEntryModalScreen extends Screen {
                     if (cStr.length() <= 6) {
                         clr = 0xFF000000 | clr;
                     }
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
             entry.setScreenEffectColor(clr);
             entry.setCommand("screeneffect cinematic_bars " + duration + " " + inMs + " " + outMs);
             if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
                 entry.setDescription(descriptionBox.getValue().trim());
             } else {
-                entry.setDescription("Cinematic Bars (" + (int) heightPercent + "% height, in=" + inMs + "ms, out=" + outMs + "ms)");
+                entry.setDescription(
+                        "Cinematic Bars (" + (int) heightPercent + "% height, in=" + inMs + "ms, out=" + outMs + "ms)");
             }
         } else {
             // SCREEN_SHAKE
@@ -1008,24 +1115,30 @@ public class EditMusicEntryModalScreen extends Screen {
 
         // 1. Four Camera Mode Tabs: ENABLE, KEYFRAME, DISABLE, TRACKING
         int tabW = (contentW - 9) / 4;
-        boolean isKeyframe = "KEYFRAME".equalsIgnoreCase(activeCameraMode) || "STATIC".equalsIgnoreCase(activeCameraMode);
+        boolean isKeyframe = "KEYFRAME".equalsIgnoreCase(activeCameraMode)
+                || "STATIC".equalsIgnoreCase(activeCameraMode);
         boolean isEnable = "ENABLE".equalsIgnoreCase(activeCameraMode);
         boolean isDisable = "DISABLE".equalsIgnoreCase(activeCameraMode) || "CLEAR".equalsIgnoreCase(activeCameraMode);
-        boolean isTracking = "FOLLOW".equalsIgnoreCase(activeCameraMode) || "OVER_THE_SHOULDER".equalsIgnoreCase(activeCameraMode);
+        boolean isTracking = "FOLLOW".equalsIgnoreCase(activeCameraMode)
+                || "OVER_THE_SHOULDER".equalsIgnoreCase(activeCameraMode);
 
         CyberpunkButton enableTab = new CyberpunkButton(contentX, currentY, tabW, 20, Component.literal("🟢 ENABLE"),
                 b -> switchCameraMode("ENABLE"),
                 0xFF00FF88, isEnable, Component.literal("Turn camera override ON at this timestamp"));
 
-        CyberpunkButton keyframeTab = new CyberpunkButton(contentX + tabW + 3, currentY, tabW, 20, Component.literal("📷 KEYFRAME"),
+        CyberpunkButton keyframeTab = new CyberpunkButton(contentX + tabW + 3, currentY, tabW, 20,
+                Component.literal("📷 KEYFRAME"),
                 b -> switchCameraMode("KEYFRAME"),
-                MusicSequenceChannel.COLOR_CAMERA, isKeyframe, Component.literal("Camera position & spline transition to next keyframe"));
+                MusicSequenceChannel.COLOR_CAMERA, isKeyframe,
+                Component.literal("Camera position & spline transition to next keyframe"));
 
-        CyberpunkButton disableTab = new CyberpunkButton(contentX + (tabW + 3) * 2, currentY, tabW, 20, Component.literal("🔴 DISABLE"),
+        CyberpunkButton disableTab = new CyberpunkButton(contentX + (tabW + 3) * 2, currentY, tabW, 20,
+                Component.literal("🔴 DISABLE"),
                 b -> switchCameraMode("DISABLE"),
                 0xFFFF3355, isDisable, Component.literal("Turn camera override OFF and restore player controls"));
 
-        CyberpunkButton trackingTab = new CyberpunkButton(contentX + (tabW + 3) * 3, currentY, tabW, 20, Component.literal("👤 TRACKING"),
+        CyberpunkButton trackingTab = new CyberpunkButton(contentX + (tabW + 3) * 3, currentY, tabW, 20,
+                Component.literal("👤 TRACKING"),
                 b -> switchCameraMode("FOLLOW"),
                 0xFF00E5FF, isTracking, Component.literal("Follow player or entity in 3rd-person"));
 
@@ -1053,7 +1166,7 @@ public class EditMusicEntryModalScreen extends Screen {
                     }, MusicSequenceChannel.COLOR_CAMERA, false, Component.literal(cameraSplineMode.getDescription()));
             this.addRenderableWidget(splineBtn);
 
-            CameraEasing[] easingPresets = new CameraEasing[]{
+            CameraEasing[] easingPresets = new CameraEasing[] {
                     CameraEasing.LINEAR,
                     CameraEasing.EASE_IN_QUAD,
                     CameraEasing.EASE_OUT_QUAD,
@@ -1092,7 +1205,8 @@ public class EditMusicEntryModalScreen extends Screen {
                             cb.setAccentColor(cameraInterpolate ? 0xFF00FF88 : 0xFF8899AA);
                         }
                     },
-                    cameraInterpolate ? 0xFF00FF88 : 0xFF8899AA, false, Component.literal("Smooth interpolation between keyframe coordinates"));
+                    cameraInterpolate ? 0xFF00FF88 : 0xFF8899AA, false,
+                    Component.literal("Smooth interpolation between keyframe coordinates"));
             this.addRenderableWidget(smoothToggle);
 
             // Bézier handles row if Bézier spline selected
@@ -1111,15 +1225,18 @@ public class EditMusicEntryModalScreen extends Screen {
                 this.cameraInHandleZBox.setValue(String.format(Locale.US, "%.1f", entry.getInHandleZ()));
                 this.addRenderableWidget(this.cameraInHandleZBox);
 
-                this.cameraOutHandleXBox = new EditBox(this.font, contentX + 224, by, hW, 16, Component.literal("OutX"));
+                this.cameraOutHandleXBox = new EditBox(this.font, contentX + 224, by, hW, 16,
+                        Component.literal("OutX"));
                 this.cameraOutHandleXBox.setValue(String.format(Locale.US, "%.1f", entry.getOutHandleX()));
                 this.addRenderableWidget(this.cameraOutHandleXBox);
 
-                this.cameraOutHandleYBox = new EditBox(this.font, contentX + 262, by, hW, 16, Component.literal("OutY"));
+                this.cameraOutHandleYBox = new EditBox(this.font, contentX + 262, by, hW, 16,
+                        Component.literal("OutY"));
                 this.cameraOutHandleYBox.setValue(String.format(Locale.US, "%.1f", entry.getOutHandleY()));
                 this.addRenderableWidget(this.cameraOutHandleYBox);
 
-                this.cameraOutHandleZBox = new EditBox(this.font, contentX + 300, by, hW, 16, Component.literal("OutZ"));
+                this.cameraOutHandleZBox = new EditBox(this.font, contentX + 300, by, hW, 16,
+                        Component.literal("OutZ"));
                 this.cameraOutHandleZBox.setValue(String.format(Locale.US, "%.1f", entry.getOutHandleZ()));
                 this.addRenderableWidget(this.cameraOutHandleZBox);
             }
@@ -1132,7 +1249,8 @@ public class EditMusicEntryModalScreen extends Screen {
                         cameraLookAtEnabled = !cameraLookAtEnabled;
                         this.init();
                     },
-                    cameraLookAtEnabled ? 0xFF00FF88 : 0xFF8899AA, false, Component.literal("Decouple camera orientation to lock target via Inverse Kinematics"));
+                    cameraLookAtEnabled ? 0xFF00FF88 : 0xFF8899AA, false,
+                    Component.literal("Decouple camera orientation to lock target via Inverse Kinematics"));
             this.addRenderableWidget(lookAtToggle);
 
             CyberpunkButton lookAtModeBtn = new CyberpunkButton(contentX + 126, card3Y + 5, 100, 18,
@@ -1141,31 +1259,38 @@ public class EditMusicEntryModalScreen extends Screen {
                         cameraLookAtMode = "COORDINATE".equalsIgnoreCase(cameraLookAtMode) ? "ENTITY" : "COORDINATE";
                         this.init();
                     },
-                    0xFF00E5FF, false, Component.literal("Switch look-at IK target between 3D world coordinate and entity"));
+                    0xFF00E5FF, false,
+                    Component.literal("Switch look-at IK target between 3D world coordinate and entity"));
             this.addRenderableWidget(lookAtModeBtn);
 
             if ("COORDINATE".equalsIgnoreCase(cameraLookAtMode)) {
                 int cW = 40;
-                this.cameraLookAtXBox = new EditBox(this.font, contentX + 246, card3Y + 5, cW, 18, Component.literal("LX"));
+                this.cameraLookAtXBox = new EditBox(this.font, contentX + 246, card3Y + 5, cW, 18,
+                        Component.literal("LX"));
                 this.cameraLookAtXBox.setValue(String.format(Locale.US, "%.1f", entry.getLookAtX()));
                 this.addRenderableWidget(this.cameraLookAtXBox);
 
-                this.cameraLookAtYBox = new EditBox(this.font, contentX + 290, card3Y + 5, cW, 18, Component.literal("LY"));
+                this.cameraLookAtYBox = new EditBox(this.font, contentX + 290, card3Y + 5, cW, 18,
+                        Component.literal("LY"));
                 this.cameraLookAtYBox.setValue(String.format(Locale.US, "%.1f", entry.getLookAtY()));
                 this.addRenderableWidget(this.cameraLookAtYBox);
 
-                this.cameraLookAtZBox = new EditBox(this.font, contentX + 334, card3Y + 5, cW, 18, Component.literal("LZ"));
+                this.cameraLookAtZBox = new EditBox(this.font, contentX + 334, card3Y + 5, cW, 18,
+                        Component.literal("LZ"));
                 this.cameraLookAtZBox.setValue(String.format(Locale.US, "%.1f", entry.getLookAtZ()));
                 this.addRenderableWidget(this.cameraLookAtZBox);
             } else {
-                this.cameraLookAtTargetBox = new EditBox(this.font, contentX + 246, card3Y + 5, 128, 18, Component.literal("Target"));
+                this.cameraLookAtTargetBox = new EditBox(this.font, contentX + 246, card3Y + 5, 128, 18,
+                        Component.literal("Target"));
                 this.cameraLookAtTargetBox.setValue(entry.getLookAtTarget().isEmpty() ? "@p" : entry.getLookAtTarget());
                 this.cameraLookAtTargetBox.setHint(Component.literal("@p, UUID, or #tag"));
                 this.addRenderableWidget(this.cameraLookAtTargetBox);
             }
 
-            this.cameraLookAtWeightBox = new EditBox(this.font, contentX + contentW - 40, card3Y + 5, 36, 18, Component.literal("Weight"));
-            this.cameraLookAtWeightBox.setValue(String.format(Locale.US, "%.2f", entry.getLookAtWeight() > 0 ? entry.getLookAtWeight() : 1.0));
+            this.cameraLookAtWeightBox = new EditBox(this.font, contentX + contentW - 40, card3Y + 5, 36, 18,
+                    Component.literal("Weight"));
+            this.cameraLookAtWeightBox.setValue(
+                    String.format(Locale.US, "%.2f", entry.getLookAtWeight() > 0 ? entry.getLookAtWeight() : 1.0));
             this.addRenderableWidget(this.cameraLookAtWeightBox);
 
             // 5. Timing Section (Card 4)
@@ -1174,7 +1299,8 @@ public class EditMusicEntryModalScreen extends Screen {
 
             // 6. Description / Note Box
             int descLabelY = panelTop + 264;
-            this.descriptionBox = new EditBox(this.font, contentX, descLabelY + 12, contentW, 18, Component.literal("Description / Note"));
+            this.descriptionBox = new EditBox(this.font, contentX, descLabelY + 12, contentW, 18,
+                    Component.literal("Description / Note"));
             this.descriptionBox.setMaxLength(128);
             this.descriptionBox.setValue(entry.getDescription());
             this.descriptionBox.setHint(Component.literal("Optional label or cinematic note for timeline"));
@@ -1186,7 +1312,8 @@ public class EditMusicEntryModalScreen extends Screen {
             initTimingWidgets(contentX, card2Y, contentW);
 
             int descLabelY = panelTop + 176;
-            this.descriptionBox = new EditBox(this.font, contentX, descLabelY + 13, contentW, 18, Component.literal("Description / Note"));
+            this.descriptionBox = new EditBox(this.font, contentX, descLabelY + 13, contentW, 18,
+                    Component.literal("Description / Note"));
             this.descriptionBox.setMaxLength(128);
             this.descriptionBox.setValue(entry.getDescription().isEmpty() ? "Enable Camera" : entry.getDescription());
             this.descriptionBox.setHint(Component.literal("Optional label or note for timeline"));
@@ -1198,7 +1325,8 @@ public class EditMusicEntryModalScreen extends Screen {
             initTimingWidgets(contentX, card2Y, contentW);
 
             int descLabelY = panelTop + 176;
-            this.descriptionBox = new EditBox(this.font, contentX, descLabelY + 13, contentW, 18, Component.literal("Description / Note"));
+            this.descriptionBox = new EditBox(this.font, contentX, descLabelY + 13, contentW, 18,
+                    Component.literal("Description / Note"));
             this.descriptionBox.setMaxLength(128);
             this.descriptionBox.setValue(entry.getDescription().isEmpty() ? "Disable Camera" : entry.getDescription());
             this.descriptionBox.setHint(Component.literal("Optional label or note for timeline"));
@@ -1215,7 +1343,8 @@ public class EditMusicEntryModalScreen extends Screen {
             initTimingWidgets(contentX, card2Y, contentW);
 
             int descLabelY = panelTop + 176;
-            this.descriptionBox = new EditBox(this.font, contentX, descLabelY + 13, contentW, 18, Component.literal("Description / Note"));
+            this.descriptionBox = new EditBox(this.font, contentX, descLabelY + 13, contentW, 18,
+                    Component.literal("Description / Note"));
             this.descriptionBox.setMaxLength(128);
             this.descriptionBox.setValue(entry.getDescription());
             this.descriptionBox.setHint(Component.literal("Optional label or note for timeline"));
@@ -1235,26 +1364,32 @@ public class EditMusicEntryModalScreen extends Screen {
         if (onDelete != null) {
             CyberpunkButton deleteBtn = new CyberpunkButton(panelLeft + 98, footerY, 80, 20,
                     Component.literal("🗑 Delete"), b -> {
-                onDelete.run();
-                this.onClose();
-            }, RED_CANCEL, false);
+                        onDelete.run();
+                        this.onClose();
+                    }, RED_CANCEL, false);
             this.addRenderableWidget(deleteBtn);
         }
     }
 
     private void initTimingWidgets(int contentX, int cardY, int contentW) {
-        this.timestampBox = new EditBox(this.font, contentX + 66, cardY + 5, 75, 18, Component.literal("Timestamp (ms)"));
+        this.timestampBox = new EditBox(this.font, contentX + 66, cardY + 5, 75, 18,
+                Component.literal("Timestamp (ms)"));
         this.timestampBox.setMaxLength(10);
         this.timestampBox.setValue(String.valueOf(entry.getTimestampMs()));
         this.addRenderableWidget(this.timestampBox);
 
         int qx = contentX + 150;
         int btnW = 38;
-        this.addRenderableWidget(new CyberpunkButton(qx, cardY + 5, btnW, 18, Component.literal("-1s"), b -> adjustTimestamp(-1000)));
-        this.addRenderableWidget(new CyberpunkButton(qx + btnW + 2, cardY + 5, btnW, 18, Component.literal("-0.1s"), b -> adjustTimestamp(-100)));
-        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 2, cardY + 5, btnW, 18, Component.literal("+0.1s"), b -> adjustTimestamp(100)));
-        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 3, cardY + 5, btnW, 18, Component.literal("+1s"), b -> adjustTimestamp(1000)));
-        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 4, cardY + 5, btnW, 18, Component.literal("+3s"), b -> adjustTimestamp(3000)));
+        this.addRenderableWidget(
+                new CyberpunkButton(qx, cardY + 5, btnW, 18, Component.literal("-1s"), b -> adjustTimestamp(-1000)));
+        this.addRenderableWidget(new CyberpunkButton(qx + btnW + 2, cardY + 5, btnW, 18, Component.literal("-0.1s"),
+                b -> adjustTimestamp(-100)));
+        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 2, cardY + 5, btnW, 18,
+                Component.literal("+0.1s"), b -> adjustTimestamp(100)));
+        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 3, cardY + 5, btnW, 18, Component.literal("+1s"),
+                b -> adjustTimestamp(1000)));
+        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 4, cardY + 5, btnW, 18, Component.literal("+3s"),
+                b -> adjustTimestamp(3000)));
     }
 
     private void initStaticCameraControls(int contentX, int card1Y, int contentW) {
@@ -1272,11 +1407,13 @@ public class EditMusicEntryModalScreen extends Screen {
         this.addRenderableWidget(this.cameraPosZBox);
 
         CyberpunkButton snapEyeBtn = new CyberpunkButton(contentX + 202, y1, 114, 18,
-                Component.literal("📍 SNAP EYE POS"), b -> capturePlayerEyePosition(), 0xFF00FF88, false, Component.literal("Capture player eye coordinates and angles"));
+                Component.literal("📍 SNAP EYE POS"), b -> capturePlayerEyePosition(), 0xFF00FF88, false,
+                Component.literal("Capture player eye coordinates and angles"));
         this.addRenderableWidget(snapEyeBtn);
 
         CyberpunkButton flyBtn = new CyberpunkButton(contentX + 322, y1, contentW - 322 - 4, 18,
-                Component.literal("✈ FLY & AIM (3D)"), b -> openCameraSetupScreen(), CYAN_MAIN, false, Component.literal("Launch 3D in-world camera flight & aim setup"));
+                Component.literal("✈ FLY & AIM (3D)"), b -> openCameraSetupScreen(), CYAN_MAIN, false,
+                Component.literal("Launch 3D in-world camera flight & aim setup"));
         flyBtn.setSolidPrimary(true);
         this.addRenderableWidget(flyBtn);
 
@@ -1304,8 +1441,10 @@ public class EditMusicEntryModalScreen extends Screen {
         this.cameraTargetBox.setValue(entry.getCameraTarget().isEmpty() ? "@p" : entry.getCameraTarget());
         this.addRenderableWidget(this.cameraTargetBox);
 
-        this.cameraHeightOffsetBox = new EditBox(this.font, contentX + 254, y1, 46, 18, Component.literal("Height Offset"));
-        this.cameraHeightOffsetBox.setValue(String.format(Locale.US, "%.1f", entry.getCameraHeightOffset() > 0 ? entry.getCameraHeightOffset() : 5.5));
+        this.cameraHeightOffsetBox = new EditBox(this.font, contentX + 254, y1, 46, 18,
+                Component.literal("Height Offset"));
+        this.cameraHeightOffsetBox.setValue(String.format(Locale.US, "%.1f",
+                entry.getCameraHeightOffset() > 0 ? entry.getCameraHeightOffset() : 5.5));
         this.addRenderableWidget(this.cameraHeightOffsetBox);
 
         this.cameraFovBox = new EditBox(this.font, contentX + 338, y1, 42, 18, Component.literal("FOV"));
@@ -1325,11 +1464,14 @@ public class EditMusicEntryModalScreen extends Screen {
         this.addRenderableWidget(this.cameraTargetBox);
 
         this.cameraBackDistanceBox = new EditBox(this.font, contentX + 202, y1, 46, 18, Component.literal("Back Dist"));
-        this.cameraBackDistanceBox.setValue(String.format(Locale.US, "%.1f", entry.getCameraBackDistance() > 0 ? entry.getCameraBackDistance() : 2.4));
+        this.cameraBackDistanceBox.setValue(String.format(Locale.US, "%.1f",
+                entry.getCameraBackDistance() > 0 ? entry.getCameraBackDistance() : 2.4));
         this.addRenderableWidget(this.cameraBackDistanceBox);
 
-        this.cameraShoulderOffsetBox = new EditBox(this.font, contentX + 286, y1, 46, 18, Component.literal("Shoulder"));
-        this.cameraShoulderOffsetBox.setValue(String.format(Locale.US, "%.2f", entry.getCameraShoulderOffset() > 0 ? entry.getCameraShoulderOffset() : 0.55));
+        this.cameraShoulderOffsetBox = new EditBox(this.font, contentX + 286, y1, 46, 18,
+                Component.literal("Shoulder"));
+        this.cameraShoulderOffsetBox.setValue(String.format(Locale.US, "%.2f",
+                entry.getCameraShoulderOffset() > 0 ? entry.getCameraShoulderOffset() : 0.55));
         this.addRenderableWidget(this.cameraShoulderOffsetBox);
 
         this.cameraFovBox = new EditBox(this.font, contentX + 368, y1, 42, 18, Component.literal("FOV"));
@@ -1337,48 +1479,59 @@ public class EditMusicEntryModalScreen extends Screen {
         this.addRenderableWidget(this.cameraFovBox);
 
         int y2 = card1Y + 31;
-        this.cameraHeightOffsetBox = new EditBox(this.font, contentX + 52, y2, 46, 18, Component.literal("Height Offset"));
+        this.cameraHeightOffsetBox = new EditBox(this.font, contentX + 52, y2, 46, 18,
+                Component.literal("Height Offset"));
         this.cameraHeightOffsetBox.setValue(String.format(Locale.US, "%.2f", entry.getCameraHeightOffset()));
         this.addRenderableWidget(this.cameraHeightOffsetBox);
 
         this.cameraPitchBox = new EditBox(this.font, contentX + 140, y2, 46, 18, Component.literal("Pitch"));
-        this.cameraPitchBox.setValue(String.format(Locale.US, "%.0f", entry.getCameraPitch() != 0 ? entry.getCameraPitch() : 15.0f));
+        this.cameraPitchBox.setValue(
+                String.format(Locale.US, "%.0f", entry.getCameraPitch() != 0 ? entry.getCameraPitch() : 15.0f));
         this.addRenderableWidget(this.cameraPitchBox);
     }
 
     private void initActivationCameraControls(int contentX, int card1Y, int contentW, boolean isEnable) {
-        long currentDur = entry.getDurationMs() > 0 ? entry.getDurationMs() : (entry.getTotalDurationMs() > 0 ? entry.getTotalDurationMs() : 1000L);
-        this.cameraDurationBox = new EditBox(this.font, contentX + 104, card1Y + 5, 54, 18, Component.literal("Duration"));
+        long currentDur = entry.getDurationMs() > 0 ? entry.getDurationMs()
+                : (entry.getTotalDurationMs() > 0 ? entry.getTotalDurationMs() : 1000L);
+        this.cameraDurationBox = new EditBox(this.font, contentX + 104, card1Y + 5, 54, 18,
+                Component.literal("Duration"));
         this.cameraDurationBox.setValue(String.valueOf(currentDur));
         this.addRenderableWidget(this.cameraDurationBox);
 
         int qx = contentX + 162;
         int btnW = 34;
         this.addRenderableWidget(new CyberpunkButton(qx, card1Y + 5, btnW, 18, Component.literal("0ms"), b -> {
-            if (cameraDurationBox != null) cameraDurationBox.setValue("0");
+            if (cameraDurationBox != null)
+                cameraDurationBox.setValue("0");
             cameraInterpolate = false;
             this.init();
         }, 0xFFFF5555, false, Component.literal("Instant cut without smooth transition")));
 
-        this.addRenderableWidget(new CyberpunkButton(qx + btnW + 2, card1Y + 5, btnW, 18, Component.literal(".5s"), b -> {
-            if (cameraDurationBox != null) cameraDurationBox.setValue("500");
-            cameraInterpolate = true;
-            this.init();
-        }, 0xFF00FF88, false, Component.literal("500ms transition duration")));
+        this.addRenderableWidget(
+                new CyberpunkButton(qx + btnW + 2, card1Y + 5, btnW, 18, Component.literal(".5s"), b -> {
+                    if (cameraDurationBox != null)
+                        cameraDurationBox.setValue("500");
+                    cameraInterpolate = true;
+                    this.init();
+                }, 0xFF00FF88, false, Component.literal("500ms transition duration")));
 
-        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 2, card1Y + 5, btnW, 18, Component.literal("1s"), b -> {
-            if (cameraDurationBox != null) cameraDurationBox.setValue("1000");
-            cameraInterpolate = true;
-            this.init();
-        }, 0xFF00FF88, false, Component.literal("1000ms (1s) transition duration")));
+        this.addRenderableWidget(
+                new CyberpunkButton(qx + (btnW + 2) * 2, card1Y + 5, btnW, 18, Component.literal("1s"), b -> {
+                    if (cameraDurationBox != null)
+                        cameraDurationBox.setValue("1000");
+                    cameraInterpolate = true;
+                    this.init();
+                }, 0xFF00FF88, false, Component.literal("1000ms (1s) transition duration")));
 
-        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 2) * 3, card1Y + 5, btnW, 18, Component.literal("2s"), b -> {
-            if (cameraDurationBox != null) cameraDurationBox.setValue("2000");
-            cameraInterpolate = true;
-            this.init();
-        }, 0xFF00FF88, false, Component.literal("2000ms (2s) transition duration")));
+        this.addRenderableWidget(
+                new CyberpunkButton(qx + (btnW + 2) * 3, card1Y + 5, btnW, 18, Component.literal("2s"), b -> {
+                    if (cameraDurationBox != null)
+                        cameraDurationBox.setValue("2000");
+                    cameraInterpolate = true;
+                    this.init();
+                }, 0xFF00FF88, false, Component.literal("2000ms (2s) transition duration")));
 
-        CameraEasing[] easingPresets = new CameraEasing[]{
+        CameraEasing[] easingPresets = new CameraEasing[] {
                 CameraEasing.LINEAR,
                 CameraEasing.EASE_IN_QUAD,
                 CameraEasing.EASE_OUT_QUAD,
@@ -1422,7 +1575,8 @@ public class EditMusicEntryModalScreen extends Screen {
                         cb.setAccentColor(cameraInterpolate ? 0xFF00FF88 : 0xFF8899AA);
                     }
                 },
-                cameraInterpolate ? 0xFF00FF88 : 0xFF8899AA, false, Component.literal("Toggle smooth interpolation vs instant cut"));
+                cameraInterpolate ? 0xFF00FF88 : 0xFF8899AA, false,
+                Component.literal("Toggle smooth interpolation vs instant cut"));
         this.addRenderableWidget(smoothToggle);
     }
 
@@ -1438,13 +1592,20 @@ public class EditMusicEntryModalScreen extends Screen {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {
             Vec3 eye = mc.player.getEyePosition();
-            if (cameraPosXBox != null) cameraPosXBox.setValue(String.format(Locale.US, "%.1f", eye.x));
-            if (cameraPosYBox != null) cameraPosYBox.setValue(String.format(Locale.US, "%.1f", eye.y));
-            if (cameraPosZBox != null) cameraPosZBox.setValue(String.format(Locale.US, "%.1f", eye.z));
-            if (cameraYawBox != null) cameraYawBox.setValue(String.format(Locale.US, "%.0f", mc.player.getYRot()));
-            if (cameraPitchBox != null) cameraPitchBox.setValue(String.format(Locale.US, "%.0f", mc.player.getXRot()));
-            if (cameraRollBox != null) cameraRollBox.setValue(String.format(Locale.US, "%.0f", 0.0f));
-            mc.getSoundManager().play(SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK.get(), 1.2f));
+            if (cameraPosXBox != null)
+                cameraPosXBox.setValue(String.format(Locale.US, "%.1f", eye.x));
+            if (cameraPosYBox != null)
+                cameraPosYBox.setValue(String.format(Locale.US, "%.1f", eye.y));
+            if (cameraPosZBox != null)
+                cameraPosZBox.setValue(String.format(Locale.US, "%.1f", eye.z));
+            if (cameraYawBox != null)
+                cameraYawBox.setValue(String.format(Locale.US, "%.0f", mc.player.getYRot()));
+            if (cameraPitchBox != null)
+                cameraPitchBox.setValue(String.format(Locale.US, "%.0f", mc.player.getXRot()));
+            if (cameraRollBox != null)
+                cameraRollBox.setValue(String.format(Locale.US, "%.0f", 0.0f));
+            mc.getSoundManager()
+                    .play(SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK.get(), 1.2f));
         }
     }
 
@@ -1452,7 +1613,8 @@ public class EditMusicEntryModalScreen extends Screen {
         if (timestampBox != null) {
             try {
                 entry.setTimestampMs(Math.max(0L, Long.parseLong(timestampBox.getValue().trim())));
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
         if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
             entry.setDescription(descriptionBox.getValue().trim());
@@ -1484,18 +1646,26 @@ public class EditMusicEntryModalScreen extends Screen {
             entry.setCameraRoll(res.roll());
             entry.setCameraFov(res.fov());
 
-            if (cameraPosXBox != null) cameraPosXBox.setValue(String.format(Locale.US, "%.1f", res.x()));
-            if (cameraPosYBox != null) cameraPosYBox.setValue(String.format(Locale.US, "%.1f", res.y()));
-            if (cameraPosZBox != null) cameraPosZBox.setValue(String.format(Locale.US, "%.1f", res.z()));
-            if (cameraYawBox != null) cameraYawBox.setValue(String.format(Locale.US, "%.0f", res.yaw()));
-            if (cameraPitchBox != null) cameraPitchBox.setValue(String.format(Locale.US, "%.0f", res.pitch()));
-            if (cameraRollBox != null) cameraRollBox.setValue(String.format(Locale.US, "%.0f", res.roll()));
-            if (cameraFovBox != null) cameraFovBox.setValue(String.format(Locale.US, "%.0f", res.fov()));
+            if (cameraPosXBox != null)
+                cameraPosXBox.setValue(String.format(Locale.US, "%.1f", res.x()));
+            if (cameraPosYBox != null)
+                cameraPosYBox.setValue(String.format(Locale.US, "%.1f", res.y()));
+            if (cameraPosZBox != null)
+                cameraPosZBox.setValue(String.format(Locale.US, "%.1f", res.z()));
+            if (cameraYawBox != null)
+                cameraYawBox.setValue(String.format(Locale.US, "%.0f", res.yaw()));
+            if (cameraPitchBox != null)
+                cameraPitchBox.setValue(String.format(Locale.US, "%.0f", res.pitch()));
+            if (cameraRollBox != null)
+                cameraRollBox.setValue(String.format(Locale.US, "%.0f", res.roll()));
+            if (cameraFovBox != null)
+                cameraFovBox.setValue(String.format(Locale.US, "%.0f", res.fov()));
         }));
     }
 
     private double parseDouble(EditBox box, double fallback) {
-        if (box == null || box.getValue().trim().isEmpty()) return fallback;
+        if (box == null || box.getValue().trim().isEmpty())
+            return fallback;
         try {
             return Double.parseDouble(box.getValue().trim().replace(",", "."));
         } catch (Exception ignored) {
@@ -1504,7 +1674,8 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private int parseInt(EditBox box, int fallback) {
-        if (box == null || box.getValue().trim().isEmpty()) return fallback;
+        if (box == null || box.getValue().trim().isEmpty())
+            return fallback;
         try {
             return Integer.parseInt(box.getValue().trim());
         } catch (Exception ignored) {
@@ -1513,7 +1684,8 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private float parseFloat(EditBox box, float fallback) {
-        if (box == null || box.getValue().trim().isEmpty()) return fallback;
+        if (box == null || box.getValue().trim().isEmpty())
+            return fallback;
         try {
             return Float.parseFloat(box.getValue().trim().replace(",", "."));
         } catch (Exception ignored) {
@@ -1522,7 +1694,8 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private float parseOpacity(EditBox box, float fallback) {
-        if (box == null || box.getValue().trim().isEmpty()) return fallback;
+        if (box == null || box.getValue().trim().isEmpty())
+            return fallback;
         try {
             String valStr = box.getValue().trim().replace("%", "").replace(",", ".");
             float val = Float.parseFloat(valStr);
@@ -1544,19 +1717,26 @@ public class EditMusicEntryModalScreen extends Screen {
         int tabW = (contentW - 9) / 4;
         CyberpunkButton spawnTab = new CyberpunkButton(contentX, currentY, tabW, 20, Component.literal("➕ SPAWN"),
                 b -> switchPuppetMode(PuppetSubAction.SPAWN),
-                0xFF00FF88, activePuppetMode == PuppetSubAction.SPAWN, Component.literal("Summon actor into the world"));
+                0xFF00FF88, activePuppetMode == PuppetSubAction.SPAWN,
+                Component.literal("Summon actor into the world"));
 
-        CyberpunkButton despawnTab = new CyberpunkButton(contentX + tabW + 3, currentY, tabW, 20, Component.literal("✕ DESPAWN"),
+        CyberpunkButton despawnTab = new CyberpunkButton(contentX + tabW + 3, currentY, tabW, 20,
+                Component.literal("✕ DESPAWN"),
                 b -> switchPuppetMode(PuppetSubAction.DESPAWN),
-                0xFFFF3355, activePuppetMode == PuppetSubAction.DESPAWN, Component.literal("Discard actor from the world"));
+                0xFFFF3355, activePuppetMode == PuppetSubAction.DESPAWN,
+                Component.literal("Discard actor from the world"));
 
-        CyberpunkButton aiTab = new CyberpunkButton(contentX + (tabW + 3) * 2, currentY, tabW, 20, Component.literal("🧠 TOGGLE AI"),
+        CyberpunkButton aiTab = new CyberpunkButton(contentX + (tabW + 3) * 2, currentY, tabW, 20,
+                Component.literal("🧠 TOGGLE AI"),
                 b -> switchPuppetMode(PuppetSubAction.TOGGLE_AI),
-                0xFFFFB300, activePuppetMode == PuppetSubAction.TOGGLE_AI, Component.literal("Freeze, suppress, or restore actor AI"));
+                0xFFFFB300, activePuppetMode == PuppetSubAction.TOGGLE_AI,
+                Component.literal("Freeze, suppress, or restore actor AI"));
 
-        CyberpunkButton actionTab = new CyberpunkButton(contentX + (tabW + 3) * 3, currentY, tabW, 20, Component.literal("⚔ ACTION"),
+        CyberpunkButton actionTab = new CyberpunkButton(contentX + (tabW + 3) * 3, currentY, tabW, 20,
+                Component.literal("⚔ ACTION"),
                 b -> switchPuppetMode(PuppetSubAction.EXECUTE_ACTION),
-                0xFFAA55FF, activePuppetMode == PuppetSubAction.EXECUTE_ACTION, Component.literal("Execute scripted puppet boss action"));
+                0xFFAA55FF, activePuppetMode == PuppetSubAction.EXECUTE_ACTION,
+                Component.literal("Execute scripted puppet boss action"));
 
         this.addRenderableWidget(spawnTab);
         this.addRenderableWidget(despawnTab);
@@ -1588,14 +1768,19 @@ public class EditMusicEntryModalScreen extends Screen {
 
         int qx = contentX + 116;
         int btnW = 48;
-        this.addRenderableWidget(new CyberpunkButton(qx, currentY, btnW, 18, Component.literal("+500ms"), b -> adjustTimestamp(500)));
-        this.addRenderableWidget(new CyberpunkButton(qx + btnW + 4, currentY, btnW, 18, Component.literal("+1s"), b -> adjustTimestamp(1000)));
-        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 4) * 2, currentY, btnW, 18, Component.literal("+5s"), b -> adjustTimestamp(5000)));
-        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 4) * 3, currentY, btnW, 18, Component.literal("-1s"), b -> adjustTimestamp(-1000)));
+        this.addRenderableWidget(
+                new CyberpunkButton(qx, currentY, btnW, 18, Component.literal("+500ms"), b -> adjustTimestamp(500)));
+        this.addRenderableWidget(new CyberpunkButton(qx + btnW + 4, currentY, btnW, 18, Component.literal("+1s"),
+                b -> adjustTimestamp(1000)));
+        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 4) * 2, currentY, btnW, 18, Component.literal("+5s"),
+                b -> adjustTimestamp(5000)));
+        this.addRenderableWidget(new CyberpunkButton(qx + (btnW + 4) * 3, currentY, btnW, 18, Component.literal("-1s"),
+                b -> adjustTimestamp(-1000)));
         currentY += 24;
 
         // 4. Description / Note Box
-        this.descriptionBox = new EditBox(this.font, contentX, currentY, contentW, 18, Component.literal("Description / Note"));
+        this.descriptionBox = new EditBox(this.font, contentX, currentY, contentW, 18,
+                Component.literal("Description / Note"));
         this.descriptionBox.setMaxLength(128);
         this.descriptionBox.setValue(entry.getDescription());
         this.descriptionBox.setHint(Component.literal("Optional label for timeline marker"));
@@ -1604,7 +1789,8 @@ public class EditMusicEntryModalScreen extends Screen {
         // 5. Footer Buttons: [DELETE ACTION] [CANCEL] [SAVE ENTRY]
         int footerY = panelTop + panelHeight - 28;
         if (onDelete != null) {
-            CyberpunkButton deleteBtn = new CyberpunkButton(contentX, footerY, 110, 20, Component.literal("🗑 DELETE ACTION"),
+            CyberpunkButton deleteBtn = new CyberpunkButton(contentX, footerY, 110, 20,
+                    Component.literal("🗑 DELETE ACTION"),
                     b -> {
                         onDelete.run();
                         this.onClose();
@@ -1612,9 +1798,11 @@ public class EditMusicEntryModalScreen extends Screen {
             this.addRenderableWidget(deleteBtn);
         }
 
-        CyberpunkButton cancelBtn = new CyberpunkButton(panelLeft + panelWidth - 210, footerY, 95, 20, Component.literal("CANCEL"),
+        CyberpunkButton cancelBtn = new CyberpunkButton(panelLeft + panelWidth - 210, footerY, 95, 20,
+                Component.literal("CANCEL"),
                 b -> this.onClose(), 0xFF778899, false);
-        CyberpunkButton saveBtn = new CyberpunkButton(panelLeft + panelWidth - 105, footerY, 95, 20, Component.literal("SAVE ENTRY"),
+        CyberpunkButton saveBtn = new CyberpunkButton(panelLeft + panelWidth - 105, footerY, 95, 20,
+                Component.literal("SAVE ENTRY"),
                 b -> saveAndClose(), CYAN_MAIN, false);
 
         this.addRenderableWidget(cancelBtn);
@@ -1625,7 +1813,8 @@ public class EditMusicEntryModalScreen extends Screen {
         // Parse previous coords or default
         String prevX = "~", prevY = "~", prevZ = "~";
         String cmd = entry.getCommand() != null ? entry.getCommand().trim() : "";
-        if (cmd.startsWith("/")) cmd = cmd.substring(1).trim();
+        if (cmd.startsWith("/"))
+            cmd = cmd.substring(1).trim();
         if (cmd.startsWith("summon")) {
             String[] parts = cmd.split("\\s+");
             if (parts.length >= 5) {
@@ -1634,7 +1823,9 @@ public class EditMusicEntryModalScreen extends Screen {
                 prevZ = parts[4].trim().replace(',', '.');
             }
         }
-        if (prevX.equals("~") && prevY.equals("~") && prevZ.equals("~") && (entry.getDescription() == null || !entry.getDescription().contains("~")) && this.minecraft != null && this.minecraft.player != null) {
+        if (prevX.equals("~") && prevY.equals("~") && prevZ.equals("~")
+                && (entry.getDescription() == null || !entry.getDescription().contains("~")) && this.minecraft != null
+                && this.minecraft.player != null) {
             prevX = String.format(Locale.ROOT, "%.2f", this.minecraft.player.getX());
             prevY = String.format(Locale.ROOT, "%.2f", this.minecraft.player.getY());
             prevZ = String.format(Locale.ROOT, "%.2f", this.minecraft.player.getZ());
@@ -1646,11 +1837,13 @@ public class EditMusicEntryModalScreen extends Screen {
         this.spawnXBox.setValue(prevX);
         this.spawnXBox.setMaxLength(16);
 
-        this.spawnYBox = new EditBox(this.font, contentX + 16 + coordW + 18, currentY + 14, coordW, 18, Component.literal("Y"));
+        this.spawnYBox = new EditBox(this.font, contentX + 16 + coordW + 18, currentY + 14, coordW, 18,
+                Component.literal("Y"));
         this.spawnYBox.setValue(prevY);
         this.spawnYBox.setMaxLength(16);
 
-        this.spawnZBox = new EditBox(this.font, contentX + 16 + (coordW + 18) * 2, currentY + 14, coordW, 18, Component.literal("Z"));
+        this.spawnZBox = new EditBox(this.font, contentX + 16 + (coordW + 18) * 2, currentY + 14, coordW, 18,
+                Component.literal("Z"));
         this.spawnZBox.setValue(prevZ);
         this.spawnZBox.setMaxLength(16);
 
@@ -1660,25 +1853,27 @@ public class EditMusicEntryModalScreen extends Screen {
 
         // Helper Buttons: Player Pos and Look Pos
         int btnX = contentX + 16 + (coordW + 18) * 3 + 6;
-        CyberpunkButton playerPosBtn = new CyberpunkButton(btnX, currentY + 14, 94, 18, Component.literal("📍 PLAYER POS"), b -> {
-            if (minecraft != null && minecraft.player != null) {
-                spawnXBox.setValue(String.format(Locale.ROOT, "%.2f", minecraft.player.getX()));
-                spawnYBox.setValue(String.format(Locale.ROOT, "%.2f", minecraft.player.getY()));
-                spawnZBox.setValue(String.format(Locale.ROOT, "%.2f", minecraft.player.getZ()));
-            }
-        }, 0xFF00FF88, false, Component.literal("Set coordinates to player current position"));
+        CyberpunkButton playerPosBtn = new CyberpunkButton(btnX, currentY + 14, 94, 18,
+                Component.literal("📍 PLAYER POS"), b -> {
+                    if (minecraft != null && minecraft.player != null) {
+                        spawnXBox.setValue(String.format(Locale.ROOT, "%.2f", minecraft.player.getX()));
+                        spawnYBox.setValue(String.format(Locale.ROOT, "%.2f", minecraft.player.getY()));
+                        spawnZBox.setValue(String.format(Locale.ROOT, "%.2f", minecraft.player.getZ()));
+                    }
+                }, 0xFF00FF88, false, Component.literal("Set coordinates to player current position"));
 
-        CyberpunkButton lookPosBtn = new CyberpunkButton(btnX + 100, currentY + 14, 88, 18, Component.literal("🎯 LOOK POS"), b -> {
-            if (minecraft != null && minecraft.player != null) {
-                HitResult hit = minecraft.player.pick(50.0D, 0.0F, false);
-                if (hit != null && hit.getType() != HitResult.Type.MISS) {
-                    Vec3 pos = hit.getLocation();
-                    spawnXBox.setValue(String.format(Locale.ROOT, "%.2f", pos.x));
-                    spawnYBox.setValue(String.format(Locale.ROOT, "%.2f", pos.y));
-                    spawnZBox.setValue(String.format(Locale.ROOT, "%.2f", pos.z));
-                }
-            }
-        }, 0xFF00FFCC, false, Component.literal("Set coordinates to crosshair block position"));
+        CyberpunkButton lookPosBtn = new CyberpunkButton(btnX + 100, currentY + 14, 88, 18,
+                Component.literal("🎯 LOOK POS"), b -> {
+                    if (minecraft != null && minecraft.player != null) {
+                        HitResult hit = minecraft.player.pick(50.0D, 0.0F, false);
+                        if (hit != null && hit.getType() != HitResult.Type.MISS) {
+                            Vec3 pos = hit.getLocation();
+                            spawnXBox.setValue(String.format(Locale.ROOT, "%.2f", pos.x));
+                            spawnYBox.setValue(String.format(Locale.ROOT, "%.2f", pos.y));
+                            spawnZBox.setValue(String.format(Locale.ROOT, "%.2f", pos.z));
+                        }
+                    }
+                }, 0xFF00FFCC, false, Component.literal("Set coordinates to crosshair block position"));
 
         this.addRenderableWidget(playerPosBtn);
         this.addRenderableWidget(lookPosBtn);
@@ -1695,48 +1890,51 @@ public class EditMusicEntryModalScreen extends Screen {
         this.addRenderableWidget(this.spawnYawBox);
         this.addRenderableWidget(this.spawnPitchBox);
 
-        CyberpunkButton matchRotBtn = new CyberpunkButton(contentX + 168, currentY + 38, 102, 18, Component.literal("📍 MATCH ROT"), b -> {
-            if (minecraft != null && minecraft.player != null) {
-                spawnYawBox.setValue(String.format(Locale.ROOT, "%.1f", minecraft.player.getYRot()));
-                spawnPitchBox.setValue(String.format(Locale.ROOT, "%.1f", minecraft.player.getXRot()));
-            }
-        }, 0xFF00FF88, false, Component.literal("Copy player's current yaw and pitch angles"));
+        CyberpunkButton matchRotBtn = new CyberpunkButton(contentX + 168, currentY + 38, 102, 18,
+                Component.literal("📍 MATCH ROT"), b -> {
+                    if (minecraft != null && minecraft.player != null) {
+                        spawnYawBox.setValue(String.format(Locale.ROOT, "%.1f", minecraft.player.getYRot()));
+                        spawnPitchBox.setValue(String.format(Locale.ROOT, "%.1f", minecraft.player.getXRot()));
+                    }
+                }, 0xFF00FF88, false, Component.literal("Copy player's current yaw and pitch angles"));
 
-        CyberpunkButton facePlayerBtn = new CyberpunkButton(contentX + 274, currentY + 38, 104, 18, Component.literal("👁 FACE PLAYER"), b -> {
-            if (minecraft != null && minecraft.player != null) {
-                double sx = parseCoordinate(spawnXBox.getValue(), minecraft.player.getX());
-                double sy = parseCoordinate(spawnYBox.getValue(), minecraft.player.getY());
-                double sz = parseCoordinate(spawnZBox.getValue(), minecraft.player.getZ());
-                double dx = minecraft.player.getX() - sx;
-                double dy = minecraft.player.getEyeY() - (sy + 1.6);
-                double dz = minecraft.player.getZ() - sz;
-                double dist = Math.sqrt(dx * dx + dz * dz);
-                float yRot = (float) (Mth.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
-                float xRot = (float) (-(Mth.atan2(dy, dist) * (180.0 / Math.PI)));
-                spawnYawBox.setValue(String.format(Locale.ROOT, "%.1f", Mth.wrapDegrees(yRot)));
-                spawnPitchBox.setValue(String.format(Locale.ROOT, "%.1f", Mth.clamp(xRot, -90.0F, 90.0F)));
-            }
-        }, 0xFF00E5FF, false, Component.literal("Calculate facing angles toward current player position"));
+        CyberpunkButton facePlayerBtn = new CyberpunkButton(contentX + 274, currentY + 38, 104, 18,
+                Component.literal("👁 FACE PLAYER"), b -> {
+                    if (minecraft != null && minecraft.player != null) {
+                        double sx = parseCoordinate(spawnXBox.getValue(), minecraft.player.getX());
+                        double sy = parseCoordinate(spawnYBox.getValue(), minecraft.player.getY());
+                        double sz = parseCoordinate(spawnZBox.getValue(), minecraft.player.getZ());
+                        double dx = minecraft.player.getX() - sx;
+                        double dy = minecraft.player.getEyeY() - (sy + 1.6);
+                        double dz = minecraft.player.getZ() - sz;
+                        double dist = Math.sqrt(dx * dx + dz * dz);
+                        float yRot = (float) (Mth.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
+                        float xRot = (float) (-(Mth.atan2(dy, dist) * (180.0 / Math.PI)));
+                        spawnYawBox.setValue(String.format(Locale.ROOT, "%.1f", Mth.wrapDegrees(yRot)));
+                        spawnPitchBox.setValue(String.format(Locale.ROOT, "%.1f", Mth.clamp(xRot, -90.0F, 90.0F)));
+                    }
+                }, 0xFF00E5FF, false, Component.literal("Calculate facing angles toward current player position"));
 
-        CyberpunkButton faceLookBtn = new CyberpunkButton(contentX + 382, currentY + 38, 104, 18, Component.literal("🎯 FACE LOOK"), b -> {
-            if (minecraft != null && minecraft.player != null) {
-                HitResult hit = minecraft.player.pick(50.0D, 0.0F, false);
-                if (hit != null && hit.getType() != HitResult.Type.MISS) {
-                    Vec3 target = hit.getLocation();
-                    double sx = parseCoordinate(spawnXBox.getValue(), minecraft.player.getX());
-                    double sy = parseCoordinate(spawnYBox.getValue(), minecraft.player.getY());
-                    double sz = parseCoordinate(spawnZBox.getValue(), minecraft.player.getZ());
-                    double dx = target.x - sx;
-                    double dy = target.y - (sy + 1.6);
-                    double dz = target.z - sz;
-                    double dist = Math.sqrt(dx * dx + dz * dz);
-                    float yRot = (float) (Mth.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
-                    float xRot = (float) (-(Mth.atan2(dy, dist) * (180.0 / Math.PI)));
-                    spawnYawBox.setValue(String.format(Locale.ROOT, "%.1f", Mth.wrapDegrees(yRot)));
-                    spawnPitchBox.setValue(String.format(Locale.ROOT, "%.1f", Mth.clamp(xRot, -90.0F, 90.0F)));
-                }
-            }
-        }, 0xFF00FFCC, false, Component.literal("Calculate facing angles toward crosshair block position"));
+        CyberpunkButton faceLookBtn = new CyberpunkButton(contentX + 382, currentY + 38, 104, 18,
+                Component.literal("🎯 FACE LOOK"), b -> {
+                    if (minecraft != null && minecraft.player != null) {
+                        HitResult hit = minecraft.player.pick(50.0D, 0.0F, false);
+                        if (hit != null && hit.getType() != HitResult.Type.MISS) {
+                            Vec3 target = hit.getLocation();
+                            double sx = parseCoordinate(spawnXBox.getValue(), minecraft.player.getX());
+                            double sy = parseCoordinate(spawnYBox.getValue(), minecraft.player.getY());
+                            double sz = parseCoordinate(spawnZBox.getValue(), minecraft.player.getZ());
+                            double dx = target.x - sx;
+                            double dy = target.y - (sy + 1.6);
+                            double dz = target.z - sz;
+                            double dist = Math.sqrt(dx * dx + dz * dz);
+                            float yRot = (float) (Mth.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
+                            float xRot = (float) (-(Mth.atan2(dy, dist) * (180.0 / Math.PI)));
+                            spawnYawBox.setValue(String.format(Locale.ROOT, "%.1f", Mth.wrapDegrees(yRot)));
+                            spawnPitchBox.setValue(String.format(Locale.ROOT, "%.1f", Mth.clamp(xRot, -90.0F, 90.0F)));
+                        }
+                    }
+                }, 0xFF00FFCC, false, Component.literal("Calculate facing angles toward crosshair block position"));
 
         this.addRenderableWidget(matchRotBtn);
         this.addRenderableWidget(facePlayerBtn);
@@ -1744,27 +1942,34 @@ public class EditMusicEntryModalScreen extends Screen {
 
         // Toggles Row (AI Disable & Nametag Toggle)
         int toggleW = (contentW - 6) / 2;
-        Component aiLabel = Component.literal(spawnDisableAi ? "[✓] DISABLE AI ON SPAWN: YES" : "[ ] DISABLE AI ON SPAWN: NO");
+        Component aiLabel = Component
+                .literal(spawnDisableAi ? "[✓] DISABLE AI ON SPAWN: YES" : "[ ] DISABLE AI ON SPAWN: NO");
         CyberpunkButton toggleAiOnSpawnBtn = new CyberpunkButton(contentX, currentY + 62, toggleW, 18, aiLabel, b -> {
             spawnDisableAi = !spawnDisableAi;
-            b.setMessage(Component.literal(spawnDisableAi ? "[✓] DISABLE AI ON SPAWN: YES" : "[ ] DISABLE AI ON SPAWN: NO"));
+            b.setMessage(
+                    Component.literal(spawnDisableAi ? "[✓] DISABLE AI ON SPAWN: YES" : "[ ] DISABLE AI ON SPAWN: NO"));
             ((CyberpunkButton) b).setAccentColor(spawnDisableAi ? 0xFFFF9900 : 0xFF778899);
-        }, spawnDisableAi ? 0xFFFF9900 : 0xFF778899, false, Component.literal("When enabled, adds NoAI:1b so entity stays frozen upon summon until instructed"));
+        }, spawnDisableAi ? 0xFFFF9900 : 0xFF778899, false,
+                Component.literal("When enabled, adds NoAI:1b so entity stays frozen upon summon until instructed"));
         this.addRenderableWidget(toggleAiOnSpawnBtn);
 
         Component nametagLabel = Component.literal(showNametag ? "[✓] SHOW NAMETAG: ON" : "[ ] SHOW NAMETAG: OFF");
-        CyberpunkButton toggleNametagBtn = new CyberpunkButton(contentX + toggleW + 6, currentY + 62, toggleW, 18, nametagLabel, b -> {
-            showNametag = !showNametag;
-            b.setMessage(Component.literal(showNametag ? "[✓] SHOW NAMETAG: ON" : "[ ] SHOW NAMETAG: OFF"));
-            ((CyberpunkButton) b).setAccentColor(showNametag ? 0xFF00FF88 : 0xFF778899);
-        }, showNametag ? 0xFF00FF88 : 0xFF778899, false, Component.literal("Toggle entity nametag visibility above head (default: OFF)"));
+        CyberpunkButton toggleNametagBtn = new CyberpunkButton(contentX + toggleW + 6, currentY + 62, toggleW, 18,
+                nametagLabel, b -> {
+                    showNametag = !showNametag;
+                    b.setMessage(Component.literal(showNametag ? "[✓] SHOW NAMETAG: ON" : "[ ] SHOW NAMETAG: OFF"));
+                    ((CyberpunkButton) b).setAccentColor(showNametag ? 0xFF00FF88 : 0xFF778899);
+                }, showNametag ? 0xFF00FF88 : 0xFF778899, false,
+                Component.literal("Toggle entity nametag visibility above head (default: OFF)"));
         this.addRenderableWidget(toggleNametagBtn);
     }
 
     private static double parseCoordinate(String coordStr, double baseVal) {
-        if (coordStr == null || coordStr.isBlank()) return baseVal;
+        if (coordStr == null || coordStr.isBlank())
+            return baseVal;
         String s = coordStr.trim().replace(',', '.');
-        if (s.equals("~")) return baseVal;
+        if (s.equals("~"))
+            return baseVal;
         if (s.startsWith("~")) {
             try {
                 return baseVal + Double.parseDouble(s.substring(1));
@@ -1780,12 +1985,14 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private void initDespawnControls(int contentX, int currentY, int contentW) {
-        // Despawn is an instant command that removes the actor. We display informative status.
+        // Despawn is an instant command that removes the actor. We display informative
+        // status.
     }
 
     private void initToggleAiControls(int contentX, int currentY, int contentW) {
         // Mode: SUPPRESS AI vs RESTORE AI
-        Component modeComp = Component.literal(isSuppressAi ? "STATE: [🛑 SUPPRESS / FREEZE AI]" : "STATE: [▶ RESTORE / RESUME AI]");
+        Component modeComp = Component
+                .literal(isSuppressAi ? "STATE: [🛑 SUPPRESS / FREEZE AI]" : "STATE: [▶ RESTORE / RESUME AI]");
         CyberpunkButton modeBtn = new CyberpunkButton(contentX, currentY + 4, contentW, 20, modeComp, b -> {
             isSuppressAi = !isSuppressAi;
             this.init();
@@ -1796,35 +2003,44 @@ public class EditMusicEntryModalScreen extends Screen {
             int aspectW = (contentW - 16) / 5;
             int flagY = currentY + 28;
 
-            CyberpunkButton fullAiBtn = new CyberpunkButton(contentX, flagY, aspectW, 18, Component.literal(suppressFullAi ? "AI: ON" : "AI: OFF"), b -> {
-                suppressFullAi = !suppressFullAi;
-                b.setMessage(Component.literal(suppressFullAi ? "AI: ON" : "AI: OFF"));
-                ((CyberpunkButton) b).setAccentColor(suppressFullAi ? 0xFFFF9900 : 0xFF556677);
-            }, suppressFullAi ? 0xFFFF9900 : 0xFF556677, false, Component.literal("Suppress full mob brain & goal selectors"));
+            CyberpunkButton fullAiBtn = new CyberpunkButton(contentX, flagY, aspectW, 18,
+                    Component.literal(suppressFullAi ? "AI: ON" : "AI: OFF"), b -> {
+                        suppressFullAi = !suppressFullAi;
+                        b.setMessage(Component.literal(suppressFullAi ? "AI: ON" : "AI: OFF"));
+                        ((CyberpunkButton) b).setAccentColor(suppressFullAi ? 0xFFFF9900 : 0xFF556677);
+                    }, suppressFullAi ? 0xFFFF9900 : 0xFF556677, false,
+                    Component.literal("Suppress full mob brain & goal selectors"));
 
-            CyberpunkButton navBtn = new CyberpunkButton(contentX + aspectW + 4, flagY, aspectW, 18, Component.literal(suppressNav ? "NAV: ON" : "NAV: OFF"), b -> {
-                suppressNav = !suppressNav;
-                b.setMessage(Component.literal(suppressNav ? "NAV: ON" : "NAV: OFF"));
-                ((CyberpunkButton) b).setAccentColor(suppressNav ? 0xFFFF9900 : 0xFF556677);
-            }, suppressNav ? 0xFFFF9900 : 0xFF556677, false, Component.literal("Suppress pathfinding navigation"));
+            CyberpunkButton navBtn = new CyberpunkButton(contentX + aspectW + 4, flagY, aspectW, 18,
+                    Component.literal(suppressNav ? "NAV: ON" : "NAV: OFF"), b -> {
+                        suppressNav = !suppressNav;
+                        b.setMessage(Component.literal(suppressNav ? "NAV: ON" : "NAV: OFF"));
+                        ((CyberpunkButton) b).setAccentColor(suppressNav ? 0xFFFF9900 : 0xFF556677);
+                    }, suppressNav ? 0xFFFF9900 : 0xFF556677, false,
+                    Component.literal("Suppress pathfinding navigation"));
 
-            CyberpunkButton tgtBtn = new CyberpunkButton(contentX + (aspectW + 4) * 2, flagY, aspectW, 18, Component.literal(suppressTgt ? "TGT: ON" : "TGT: OFF"), b -> {
-                suppressTgt = !suppressTgt;
-                b.setMessage(Component.literal(suppressTgt ? "TGT: ON" : "TGT: OFF"));
-                ((CyberpunkButton) b).setAccentColor(suppressTgt ? 0xFFFF9900 : 0xFF556677);
-            }, suppressTgt ? 0xFFFF9900 : 0xFF556677, false, Component.literal("Suppress attack targeting"));
+            CyberpunkButton tgtBtn = new CyberpunkButton(contentX + (aspectW + 4) * 2, flagY, aspectW, 18,
+                    Component.literal(suppressTgt ? "TGT: ON" : "TGT: OFF"), b -> {
+                        suppressTgt = !suppressTgt;
+                        b.setMessage(Component.literal(suppressTgt ? "TGT: ON" : "TGT: OFF"));
+                        ((CyberpunkButton) b).setAccentColor(suppressTgt ? 0xFFFF9900 : 0xFF556677);
+                    }, suppressTgt ? 0xFFFF9900 : 0xFF556677, false, Component.literal("Suppress attack targeting"));
 
-            CyberpunkButton lookBtn = new CyberpunkButton(contentX + (aspectW + 4) * 3, flagY, aspectW, 18, Component.literal(suppressLook ? "LOOK: ON" : "LOOK: OFF"), b -> {
-                suppressLook = !suppressLook;
-                b.setMessage(Component.literal(suppressLook ? "LOOK: ON" : "LOOK: OFF"));
-                ((CyberpunkButton) b).setAccentColor(suppressLook ? 0xFFFF9900 : 0xFF556677);
-            }, suppressLook ? 0xFFFF9900 : 0xFF556677, false, Component.literal("Suppress head look controller"));
+            CyberpunkButton lookBtn = new CyberpunkButton(contentX + (aspectW + 4) * 3, flagY, aspectW, 18,
+                    Component.literal(suppressLook ? "LOOK: ON" : "LOOK: OFF"), b -> {
+                        suppressLook = !suppressLook;
+                        b.setMessage(Component.literal(suppressLook ? "LOOK: ON" : "LOOK: OFF"));
+                        ((CyberpunkButton) b).setAccentColor(suppressLook ? 0xFFFF9900 : 0xFF556677);
+                    }, suppressLook ? 0xFFFF9900 : 0xFF556677, false,
+                    Component.literal("Suppress head look controller"));
 
-            CyberpunkButton actionsBtn = new CyberpunkButton(contentX + (aspectW + 4) * 4, flagY, aspectW, 18, Component.literal(suppressActions ? "ACT: ON" : "ACT: OFF"), b -> {
-                suppressActions = !suppressActions;
-                b.setMessage(Component.literal(suppressActions ? "ACT: ON" : "ACT: OFF"));
-                ((CyberpunkButton) b).setAccentColor(suppressActions ? 0xFFFF9900 : 0xFF556677);
-            }, suppressActions ? 0xFFFF9900 : 0xFF556677, false, Component.literal("Suppress active puppet actions"));
+            CyberpunkButton actionsBtn = new CyberpunkButton(contentX + (aspectW + 4) * 4, flagY, aspectW, 18,
+                    Component.literal(suppressActions ? "ACT: ON" : "ACT: OFF"), b -> {
+                        suppressActions = !suppressActions;
+                        b.setMessage(Component.literal(suppressActions ? "ACT: ON" : "ACT: OFF"));
+                        ((CyberpunkButton) b).setAccentColor(suppressActions ? 0xFFFF9900 : 0xFF556677);
+                    }, suppressActions ? 0xFFFF9900 : 0xFF556677, false,
+                    Component.literal("Suppress active puppet actions"));
 
             this.addRenderableWidget(fullAiBtn);
             this.addRenderableWidget(navBtn);
@@ -1840,21 +2056,26 @@ public class EditMusicEntryModalScreen extends Screen {
         for (PuppetActionType<?> action : ModPuppetActions.getAll()) {
             String idStr = action.getId().toString();
             String simpleName = action.getId().getPath().replace("_", " ").toUpperCase(Locale.ROOT);
-            actionEntries.add(new CyberpunkDropdown.DropdownEntry<>(idStr, Component.literal("⚡ " + simpleName), Component.literal(idStr)));
+            actionEntries.add(new CyberpunkDropdown.DropdownEntry<>(idStr, Component.literal("⚡ " + simpleName),
+                    Component.literal(idStr)));
         }
-        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("custom", Component.literal("⚙ CUSTOM ACTION ID"), Component.literal("Enter custom puppet action")));
+        actionEntries.add(new CyberpunkDropdown.DropdownEntry<>("custom", Component.literal("⚙ CUSTOM ACTION ID"),
+                Component.literal("Enter custom puppet action")));
 
         int dropdownW = 260;
-        this.puppetActionDropdown = new CyberpunkDropdown<>(contentX, currentY + 12, dropdownW, 18, Component.literal("Puppet Action"));
+        this.puppetActionDropdown = new CyberpunkDropdown<>(contentX, currentY + 12, dropdownW, 18,
+                Component.literal("Puppet Action"));
         this.puppetActionDropdown.setOptions(actionEntries);
         this.puppetActionDropdown.selectByValue(selectedActionId);
         int timingY = currentY + 36;
         this.puppetActionDropdown.setOnSelect(entry -> {
             this.selectedActionId = entry.getValue();
             if ("custom".equalsIgnoreCase(entry.getValue())) {
-                if (customActionIdBox != null) customActionIdBox.setVisible(true);
+                if (customActionIdBox != null)
+                    customActionIdBox.setVisible(true);
             } else {
-                if (customActionIdBox != null) customActionIdBox.setVisible(false);
+                if (customActionIdBox != null)
+                    customActionIdBox.setVisible(false);
                 updateTimingBoxesLayout(true, contentX, timingY, contentW);
             }
             syncPuppetParamsWithAction(true);
@@ -1864,9 +2085,11 @@ public class EditMusicEntryModalScreen extends Screen {
 
         int targetX = contentX + dropdownW + 10;
         int targetW = contentW - dropdownW - 10;
-        this.targetSelectorBox = new EditBox(this.font, targetX, currentY + 12, targetW, 18, Component.literal("Target"));
+        this.targetSelectorBox = new EditBox(this.font, targetX, currentY + 12, targetW, 18,
+                Component.literal("Target"));
         this.targetSelectorBox.setMaxLength(64);
-        this.targetSelectorBox.setValue(this.combatTarget != null && !this.combatTarget.isBlank() ? this.combatTarget : "@p");
+        this.targetSelectorBox
+                .setValue(this.combatTarget != null && !this.combatTarget.isBlank() ? this.combatTarget : "@p");
         this.targetSelectorBox.setHint(Component.literal("@p"));
         this.addRenderableWidget(this.targetSelectorBox);
 
@@ -1878,34 +2101,49 @@ public class EditMusicEntryModalScreen extends Screen {
         this.windupBox.setMaxLength(6);
         this.windupBox.setValue(String.valueOf(windupMs));
         this.windupBox.setResponder(val -> {
-            try { this.windupMs = Math.max(0, Integer.parseInt(val.trim())); } catch (Exception ignored) {}
+            try {
+                this.windupMs = Math.max(0, Integer.parseInt(val.trim()));
+            } catch (Exception ignored) {
+            }
         });
         this.addRenderableWidget(this.windupBox);
 
         // Phase 2 EditBox
-        this.jumpBox = new EditBox(this.font, contentX + colW + 8 + 32, timingY, colW - 32, 16, Component.literal("Phase 2"));
+        this.jumpBox = new EditBox(this.font, contentX + colW + 8 + 32, timingY, colW - 32, 16,
+                Component.literal("Phase 2"));
         this.jumpBox.setMaxLength(6);
         this.jumpBox.setValue(String.valueOf(jumpMs));
         this.jumpBox.setResponder(val -> {
-            try { this.jumpMs = Math.max(0, Integer.parseInt(val.trim())); } catch (Exception ignored) {}
+            try {
+                this.jumpMs = Math.max(0, Integer.parseInt(val.trim()));
+            } catch (Exception ignored) {
+            }
         });
         this.addRenderableWidget(this.jumpBox);
 
         // Phase 3 EditBox
-        this.durationBox = new EditBox(this.font, contentX + (colW + 8) * 2 + 32, timingY, colW - 32, 16, Component.literal("Phase 3"));
+        this.durationBox = new EditBox(this.font, contentX + (colW + 8) * 2 + 32, timingY, colW - 32, 16,
+                Component.literal("Phase 3"));
         this.durationBox.setMaxLength(6);
         this.durationBox.setValue(String.valueOf(durationMs));
         this.durationBox.setResponder(val -> {
-            try { this.durationMs = Math.max(0, Integer.parseInt(val.trim())); } catch (Exception ignored) {}
+            try {
+                this.durationMs = Math.max(0, Integer.parseInt(val.trim()));
+            } catch (Exception ignored) {
+            }
         });
         this.addRenderableWidget(this.durationBox);
 
         // Phase 4 EditBox
-        this.recoveryBox = new EditBox(this.font, contentX + (colW + 8) * 3 + 48, timingY, colW - 48, 16, Component.literal("Phase 4"));
+        this.recoveryBox = new EditBox(this.font, contentX + (colW + 8) * 3 + 48, timingY, colW - 48, 16,
+                Component.literal("Phase 4"));
         this.recoveryBox.setMaxLength(6);
         this.recoveryBox.setValue(String.valueOf(recoveryMs));
         this.recoveryBox.setResponder(val -> {
-            try { this.recoveryMs = Math.max(0, Integer.parseInt(val.trim())); } catch (Exception ignored) {}
+            try {
+                this.recoveryMs = Math.max(0, Integer.parseInt(val.trim()));
+            } catch (Exception ignored) {
+            }
         });
         this.addRenderableWidget(this.recoveryBox);
 
@@ -1927,8 +2165,7 @@ public class EditMusicEntryModalScreen extends Screen {
                     currentPuppetParams.put(newKey, "1.0");
                     this.init();
                 },
-                CYAN_MAIN, false, Component.literal("Add custom parameter to this puppet action")
-        );
+                CYAN_MAIN, false, Component.literal("Add custom parameter to this puppet action"));
         this.addRenderableWidget(addParamBtn);
 
         int startY = paramsY + 26;
@@ -1954,15 +2191,17 @@ public class EditMusicEntryModalScreen extends Screen {
                 String pLabel = declaredParam.getLabel().getString();
                 CyberpunkButton toggleBtn = new CyberpunkButton(
                         itemX, itemY, pColW, 18,
-                        Component.literal((isTrue ? "[✓] " : "[ ] ") + pLabel.toUpperCase(Locale.ROOT) + ": " + (isTrue ? "YES" : "NO")),
+                        Component.literal((isTrue ? "[✓] " : "[ ] ") + pLabel.toUpperCase(Locale.ROOT) + ": "
+                                + (isTrue ? "YES" : "NO")),
                         b -> {
-                            boolean next = !("true".equalsIgnoreCase(currentPuppetParams.getOrDefault(pKey, "false")) || "1".equals(currentPuppetParams.getOrDefault(pKey, "false")));
+                            boolean next = !("true".equalsIgnoreCase(currentPuppetParams.getOrDefault(pKey, "false"))
+                                    || "1".equals(currentPuppetParams.getOrDefault(pKey, "false")));
                             currentPuppetParams.put(pKey, String.valueOf(next));
-                            b.setMessage(Component.literal((next ? "[✓] " : "[ ] ") + pLabel.toUpperCase(Locale.ROOT) + ": " + (next ? "YES" : "NO")));
+                            b.setMessage(Component.literal((next ? "[✓] " : "[ ] ") + pLabel.toUpperCase(Locale.ROOT)
+                                    + ": " + (next ? "YES" : "NO")));
                             ((CyberpunkButton) b).setAccentColor(next ? 0xFF00FF88 : 0xFF667788);
                         },
-                        isTrue ? 0xFF00FF88 : 0xFF667788, false, declaredParam.getDescription()
-                );
+                        isTrue ? 0xFF00FF88 : 0xFF667788, false, declaredParam.getDescription());
                 this.addRenderableWidget(toggleBtn);
             } else if (declaredParam != null && declaredParam.getType() == ActionParameter.Type.OPTIONS) {
                 List<String> opts = declaredParam.getOptions();
@@ -1976,8 +2215,7 @@ public class EditMusicEntryModalScreen extends Screen {
                             currentPuppetParams.put(pKey, nextVal);
                             b.setMessage(Component.literal(pLabel.toUpperCase(Locale.ROOT) + ": " + nextVal));
                         },
-                        CYAN_MAIN, false, declaredParam.getDescription()
-                );
+                        CYAN_MAIN, false, declaredParam.getDescription());
                 this.addRenderableWidget(optBtn);
             } else if (declaredParam != null) {
                 // Numeric / String declared parameter
@@ -1988,7 +2226,8 @@ public class EditMusicEntryModalScreen extends Screen {
 
                 final int finalItemX = itemX;
                 final int finalItemY = itemY;
-                paramLabelRenderers.add(g -> g.drawString(this.font, pLabelStr, finalItemX, finalItemY + 5, 0xFFAABBCC, false));
+                paramLabelRenderers
+                        .add(g -> g.drawString(this.font, pLabelStr, finalItemX, finalItemY + 5, 0xFFAABBCC, false));
 
                 EditBox pBox = new EditBox(this.font, boxX, itemY, boxW, 18, declaredParam.getLabel());
                 pBox.setValue(pVal);
@@ -2033,8 +2272,7 @@ public class EditMusicEntryModalScreen extends Screen {
                             currentPuppetParams.remove(oldKey);
                             this.init();
                         },
-                        RED_CANCEL, false, Component.literal("Remove custom parameter")
-                );
+                        RED_CANCEL, false, Component.literal("Remove custom parameter"));
 
                 this.addRenderableWidget(kBox);
                 this.addRenderableWidget(vBox);
@@ -2051,7 +2289,8 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private int getPhaseMs(ActionTimingPhase phase) {
-        if (phase == null) return 0;
+        if (phase == null)
+            return 0;
         return switch (phase.id().toLowerCase(Locale.ROOT)) {
             case "windup" -> windupMs;
             case "jump" -> jumpMs;
@@ -2067,10 +2306,14 @@ public class EditMusicEntryModalScreen extends Screen {
         int phaseCount = Math.max(1, Math.min(4, phases.size()));
         int colW = (contentW - (8 * (phaseCount - 1))) / phaseCount;
 
-        if (windupBox != null) windupBox.setVisible(false);
-        if (jumpBox != null) jumpBox.setVisible(false);
-        if (durationBox != null) durationBox.setVisible(false);
-        if (recoveryBox != null) recoveryBox.setVisible(false);
+        if (windupBox != null)
+            windupBox.setVisible(false);
+        if (jumpBox != null)
+            jumpBox.setVisible(false);
+        if (durationBox != null)
+            durationBox.setVisible(false);
+        if (recoveryBox != null)
+            recoveryBox.setVisible(false);
 
         if (resetValuesToDefaults) {
             this.windupMs = 0;
@@ -2115,20 +2358,30 @@ public class EditMusicEntryModalScreen extends Screen {
         int contentX = panelLeft + 16;
         int contentW = panelWidth - 32;
 
-        String prevTimestamp = (this.timestampBox != null) ? this.timestampBox.getValue() : String.valueOf(entry.getTimestampMs());
+        String prevTimestamp = (this.timestampBox != null) ? this.timestampBox.getValue()
+                : String.valueOf(entry.getTimestampMs());
         String prevCommand = (this.commandBox != null) ? this.commandBox.getValue() : entry.getCommand();
-        String prevDescription = (this.descriptionBox != null) ? this.descriptionBox.getValue() : entry.getDescription();
+        String prevDescription = (this.descriptionBox != null) ? this.descriptionBox.getValue()
+                : entry.getDescription();
 
         // 1. Action Type Dropdown (Top Row)
         List<CyberpunkDropdown.DropdownEntry<String>> typeEntries = new ArrayList<>();
-        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("COMMAND", Component.literal("COMMAND"), Component.literal("Execute console command")));
-        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("DIALOG", Component.literal("DIALOG"), Component.literal("Trigger dialog sequence")));
-        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>(MusicSequenceChannel.TYPE_SCREEN_EFFECT, Component.literal("SCREEN_EFFECT"), Component.literal("Display screen effect (shake/invert/strobe)")));
-        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("CAMERA", Component.literal("CAMERA"), Component.literal("Set camera position")));
-        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("CHECKPOINT", Component.literal("CHECKPOINT"), Component.literal("Trigger checkpoint")));
-        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("PUPPET", Component.literal("PUPPET"), Component.literal("Trigger puppet actor action")));
-        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("SOUND_EFFECT", Component.literal("SOUND_EFFECT"), Component.literal("Play sound effect")));
-        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("OPERATOR_RESUME", Component.literal("OPERATOR_RESUME"), Component.literal("Resume sequence")));
+        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("COMMAND", Component.literal("COMMAND"),
+                Component.literal("Execute console command")));
+        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("DIALOG", Component.literal("DIALOG"),
+                Component.literal("Trigger dialog sequence")));
+        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>(MusicSequenceChannel.TYPE_SCREEN_EFFECT,
+                Component.literal("SCREEN_EFFECT"), Component.literal("Display screen effect (shake/invert/strobe)")));
+        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("CAMERA", Component.literal("CAMERA"),
+                Component.literal("Set camera position")));
+        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("CHECKPOINT", Component.literal("CHECKPOINT"),
+                Component.literal("Trigger checkpoint")));
+        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("PUPPET", Component.literal("PUPPET"),
+                Component.literal("Trigger puppet actor action")));
+        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("SOUND_EFFECT", Component.literal("SOUND_EFFECT"),
+                Component.literal("Play sound effect")));
+        typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("OPERATOR_RESUME", Component.literal("OPERATOR_RESUME"),
+                Component.literal("Resume sequence")));
 
         int row1Y = panelTop + 30;
         this.typeDropdown = new CyberpunkDropdown<>(contentX + 34, row1Y, 100, 18, Component.literal("Action Type"));
@@ -2150,7 +2403,8 @@ public class EditMusicEntryModalScreen extends Screen {
         this.timestampBox.setValue(prevTimestamp);
         this.addRenderableWidget(this.timestampBox);
 
-        // 3. Command Box (with Brigadier suggestions & validation, anchorToBottom = false)
+        // 3. Command Box (with Brigadier suggestions & validation, anchorToBottom =
+        // false)
         int cmdY = panelTop + 68;
         this.commandBox = new EditBox(this.font, contentX, cmdY, contentW, 20, Component.literal("Command Payload"));
         this.commandBox.setMaxLength(512);
@@ -2161,8 +2415,7 @@ public class EditMusicEntryModalScreen extends Screen {
         if (isCommandAction()) {
             this.commandSuggestions = new CommandSuggestions(
                     this.minecraft, this, this.commandBox, this.font,
-                    true, true, 0, 7, false, 0xEE081622
-            );
+                    true, true, 0, 7, false, 0xEE081622);
             this.commandSuggestions.setAllowSuggestions(true);
             this.commandSuggestions.updateCommandInfo();
             updateCommandValidation();
@@ -2196,7 +2449,8 @@ public class EditMusicEntryModalScreen extends Screen {
             this.addRenderableWidget(deleteBtn);
         }
 
-        CyberpunkButton cancelBtn = new CyberpunkButton(panelLeft + panelWidth - 190, footerY, 80, 20, Component.literal("CANCEL"),
+        CyberpunkButton cancelBtn = new CyberpunkButton(panelLeft + panelWidth - 190, footerY, 80, 20,
+                Component.literal("CANCEL"),
                 b -> this.onClose(), 0xFF778899, false);
         CyberpunkButton saveBtn = new CyberpunkButton(panelLeft + panelWidth - 105, footerY, 90, 20,
                 Component.literal(isCommandAction() ? "SAVE COMMAND" : "SAVE ENTRY"),
@@ -2209,20 +2463,31 @@ public class EditMusicEntryModalScreen extends Screen {
     private void initDialogWidgets(int panelLeft, int panelTop, int panelWidth, int panelHeight) {
         int fullW = panelWidth - 32;
 
-        // Top Row: Action Type Dropdown (if generic channel) & Timestamp Box + Playhead Snap
+        // Top Row: Action Type Dropdown (if generic channel) & Timestamp Box + Playhead
+        // Snap
         int topRowY = panelTop + 7;
         if (channel == null || !channel.getType().equalsIgnoreCase(MusicSequenceChannel.TYPE_DIALOG)) {
             List<CyberpunkDropdown.DropdownEntry<String>> typeEntries = new ArrayList<>();
-            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("COMMAND", Component.literal("COMMAND"), Component.literal("Execute console command")));
-            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("DIALOG", Component.literal("DIALOG"), Component.literal("Trigger dialog action")));
-            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>(MusicSequenceChannel.TYPE_SCREEN_EFFECT, Component.literal("SCREEN_EFFECT"), Component.literal("Display screen effect (shake/invert/strobe)")));
-            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("CAMERA", Component.literal("CAMERA"), Component.literal("Set camera position")));
-            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("CHECKPOINT", Component.literal("CHECKPOINT"), Component.literal("Trigger checkpoint")));
-            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("PUPPET", Component.literal("PUPPET"), Component.literal("Trigger puppet actor action")));
-            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("SOUND_EFFECT", Component.literal("SOUND_EFFECT"), Component.literal("Play sound effect")));
-            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("OPERATOR_RESUME", Component.literal("OPERATOR_RESUME"), Component.literal("Resume sequence")));
+            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("COMMAND", Component.literal("COMMAND"),
+                    Component.literal("Execute console command")));
+            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("DIALOG", Component.literal("DIALOG"),
+                    Component.literal("Trigger dialog action")));
+            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>(MusicSequenceChannel.TYPE_SCREEN_EFFECT,
+                    Component.literal("SCREEN_EFFECT"),
+                    Component.literal("Display screen effect (shake/invert/strobe)")));
+            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("CAMERA", Component.literal("CAMERA"),
+                    Component.literal("Set camera position")));
+            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("CHECKPOINT", Component.literal("CHECKPOINT"),
+                    Component.literal("Trigger checkpoint")));
+            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("PUPPET", Component.literal("PUPPET"),
+                    Component.literal("Trigger puppet actor action")));
+            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("SOUND_EFFECT", Component.literal("SOUND_EFFECT"),
+                    Component.literal("Play sound effect")));
+            typeEntries.add(new CyberpunkDropdown.DropdownEntry<>("OPERATOR_RESUME",
+                    Component.literal("OPERATOR_RESUME"), Component.literal("Resume sequence")));
 
-            this.typeDropdown = new CyberpunkDropdown<>(panelLeft + 16, topRowY, 95, 18, Component.literal("Action Type"));
+            this.typeDropdown = new CyberpunkDropdown<>(panelLeft + 16, topRowY, 95, 18,
+                    Component.literal("Action Type"));
             this.typeDropdown.setOptions(typeEntries);
             this.typeDropdown.selectByValue("DIALOG");
             this.typeDropdown.setOnSelect(selected -> {
@@ -2242,21 +2507,25 @@ public class EditMusicEntryModalScreen extends Screen {
         this.dialogTimestampBox.setValue(String.valueOf(entry.getTimestampMs()));
         this.addRenderableWidget(this.dialogTimestampBox);
 
-        CyberpunkButton snapBtn = new CyberpunkButton(tsX + 72, topRowY, 58, 18, Component.literal("⏱ Snap"), b -> snapDialogToPlayhead(), 0xFF00E5FF, false, Component.literal("Snap timestamp to current timeline playhead position"));
+        CyberpunkButton snapBtn = new CyberpunkButton(tsX + 72, topRowY, 58, 18, Component.literal("⏱ Snap"),
+                b -> snapDialogToPlayhead(), 0xFF00E5FF, false,
+                Component.literal("Snap timestamp to current timeline playhead position"));
         this.addRenderableWidget(snapBtn);
 
         // --- PRIMARY FOCUS SECTION: FULL WIDTH SPEAKER TAG & MULTILINE DIALOG TEXT ---
         int formY = panelTop + 96;
 
         // 1. Speaker Tag EditBox (Full Width)
-        this.dialogSpeakerBox = new EditBox(this.font, panelLeft + 16, formY + 10, fullW, 18, Component.literal("Speaker"));
+        this.dialogSpeakerBox = new EditBox(this.font, panelLeft + 16, formY + 10, fullW, 18,
+                Component.literal("Speaker"));
         this.dialogSpeakerBox.setMaxLength(64);
         this.dialogSpeakerBox.setValue(dialogLine.getSpeaker());
         this.addRenderableWidget(this.dialogSpeakerBox);
         formY += 32;
 
         // 2. Multiline Dialog Text EditBox (Full Width & Wrapped Height)
-        this.dialogTextBox = new CyberpunkMultilineEditBox(panelLeft + 16, formY + 10, fullW, 54, Component.literal("Dialog Text"));
+        this.dialogTextBox = new CyberpunkMultilineEditBox(panelLeft + 16, formY + 10, fullW, 54,
+                Component.literal("Dialog Text"));
         this.dialogTextBox.setMaxLength(512);
         this.dialogTextBox.setValue(dialogLine.getText());
         this.addRenderableWidget(this.dialogTextBox);
@@ -2267,13 +2536,15 @@ public class EditMusicEntryModalScreen extends Screen {
         int btnH = 15;
         int gapX = 4;
 
-        String[] row1Codes = {"&0", "&1", "&2", "&3", "&4", "&5", "&6", "&7", "&8", "&9", "&a"};
-        String[] row1Labels = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a"};
-        String[] row1Names = {"Black (&0)", "Dark Blue (&1)", "Dark Green (&2)", "Dark Aqua (&3)", "Dark Red (&4)", "Dark Purple (&5)", "Gold (&6)", "Gray (&7)", "Dark Gray (&8)", "Blue (&9)", "Green (&a)"};
+        String[] row1Codes = { "&0", "&1", "&2", "&3", "&4", "&5", "&6", "&7", "&8", "&9", "&a" };
+        String[] row1Labels = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a" };
+        String[] row1Names = { "Black (&0)", "Dark Blue (&1)", "Dark Green (&2)", "Dark Aqua (&3)", "Dark Red (&4)",
+                "Dark Purple (&5)", "Gold (&6)", "Gray (&7)", "Dark Gray (&8)", "Blue (&9)", "Green (&a)" };
 
-        String[] row2Codes = {"&b", "&c", "&d", "&e", "&f", "&k", "&l", "&m", "&n", "&o", "&r"};
-        String[] row2Labels = {"b", "c", "d", "e", "f", "?", "L", "S", "U", "I", "R"};
-        String[] row2Names = {"Aqua (&b)", "Red (&c)", "Light Purple (&d)", "Yellow (&e)", "White (&f)", "Obfuscated (&k)", "Bold (&l)", "Strikethrough (&m)", "Underline (&n)", "Italic (&o)", "Reset (&r)"};
+        String[] row2Codes = { "&b", "&c", "&d", "&e", "&f", "&k", "&l", "&m", "&n", "&o", "&r" };
+        String[] row2Labels = { "b", "c", "d", "e", "f", "?", "L", "S", "U", "I", "R" };
+        String[] row2Names = { "Aqua (&b)", "Red (&c)", "Light Purple (&d)", "Yellow (&e)", "White (&f)",
+                "Obfuscated (&k)", "Bold (&l)", "Strikethrough (&m)", "Underline (&n)", "Italic (&o)", "Reset (&r)" };
 
         int paletteY = formY + 10;
 
@@ -2292,7 +2563,8 @@ public class EditMusicEntryModalScreen extends Screen {
             final String code = row2Codes[i];
             String label = row2Labels[i];
             String name = row2Names[i];
-            CyberpunkButton codeBtn = new CyberpunkButton(panelLeft + 16 + i * (btnW + gapX), paletteY + btnH + 2, btnW, btnH,
+            CyberpunkButton codeBtn = new CyberpunkButton(panelLeft + 16 + i * (btnW + gapX), paletteY + btnH + 2, btnW,
+                    btnH,
                     DialogFormatUtil.formatText(code + label),
                     b -> insertDialogFormattingCode(code));
             codeBtn.setTooltip(Tooltip.create(Component.literal(name)));
@@ -2303,17 +2575,18 @@ public class EditMusicEntryModalScreen extends Screen {
         int fxBtnH = 16;
         int fxGapX = 6;
 
-        String[] fxCodes = {"&~s", "&~w", "&~r", "&~g", "&~p", "&~x"};
-        String[] fxPreviewTexts = {"&~s~s Shake", "&~w~w Wave", "&~r~r Rainbow", "&~g~g Glitch", "&~p~p Pulse", "&~x~x Reset"};
+        String[] fxCodes = { "&~s", "&~w", "&~r", "&~g", "&~p", "&~x" };
+        String[] fxPreviewTexts = { "&~s~s Shake", "&~w~w Wave", "&~r~r Rainbow", "&~g~g Glitch", "&~p~p Pulse",
+                "&~x~x Reset" };
         String[] fxNames = {
-            "Letter Shake Effect (&~s) - Jitters letters in place",
-            "Sine Wave Effect (&~w) - Bobs letters up & down",
-            "Rainbow Spectrum Effect (&~r) - Rotating HSL colors",
-            "Cyberpunk Glitch Effect (&~g) - RGB flicker & twitch",
-            "Glow Pulse Effect (&~p) - Brightness pulsing glow",
-            "Clear Custom FX (&~x) - Resets animation effect"
+                "Letter Shake Effect (&~s) - Jitters letters in place",
+                "Sine Wave Effect (&~w) - Bobs letters up & down",
+                "Rainbow Spectrum Effect (&~r) - Rotating HSL colors",
+                "Cyberpunk Glitch Effect (&~g) - RGB flicker & twitch",
+                "Glow Pulse Effect (&~p) - Brightness pulsing glow",
+                "Clear Custom FX (&~x) - Resets animation effect"
         };
-        int[] fxAccents = {0xFFFF5555, 0xFF55FFFF, 0xFFFF55FF, 0xFF00FFCC, 0xFFFFFF55, 0xFFAAAAAA};
+        int[] fxAccents = { 0xFFFF5555, 0xFF55FFFF, 0xFFFF55FF, 0xFF00FFCC, 0xFFFFFF55, 0xFFAAAAAA };
 
         int fxY = paletteY + (btnH * 2) + 5;
         for (int i = 0; i < fxCodes.length; i++) {
@@ -2340,8 +2613,10 @@ public class EditMusicEntryModalScreen extends Screen {
         int gridY = formY + 10;
 
         // Column 1: Voice Sound Preset & Custom Sound ID & Pitch Min/Max
-        List<CyberpunkDropdown.DropdownEntry<String>> soundEntries = DialogSoundRegistry.getAvailableSoundEntries(dialogLine.getLetterSound());
-        this.dialogLetterSoundDropdown = new CyberpunkDropdown<>(col1X, gridY, colW, 18, Component.literal("Voice Sound Preset"));
+        List<CyberpunkDropdown.DropdownEntry<String>> soundEntries = DialogSoundRegistry
+                .getAvailableSoundEntries(dialogLine.getLetterSound());
+        this.dialogLetterSoundDropdown = new CyberpunkDropdown<>(col1X, gridY, colW, 18,
+                Component.literal("Voice Sound Preset"));
         this.dialogLetterSoundDropdown.setOptions(soundEntries);
         this.dialogLetterSoundDropdown.setMaxVisibleItems(5);
         this.dialogLetterSoundDropdown.selectByValue(dialogLine.getLetterSound());
@@ -2352,7 +2627,8 @@ public class EditMusicEntryModalScreen extends Screen {
         });
 
         int c1Y = gridY + 32;
-        this.dialogLetterSoundBox = new EditBox(this.font, col1X, c1Y, colW - 34, 18, Component.literal("Letter Sound ID"));
+        this.dialogLetterSoundBox = new EditBox(this.font, col1X, c1Y, colW - 34, 18,
+                Component.literal("Letter Sound ID"));
         this.dialogLetterSoundBox.setMaxLength(128);
         this.dialogLetterSoundBox.setValue(dialogLine.getLetterSound());
         this.dialogLetterSoundBox.setResponder(val -> {
@@ -2362,7 +2638,8 @@ public class EditMusicEntryModalScreen extends Screen {
         });
         this.addRenderableWidget(this.dialogLetterSoundBox);
 
-        CyberpunkButton testLetterSoundBtn = new CyberpunkButton(col1X + colW - 30, c1Y, 30, 18, Component.literal("🔊"), b -> playTestVoiceSound());
+        CyberpunkButton testLetterSoundBtn = new CyberpunkButton(col1X + colW - 30, c1Y, 30, 18,
+                Component.literal("🔊"), b -> playTestVoiceSound());
         testLetterSoundBtn.setTooltip(Tooltip.create(Component.literal("Preview voice typewriter blip sound")));
         this.addRenderableWidget(testLetterSoundBtn);
 
@@ -2372,7 +2649,8 @@ public class EditMusicEntryModalScreen extends Screen {
         this.dialogLetterPitchMinBox.setValue(String.valueOf(dialogLine.getLetterSoundPitchMin()));
         this.addRenderableWidget(this.dialogLetterPitchMinBox);
 
-        this.dialogLetterPitchMaxBox = new EditBox(this.font, col1X + 126, c1Y, 112, 18, Component.literal("Max Pitch"));
+        this.dialogLetterPitchMaxBox = new EditBox(this.font, col1X + 126, c1Y, 112, 18,
+                Component.literal("Max Pitch"));
         this.dialogLetterPitchMaxBox.setMaxLength(6);
         this.dialogLetterPitchMaxBox.setValue(String.valueOf(dialogLine.getLetterSoundPitchMax()));
         this.addRenderableWidget(this.dialogLetterPitchMaxBox);
@@ -2395,7 +2673,8 @@ public class EditMusicEntryModalScreen extends Screen {
         this.dialogSoundBox.setValue(dialogLine.getSound());
         this.addRenderableWidget(this.dialogSoundBox);
 
-        CyberpunkButton testLineSoundBtn = new CyberpunkButton(col2X + colW - 30, c2Y, 30, 18, Component.literal("🔊"), b -> playTestLineSound());
+        CyberpunkButton testLineSoundBtn = new CyberpunkButton(col2X + colW - 30, c2Y, 30, 18, Component.literal("🔊"),
+                b -> playTestLineSound());
         testLineSoundBtn.setTooltip(Tooltip.create(Component.literal("Preview line start sound event")));
         this.addRenderableWidget(testLineSoundBtn);
 
@@ -2406,20 +2685,24 @@ public class EditMusicEntryModalScreen extends Screen {
         int footerY = panelTop + panelHeight - 26;
 
         if (onDelete != null) {
-            CyberpunkButton deleteBtn = new CyberpunkButton(col1X, footerY, 85, 20, Component.literal("🗑 DELETE"), b -> {
-                onDelete.run();
-                this.onClose();
-            }, RED_CANCEL, false, Component.literal("Delete this dialog action from timeline"));
+            CyberpunkButton deleteBtn = new CyberpunkButton(col1X, footerY, 85, 20, Component.literal("🗑 DELETE"),
+                    b -> {
+                        onDelete.run();
+                        this.onClose();
+                    }, RED_CANCEL, false, Component.literal("Delete this dialog action from timeline"));
             this.addRenderableWidget(deleteBtn);
         }
 
-        CyberpunkButton testTypingBtn = new CyberpunkButton(col1X + (onDelete != null ? 92 : 0), footerY, 100, 20, Component.literal("▶ Test Typing"), b -> startTypingTest(), 0xFF00FFCC, false);
+        CyberpunkButton testTypingBtn = new CyberpunkButton(col1X + (onDelete != null ? 92 : 0), footerY, 100, 20,
+                Component.literal("▶ Test Typing"), b -> startTypingTest(), 0xFF00FFCC, false);
         this.addRenderableWidget(testTypingBtn);
 
-        CyberpunkButton cancelBtn = new CyberpunkButton(panelLeft + panelWidth - 190, footerY, 80, 20, Component.literal("✕ Cancel"), b -> this.onClose(), 0xFF778899, false);
+        CyberpunkButton cancelBtn = new CyberpunkButton(panelLeft + panelWidth - 190, footerY, 80, 20,
+                Component.literal("✕ Cancel"), b -> this.onClose(), 0xFF778899, false);
         this.addRenderableWidget(cancelBtn);
 
-        CyberpunkButton saveBtn = new CyberpunkButton(panelLeft + panelWidth - 105, footerY, 95, 20, Component.literal("✓ Save Dialog"), b -> saveDialogEntry(), 0xFFFFD700, false);
+        CyberpunkButton saveBtn = new CyberpunkButton(panelLeft + panelWidth - 105, footerY, 95, 20,
+                Component.literal("✓ Save Dialog"), b -> saveDialogEntry(), 0xFFFFD700, false);
         this.addRenderableWidget(saveBtn);
     }
 
@@ -2443,7 +2726,8 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private void startTypingTest() {
-        if (dialogTextBox == null) return;
+        if (dialogTextBox == null)
+            return;
         this.typingTotalChars = DialogFormatUtil.getVisibleCharCount(dialogTextBox.getValue());
         this.typingRevealedChars = 0;
         this.typingTickTimer = 0;
@@ -2452,26 +2736,35 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private void playTestVoiceSound() {
-        if (dialogLetterSoundBox == null) return;
+        if (dialogLetterSoundBox == null)
+            return;
         String snd = dialogLetterSoundBox.getValue().trim();
         if (!snd.isEmpty()) {
             try {
                 float minP = 0.8f;
                 float maxP = 1.2f;
-                try { minP = Float.parseFloat(dialogLetterPitchMinBox.getValue().trim()); } catch (Exception ignored) {}
-                try { maxP = Float.parseFloat(dialogLetterPitchMaxBox.getValue().trim()); } catch (Exception ignored) {}
+                try {
+                    minP = Float.parseFloat(dialogLetterPitchMinBox.getValue().trim());
+                } catch (Exception ignored) {
+                }
+                try {
+                    maxP = Float.parseFloat(dialogLetterPitchMaxBox.getValue().trim());
+                } catch (Exception ignored) {
+                }
                 float pitch = minP + (float) Math.random() * (Math.max(minP, maxP) - Math.min(minP, maxP));
                 pitch = Math.max(0.1f, Math.min(2.0f, pitch));
                 SoundEvent soundEvent = ModSounds.resolveSound(snd);
                 if (soundEvent != null) {
                     Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(soundEvent, pitch));
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
     }
 
     private void playTestLineSound() {
-        if (dialogSoundBox == null) return;
+        if (dialogSoundBox == null)
+            return;
         String snd = dialogSoundBox.getValue().trim();
         if (!snd.isEmpty()) {
             try {
@@ -2479,7 +2772,8 @@ public class EditMusicEntryModalScreen extends Screen {
                 if (soundEvent != null) {
                     Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(soundEvent, 1.0f));
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -2487,7 +2781,8 @@ public class EditMusicEntryModalScreen extends Screen {
         long ts = 0L;
         try {
             ts = Math.max(0L, Long.parseLong(this.dialogTimestampBox.getValue().trim()));
-        } catch (NumberFormatException ignored) {}
+        } catch (NumberFormatException ignored) {
+        }
         entry.setTimestampMs(ts);
         entry.setActionType(MusicSequenceChannel.TYPE_DIALOG);
         if (channel != null) {
@@ -2503,22 +2798,34 @@ public class EditMusicEntryModalScreen extends Screen {
         dialogLine.setUseCamera(false);
 
         int charSpeed = 1;
-        try { charSpeed = Math.max(0, Integer.parseInt(dialogSpeedBox.getValue().trim())); } catch (Exception ignored) {}
+        try {
+            charSpeed = Math.max(0, Integer.parseInt(dialogSpeedBox.getValue().trim()));
+        } catch (Exception ignored) {
+        }
         dialogLine.setCharSpeedTicks(charSpeed);
 
         int delay = 40;
-        try { delay = Math.max(1, Integer.parseInt(dialogDelayBox.getValue().trim())); } catch (Exception ignored) {}
+        try {
+            delay = Math.max(1, Integer.parseInt(dialogDelayBox.getValue().trim()));
+        } catch (Exception ignored) {
+        }
         dialogLine.setDelayTicks(delay);
 
         dialogLine.setSound(dialogSoundBox.getValue().trim());
         dialogLine.setLetterSound(dialogLetterSoundBox.getValue().trim());
 
         float minPitch = 0.8f;
-        try { minPitch = Math.max(0.1f, Float.parseFloat(dialogLetterPitchMinBox.getValue().trim())); } catch (Exception ignored) {}
+        try {
+            minPitch = Math.max(0.1f, Float.parseFloat(dialogLetterPitchMinBox.getValue().trim()));
+        } catch (Exception ignored) {
+        }
         dialogLine.setLetterSoundPitchMin(minPitch);
 
         float maxPitch = 1.2f;
-        try { maxPitch = Math.max(0.1f, Float.parseFloat(dialogLetterPitchMaxBox.getValue().trim())); } catch (Exception ignored) {}
+        try {
+            maxPitch = Math.max(0.1f, Float.parseFloat(dialogLetterPitchMaxBox.getValue().trim()));
+        } catch (Exception ignored) {
+        }
         dialogLine.setLetterSoundPitchMax(maxPitch);
 
         int visibleChars = DialogFormatUtil.getVisibleCharCount(dialogLine.getText());
@@ -2547,7 +2854,8 @@ public class EditMusicEntryModalScreen extends Screen {
         long ts = 0L;
         try {
             ts = Math.max(0L, Long.parseLong(this.timestampBox.getValue().trim()));
-        } catch (NumberFormatException ignored) {}
+        } catch (NumberFormatException ignored) {
+        }
         entry.setTimestampMs(ts);
         entry.setActionType(MusicSequenceChannel.TYPE_CAMERA);
         if (channel != null) {
@@ -2566,7 +2874,8 @@ public class EditMusicEntryModalScreen extends Screen {
         if ("ENABLE".equalsIgnoreCase(activeCameraMode)) {
             entry.setUseCamera(true);
             entry.setCommand("camera enable");
-            int dur = Math.max(0, parseInt(cameraDurationBox, entry.getDurationMs() > 0 ? entry.getDurationMs() : 1000));
+            int dur = Math.max(0,
+                    parseInt(cameraDurationBox, entry.getDurationMs() > 0 ? entry.getDurationMs() : 1000));
             entry.setDurationMs(dur);
             entry.setCameraEasing(cameraEasing != null ? cameraEasing.name() : "EASE_IN_OUT_CUBIC");
             entry.setCameraInterpolate(cameraInterpolate);
@@ -2578,7 +2887,8 @@ public class EditMusicEntryModalScreen extends Screen {
         } else if ("DISABLE".equalsIgnoreCase(activeCameraMode) || "CLEAR".equalsIgnoreCase(activeCameraMode)) {
             entry.setUseCamera(false);
             entry.setCommand("camera disable");
-            int dur = Math.max(0, parseInt(cameraDurationBox, entry.getDurationMs() > 0 ? entry.getDurationMs() : 1000));
+            int dur = Math.max(0,
+                    parseInt(cameraDurationBox, entry.getDurationMs() > 0 ? entry.getDurationMs() : 1000));
             entry.setDurationMs(dur);
             entry.setCameraEasing(cameraEasing != null ? cameraEasing.name() : "EASE_IN_OUT_CUBIC");
             entry.setCameraInterpolate(cameraInterpolate);
@@ -2590,7 +2900,8 @@ public class EditMusicEntryModalScreen extends Screen {
         } else if ("FOLLOW".equalsIgnoreCase(activeCameraMode)) {
             entry.setUseCamera(true);
             String tgt = cameraTargetBox != null ? cameraTargetBox.getValue().trim() : "@p";
-            if (tgt.isEmpty()) tgt = "@p";
+            if (tgt.isEmpty())
+                tgt = "@p";
             entry.setCameraTarget(tgt);
             entry.setCameraHeightOffset(parseDouble(cameraHeightOffsetBox, 5.5));
             entry.setCameraPitch(parseFloat(cameraPitchBox, 45.0f));
@@ -2604,7 +2915,8 @@ public class EditMusicEntryModalScreen extends Screen {
         } else if ("OVER_THE_SHOULDER".equalsIgnoreCase(activeCameraMode)) {
             entry.setUseCamera(true);
             String tgt = cameraTargetBox != null ? cameraTargetBox.getValue().trim() : "@p";
-            if (tgt.isEmpty()) tgt = "@p";
+            if (tgt.isEmpty())
+                tgt = "@p";
             entry.setCameraTarget(tgt);
             entry.setCameraBackDistance(parseDouble(cameraBackDistanceBox, 2.4));
             entry.setCameraShoulderOffset(parseDouble(cameraShoulderOffsetBox, 0.55));
@@ -2667,24 +2979,37 @@ public class EditMusicEntryModalScreen extends Screen {
 
     private void switchPuppetMode(PuppetSubAction newMode) {
         if (this.spawnYawBox != null) {
-            try { this.spawnYaw = Float.parseFloat(this.spawnYawBox.getValue().trim().replace(',', '.')); } catch (Exception ignored) {}
+            try {
+                this.spawnYaw = Float.parseFloat(this.spawnYawBox.getValue().trim().replace(',', '.'));
+            } catch (Exception ignored) {
+            }
         }
         if (this.spawnPitchBox != null) {
-            try { this.spawnPitch = Float.parseFloat(this.spawnPitchBox.getValue().trim().replace(',', '.')); } catch (Exception ignored) {}
+            try {
+                this.spawnPitch = Float.parseFloat(this.spawnPitchBox.getValue().trim().replace(',', '.'));
+            } catch (Exception ignored) {
+            }
         }
         this.activePuppetMode = newMode;
         this.init();
     }
 
     private void updateCommandHint() {
-        if (commandBox == null) return;
-        String type = (typeDropdown != null && typeDropdown.getSelectedValue() != null) ? typeDropdown.getSelectedValue() : entry.getActionType();
-        if (type == null) type = "COMMAND";
+        if (commandBox == null)
+            return;
+        String type = (typeDropdown != null && typeDropdown.getSelectedValue() != null)
+                ? typeDropdown.getSelectedValue()
+                : entry.getActionType();
+        if (type == null)
+            type = "COMMAND";
         switch (type.toUpperCase(Locale.ROOT)) {
-            case "PUPPET" -> commandBox.setHint(Component.literal("Action ID (e.g. leap_slam) - Target directed to channel actor"));
+            case "PUPPET" ->
+                commandBox.setHint(Component.literal("Action ID (e.g. leap_slam) - Target directed to channel actor"));
             case "CHECKPOINT" -> commandBox.setHint(Component.literal("Checkpoint label / coordinates or command"));
-            case "DIALOG" -> commandBox.setHint(Component.literal("Dialog file name (e.g. intro.json) or /dialog run <name>"));
-            case "SCREEN_EFFECT", "SCREEN_EFFECTS", "OBJECTIVE" -> commandBox.setHint(Component.literal("Screen effect ID or parameters"));
+            case "DIALOG" ->
+                commandBox.setHint(Component.literal("Dialog file name (e.g. intro.json) or /dialog run <name>"));
+            case "SCREEN_EFFECT", "SCREEN_EFFECTS", "OBJECTIVE" ->
+                commandBox.setHint(Component.literal("Screen effect ID or parameters"));
             case "CAMERA" -> commandBox.setHint(Component.literal("Camera parameters or command"));
             default -> commandBox.setHint(Component.literal("Minecraft command to execute (e.g. /say Hello)"));
         }
@@ -2704,7 +3029,8 @@ public class EditMusicEntryModalScreen extends Screen {
         long ts = 0L;
         try {
             ts = Math.max(0L, Long.parseLong(this.timestampBox.getValue().trim()));
-        } catch (NumberFormatException ignored) {}
+        } catch (NumberFormatException ignored) {
+        }
         entry.setTimestampMs(ts);
 
         if (isPuppet) {
@@ -2714,10 +3040,13 @@ public class EditMusicEntryModalScreen extends Screen {
                 entry.setChannelId(channel.getId());
             }
 
-            String actorTag = (channel != null && !channel.getActorTag().isBlank()) ? channel.getActorTag() : (channel != null ? channel.getName() : "actor");
+            String actorTag = (channel != null && !channel.getActorTag().isBlank()) ? channel.getActorTag()
+                    : (channel != null ? channel.getName() : "actor");
             String actorName = (channel != null) ? channel.getName() : "Puppet";
-            String entityType = (channel != null && !channel.getEntityTypeId().isBlank()) ? channel.getEntityTypeId() : "fractured_utils:void_herald";
-            if (entityType.equalsIgnoreCase("void_herald") || entityType.equalsIgnoreCase("fracturedutils:void_herald")) {
+            String entityType = (channel != null && !channel.getEntityTypeId().isBlank()) ? channel.getEntityTypeId()
+                    : "fractured_utils:void_herald";
+            if (entityType.equalsIgnoreCase("void_herald")
+                    || entityType.equalsIgnoreCase("fracturedutils:void_herald")) {
                 entityType = "fractured_utils:void_herald";
             }
 
@@ -2730,16 +3059,25 @@ public class EditMusicEntryModalScreen extends Screen {
                 String x = spawnXBox != null ? spawnXBox.getValue().trim().replace(',', '.') : "~";
                 String y = spawnYBox != null ? spawnYBox.getValue().trim().replace(',', '.') : "~";
                 String z = spawnZBox != null ? spawnZBox.getValue().trim().replace(',', '.') : "~";
-                if (x.isEmpty()) x = "~";
-                if (y.isEmpty()) y = "~";
-                if (z.isEmpty()) z = "~";
+                if (x.isEmpty())
+                    x = "~";
+                if (y.isEmpty())
+                    y = "~";
+                if (z.isEmpty())
+                    z = "~";
 
                 String yawStr = spawnYawBox != null ? spawnYawBox.getValue().trim().replace(',', '.') : "0.0";
                 String pitchStr = spawnPitchBox != null ? spawnPitchBox.getValue().trim().replace(',', '.') : "0.0";
                 float sYaw = 0.0f;
                 float sPitch = 0.0f;
-                try { sYaw = Float.parseFloat(yawStr); } catch (Exception ignored) {}
-                try { sPitch = Float.parseFloat(pitchStr); } catch (Exception ignored) {}
+                try {
+                    sYaw = Float.parseFloat(yawStr);
+                } catch (Exception ignored) {
+                }
+                try {
+                    sPitch = Float.parseFloat(pitchStr);
+                } catch (Exception ignored) {
+                }
 
                 entry.setSpawnYaw(sYaw);
                 entry.setSpawnPitch(sPitch);
@@ -2748,14 +3086,17 @@ public class EditMusicEntryModalScreen extends Screen {
                 entry.putPuppetParam("spawnPitch", String.format(Locale.ROOT, "%.2f", sPitch));
                 entry.putPuppetParam("showNametag", String.valueOf(showNametag));
 
-                String cmd = String.format(Locale.ROOT, "summon %s %s %s %s {Tags:[\"%s\",\"puppet_actor\"],CustomName:'{\"text\":\"%s\"}',CustomNameVisible:%sb,NoAI:%sb,PersistenceRequired:1b,Rotation:[%.2ff,%.2ff]}",
-                        entityType, x, y, z, actorTag, actorName, showNametag ? "1" : "0", spawnDisableAi ? "1" : "0", sYaw, sPitch);
+                String cmd = String.format(Locale.ROOT,
+                        "summon %s %s %s %s {Tags:[\"%s\",\"puppet_actor\"],CustomName:'{\"text\":\"%s\"}',CustomNameVisible:%sb,NoAI:%sb,PersistenceRequired:1b,Rotation:[%.2ff,%.2ff]}",
+                        entityType, x, y, z, actorTag, actorName, showNametag ? "1" : "0", spawnDisableAi ? "1" : "0",
+                        sYaw, sPitch);
                 entry.setCommand(cmd);
 
                 if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
                     entry.setDescription(descriptionBox.getValue().trim());
                 } else {
-                    entry.setDescription("Spawn " + actorName + " @ " + x + " " + y + " " + z + " (facing " + String.format(Locale.ROOT, "%.0f°", sYaw) + ")");
+                    entry.setDescription("Spawn " + actorName + " @ " + x + " " + y + " " + z + " (facing "
+                            + String.format(Locale.ROOT, "%.0f°", sYaw) + ")");
                 }
             } else if (activePuppetMode == PuppetSubAction.DESPAWN) {
                 entry.setWindupMs(0);
@@ -2776,8 +3117,9 @@ public class EditMusicEntryModalScreen extends Screen {
                 entry.setRecoveryMs(0);
 
                 if (isSuppressAi) {
-                    entry.setCommand(String.format(Locale.ROOT, "puppet_suppress tag:%s ai:%b nav:%b tgt:%b look:%b actions:%b",
-                            actorTag, suppressFullAi, suppressNav, suppressTgt, suppressLook, suppressActions));
+                    entry.setCommand(
+                            String.format(Locale.ROOT, "puppet_suppress tag:%s ai:%b nav:%b tgt:%b look:%b actions:%b",
+                                    actorTag, suppressFullAi, suppressNav, suppressTgt, suppressLook, suppressActions));
                     if (descriptionBox != null && !descriptionBox.getValue().trim().isEmpty()) {
                         entry.setDescription(descriptionBox.getValue().trim());
                     } else {
@@ -2798,11 +3140,15 @@ public class EditMusicEntryModalScreen extends Screen {
                 entry.setRecoveryMs(recoveryMs);
                 entry.setPuppetParams(new LinkedHashMap<>(currentPuppetParams));
 
-                String actionId = (selectedActionId != null && !selectedActionId.isBlank()) ? selectedActionId : "fractured_utils:leap_slam";
-                String tgt = (targetSelectorBox != null && !targetSelectorBox.getValue().trim().isEmpty()) ? targetSelectorBox.getValue().trim() : "@p";
+                String actionId = (selectedActionId != null && !selectedActionId.isBlank()) ? selectedActionId
+                        : "fractured_utils:leap_slam";
+                String tgt = (targetSelectorBox != null && !targetSelectorBox.getValue().trim().isEmpty())
+                        ? targetSelectorBox.getValue().trim()
+                        : "@p";
 
                 StringBuilder cmdBuilder = new StringBuilder();
-                cmdBuilder.append(String.format(Locale.ROOT, "puppet_action tag:%s action:%s target:%s windup:%d jump:%d duration:%d recovery:%d",
+                cmdBuilder.append(String.format(Locale.ROOT,
+                        "puppet_action tag:%s action:%s target:%s windup:%d jump:%d duration:%d recovery:%d",
                         actorTag, actionId, tgt, windupMs, jumpMs, durationMs, recoveryMs));
                 for (Map.Entry<String, String> pEntry : currentPuppetParams.entrySet()) {
                     String pKey = pEntry.getKey().trim();
@@ -2859,7 +3205,8 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private boolean isCommandAction() {
-        if (isPuppet) return false;
+        if (isPuppet)
+            return false;
         String type = (typeDropdown != null && typeDropdown.getSelectedValue() != null)
                 ? typeDropdown.getSelectedValue()
                 : entry.getActionType();
@@ -2867,14 +3214,17 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private void updateCommandValidation() {
-        if (commandBox == null) return;
+        if (commandBox == null)
+            return;
         String val = commandBox.getValue();
-        this.isCommandInvalid = !CommandAction.isValidCommand(this.minecraft, val);
+        this.isCommandInvalid = !net.dandare21.fracturedutils.client.ClientCommandHelper.isValidCommand(this.minecraft,
+                val);
         this.commandBox.setTextColor(this.isCommandInvalid ? 0xFFFF5555 : 0xFFFFFFFF);
     }
 
     private void insertToken(String tok) {
-        if (commandBox == null) return;
+        if (commandBox == null)
+            return;
         String current = commandBox.getValue();
         if (!current.isEmpty() && !current.endsWith(" ")) {
             commandBox.setValue(current + " " + tok);
@@ -2889,10 +3239,12 @@ public class EditMusicEntryModalScreen extends Screen {
     }
 
     private void applyPreset(String cmd, String defaultDesc) {
-        if (commandBox == null) return;
+        if (commandBox == null)
+            return;
         commandBox.setValue(cmd);
         commandBox.moveCursorToEnd();
-        if (descriptionBox != null && (descriptionBox.getValue().trim().isEmpty() || descriptionBox.getValue().equals(entry.getDescription()))) {
+        if (descriptionBox != null && (descriptionBox.getValue().trim().isEmpty()
+                || descriptionBox.getValue().equals(entry.getDescription()))) {
             descriptionBox.setValue(defaultDesc);
         }
         if (this.commandSuggestions != null) {
@@ -2948,7 +3300,8 @@ public class EditMusicEntryModalScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (!isDropdownOpen() && this.commandSuggestions != null && this.commandSuggestions.keyPressed(keyCode, scanCode, modifiers)) {
+        if (!isDropdownOpen() && this.commandSuggestions != null
+                && this.commandSuggestions.keyPressed(keyCode, scanCode, modifiers)) {
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
@@ -3032,7 +3385,8 @@ public class EditMusicEntryModalScreen extends Screen {
         if (typeDropdown != null && typeDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
             return true;
         }
-        if (dialogLetterSoundDropdown != null && dialogLetterSoundDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
+        if (dialogLetterSoundDropdown != null
+                && dialogLetterSoundDropdown.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
@@ -3079,43 +3433,56 @@ public class EditMusicEntryModalScreen extends Screen {
         int panelLeft = (effWidth - panelWidth) / 2;
         int panelTop = (effHeight - panelHeight) / 2;
 
-        int borderClr = isDialog ? 0xFFFFD700 : (isCamera ? MusicSequenceChannel.COLOR_CAMERA : (isScreenEffect ? MusicSequenceChannel.COLOR_SCREEN_EFFECT : CYAN_MAIN));
+        int borderClr = isDialog ? 0xFFFFD700
+                : (isCamera ? MusicSequenceChannel.COLOR_CAMERA
+                        : (isScreenEffect ? MusicSequenceChannel.COLOR_SCREEN_EFFECT : CYAN_MAIN));
 
         // Modal Background & Borders
         guiGraphics.fill(panelLeft, panelTop, panelLeft + panelWidth, panelTop + panelHeight, CYAN_BG);
         guiGraphics.fill(panelLeft, panelTop, panelLeft + panelWidth, panelTop + 1, borderClr);
-        guiGraphics.fill(panelLeft, panelTop + panelHeight - 1, panelLeft + panelWidth, panelTop + panelHeight, borderClr);
+        guiGraphics.fill(panelLeft, panelTop + panelHeight - 1, panelLeft + panelWidth, panelTop + panelHeight,
+                borderClr);
         guiGraphics.fill(panelLeft, panelTop, panelLeft + 1, panelTop + panelHeight, borderClr);
-        guiGraphics.fill(panelLeft + panelWidth - 1, panelTop, panelLeft + panelWidth, panelTop + panelHeight, borderClr);
+        guiGraphics.fill(panelLeft + panelWidth - 1, panelTop, panelLeft + panelWidth, panelTop + panelHeight,
+                borderClr);
 
         if (isDialog) {
-            renderDialogScreen(guiGraphics, panelLeft, panelTop, panelWidth, panelHeight, scaledMouseX, scaledMouseY, partialTick);
+            renderDialogScreen(guiGraphics, panelLeft, panelTop, panelWidth, panelHeight, scaledMouseX, scaledMouseY,
+                    partialTick);
         } else if (isCamera) {
-            renderCameraScreen(guiGraphics, panelLeft, panelTop, panelWidth, panelHeight, scaledMouseX, scaledMouseY, partialTick);
+            renderCameraScreen(guiGraphics, panelLeft, panelTop, panelWidth, panelHeight, scaledMouseX, scaledMouseY,
+                    partialTick);
         } else if (isScreenEffect) {
-            renderScreenEffectScreen(guiGraphics, panelLeft, panelTop, panelWidth, panelHeight, scaledMouseX, scaledMouseY, partialTick);
+            renderScreenEffectScreen(guiGraphics, panelLeft, panelTop, panelWidth, panelHeight, scaledMouseX,
+                    scaledMouseY, partialTick);
         } else if (isPuppet) {
-            renderPuppetScreen(guiGraphics, panelLeft, panelTop, panelWidth, panelHeight, scaledMouseX, scaledMouseY, partialTick);
+            renderPuppetScreen(guiGraphics, panelLeft, panelTop, panelWidth, panelHeight, scaledMouseX, scaledMouseY,
+                    partialTick);
         } else {
-            renderStandardScreen(guiGraphics, panelLeft, panelTop, panelWidth, panelHeight, scaledMouseX, scaledMouseY, partialTick);
+            renderStandardScreen(guiGraphics, panelLeft, panelTop, panelWidth, panelHeight, scaledMouseX, scaledMouseY,
+                    partialTick);
         }
 
         guiGraphics.pose().popPose();
     }
 
-    private void renderScreenEffectScreen(GuiGraphics guiGraphics, int panelLeft, int panelTop, int panelWidth, int panelHeight,
-                                          int mouseX, int mouseY, float partialTick) {
+    private void renderScreenEffectScreen(GuiGraphics guiGraphics, int panelLeft, int panelTop, int panelWidth,
+            int panelHeight,
+            int mouseX, int mouseY, float partialTick) {
         int contentX = panelLeft + 14;
         int contentW = panelWidth - 28;
 
         // 1. Header Bar
         guiGraphics.fill(panelLeft + 1, panelTop + 1, panelLeft + panelWidth - 1, panelTop + 24, HEADER_BG);
-        guiGraphics.fill(panelLeft + 1, panelTop + 23, panelLeft + panelWidth - 1, panelTop + 24, MusicSequenceChannel.COLOR_SCREEN_EFFECT);
-        guiGraphics.drawString(this.font, "⚡ SCREEN EFFECT STUDIO", contentX, panelTop + 8, MusicSequenceChannel.COLOR_SCREEN_EFFECT, false);
+        guiGraphics.fill(panelLeft + 1, panelTop + 23, panelLeft + panelWidth - 1, panelTop + 24,
+                MusicSequenceChannel.COLOR_SCREEN_EFFECT);
+        guiGraphics.drawString(this.font, "⚡ SCREEN EFFECT STUDIO", contentX, panelTop + 8,
+                MusicSequenceChannel.COLOR_SCREEN_EFFECT, false);
 
         String modeBadge = "FX: " + activeScreenEffectMode;
         int badgeW = this.font.width(modeBadge);
-        drawPillBadge(guiGraphics, panelLeft + panelWidth - 14 - badgeW - 8, panelTop + 6, modeBadge, MusicSequenceChannel.COLOR_SCREEN_EFFECT, MusicSequenceChannel.COLOR_SCREEN_EFFECT);
+        drawPillBadge(guiGraphics, panelLeft + panelWidth - 14 - badgeW - 8, panelTop + 6, modeBadge,
+                MusicSequenceChannel.COLOR_SCREEN_EFFECT, MusicSequenceChannel.COLOR_SCREEN_EFFECT);
 
         // 2. Mode Parameters Card (Height = 68)
         int card1Y = panelTop + 54;
@@ -3124,7 +3491,9 @@ public class EditMusicEntryModalScreen extends Screen {
 
         if ("INVERT_COLORS".equalsIgnoreCase(activeScreenEffectMode)) {
             guiGraphics.drawString(this.font, "PULSE HZ:", contentX + 175, card1Y + 12, TEXT_LABEL, false);
-            guiGraphics.drawString(this.font, "Inverts world & screen luminance. Supports solid invert or sinusoidal pulse.", contentX + 10, card1Y + 42, TEXT_MUTED, false);
+            guiGraphics.drawString(this.font,
+                    "Inverts world & screen luminance. Supports solid invert or sinusoidal pulse.", contentX + 10,
+                    card1Y + 42, TEXT_MUTED, false);
         } else if ("STROBE".equalsIgnoreCase(activeScreenEffectMode)) {
             guiGraphics.drawString(this.font, "SPEED:", contentX + 10, card1Y + 12, TEXT_LABEL, false);
             guiGraphics.drawString(this.font, "HEX:", contentX + 10, card1Y + 40, TEXT_LABEL, false);
@@ -3136,7 +3505,8 @@ public class EditMusicEntryModalScreen extends Screen {
                 guiGraphics.drawString(this.font, "ANGLE (°):", contentX + 164, card1Y + 12, TEXT_LABEL, false);
             }
             guiGraphics.drawString(this.font, "INTENSITY:", contentX + 10, card1Y + 40, TEXT_LABEL, false);
-            guiGraphics.drawString(this.font, "Full RGB spectrum shader rotation without solid color overlay.", contentX + 128, card1Y + 40, TEXT_MUTED, false);
+            guiGraphics.drawString(this.font, "Full RGB spectrum shader rotation without solid color overlay.",
+                    contentX + 128, card1Y + 40, TEXT_MUTED, false);
         } else if ("IMPACT_FRAME".equalsIgnoreCase(activeScreenEffectMode)) {
             guiGraphics.drawString(this.font, "CUT FPS:", contentX + 6, card1Y + 40, TEXT_LABEL, false);
             String label = impactEditingSecondary ? "INK HEX:" : "PAPER HEX:";
@@ -3167,7 +3537,8 @@ public class EditMusicEntryModalScreen extends Screen {
             // SCREEN_SHAKE
             guiGraphics.drawString(this.font, "INTENSITY:", contentX + 6, card1Y + 12, TEXT_LABEL, false);
             guiGraphics.drawString(this.font, "FREQ:", contentX + 120, card1Y + 12, TEXT_LABEL, false);
-            guiGraphics.drawString(this.font, "Viewport camera shake with rotational pitch, roll & yaw jitter.", contentX + 10, card1Y + 42, TEXT_MUTED, false);
+            guiGraphics.drawString(this.font, "Viewport camera shake with rotational pitch, roll & yaw jitter.",
+                    contentX + 10, card1Y + 42, TEXT_MUTED, false);
         }
 
         // 3. Timing Card
@@ -3185,26 +3556,31 @@ public class EditMusicEntryModalScreen extends Screen {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
-    private void renderCameraScreen(GuiGraphics guiGraphics, int panelLeft, int panelTop, int panelWidth, int panelHeight,
-                                    int mouseX, int mouseY, float partialTick) {
+    private void renderCameraScreen(GuiGraphics guiGraphics, int panelLeft, int panelTop, int panelWidth,
+            int panelHeight,
+            int mouseX, int mouseY, float partialTick) {
         int contentX = panelLeft + 14;
         int contentW = panelWidth - 28;
 
         // 1. Header Bar
         guiGraphics.fill(panelLeft + 1, panelTop + 1, panelLeft + panelWidth - 1, panelTop + 24, HEADER_BG);
-        guiGraphics.fill(panelLeft + 1, panelTop + 23, panelLeft + panelWidth - 1, panelTop + 24, MusicSequenceChannel.COLOR_CAMERA);
-        guiGraphics.drawString(this.font, "🎥 CAMERA CHANNEL STUDIO", contentX, panelTop + 8, MusicSequenceChannel.COLOR_CAMERA, false);
+        guiGraphics.fill(panelLeft + 1, panelTop + 23, panelLeft + panelWidth - 1, panelTop + 24,
+                MusicSequenceChannel.COLOR_CAMERA);
+        guiGraphics.drawString(this.font, "🎥 CAMERA CHANNEL STUDIO", contentX, panelTop + 8,
+                MusicSequenceChannel.COLOR_CAMERA, false);
 
         String modeBadge = "MODE: " + activeCameraMode;
         int badgeW = this.font.width(modeBadge);
-        drawPillBadge(guiGraphics, panelLeft + panelWidth - 14 - badgeW - 8, panelTop + 6, modeBadge, MusicSequenceChannel.COLOR_CAMERA, MusicSequenceChannel.COLOR_CAMERA);
+        drawPillBadge(guiGraphics, panelLeft + panelWidth - 14 - badgeW - 8, panelTop + 6, modeBadge,
+                MusicSequenceChannel.COLOR_CAMERA, MusicSequenceChannel.COLOR_CAMERA);
 
         // 2. Mode-Specific Content Card (Height = 58)
         int card1Y = panelTop + 56;
         int card1H = 58;
         drawInputFrame(guiGraphics, contentX, card1Y, contentW, card1H, false, false);
 
-        boolean isKeyframe = "KEYFRAME".equalsIgnoreCase(activeCameraMode) || "STATIC".equalsIgnoreCase(activeCameraMode);
+        boolean isKeyframe = "KEYFRAME".equalsIgnoreCase(activeCameraMode)
+                || "STATIC".equalsIgnoreCase(activeCameraMode);
         boolean isEnable = "ENABLE".equalsIgnoreCase(activeCameraMode);
         boolean isDisable = "DISABLE".equalsIgnoreCase(activeCameraMode) || "CLEAR".equalsIgnoreCase(activeCameraMode);
 
@@ -3248,7 +3624,8 @@ public class EditMusicEntryModalScreen extends Screen {
 
             // Description Label
             int descLabelY = panelTop + 264;
-            guiGraphics.drawString(this.font, "Timeline Label / Note (Optional):", contentX, descLabelY + 2, TEXT_LABEL, false);
+            guiGraphics.drawString(this.font, "Timeline Label / Note (Optional):", contentX, descLabelY + 2, TEXT_LABEL,
+                    false);
         } else if (isEnable) {
             drawInputFrame(guiGraphics, contentX, card1Y, contentW, 54, false, false);
             guiGraphics.drawString(this.font, "Blend-In (ms):", contentX + 6, card1Y + 10, TEXT_LABEL, false);
@@ -3259,7 +3636,8 @@ public class EditMusicEntryModalScreen extends Screen {
             guiGraphics.drawString(this.font, "Timestamp:", contentX + 6, card2Y + 9, TEXT_LABEL, false);
 
             int descLabelY = panelTop + 160;
-            guiGraphics.drawString(this.font, "Timeline Label / Note (Optional):", contentX, descLabelY, TEXT_LABEL, false);
+            guiGraphics.drawString(this.font, "Timeline Label / Note (Optional):", contentX, descLabelY, TEXT_LABEL,
+                    false);
         } else if (isDisable) {
             drawInputFrame(guiGraphics, contentX, card1Y, contentW, 54, false, false);
             guiGraphics.drawString(this.font, "Blend-Out (ms):", contentX + 6, card1Y + 10, TEXT_LABEL, false);
@@ -3270,7 +3648,8 @@ public class EditMusicEntryModalScreen extends Screen {
             guiGraphics.drawString(this.font, "Timestamp:", contentX + 6, card2Y + 9, TEXT_LABEL, false);
 
             int descLabelY = panelTop + 160;
-            guiGraphics.drawString(this.font, "Timeline Label / Note (Optional):", contentX, descLabelY, TEXT_LABEL, false);
+            guiGraphics.drawString(this.font, "Timeline Label / Note (Optional):", contentX, descLabelY, TEXT_LABEL,
+                    false);
         } else {
             if ("FOLLOW".equalsIgnoreCase(activeCameraMode)) {
                 int y1 = card1Y + 5;
@@ -3280,7 +3659,8 @@ public class EditMusicEntryModalScreen extends Screen {
 
                 int y2 = card1Y + 31;
                 guiGraphics.drawString(this.font, "Pitch:", contentX + 6, y2 + 5, TEXT_LABEL, false);
-                guiGraphics.drawString(this.font, "Tracks player/entity from above (Height offset: 5.5)", contentX + 106, y2 + 5, TEXT_MUTED, false);
+                guiGraphics.drawString(this.font, "Tracks player/entity from above (Height offset: 5.5)",
+                        contentX + 106, y2 + 5, TEXT_MUTED, false);
             } else if ("OVER_THE_SHOULDER".equalsIgnoreCase(activeCameraMode)) {
                 int y1 = card1Y + 5;
                 guiGraphics.drawString(this.font, "Target:", contentX + 6, y1 + 5, TEXT_LABEL, false);
@@ -3291,7 +3671,8 @@ public class EditMusicEntryModalScreen extends Screen {
                 int y2 = card1Y + 31;
                 guiGraphics.drawString(this.font, "Height:", contentX + 6, y2 + 5, TEXT_LABEL, false);
                 guiGraphics.drawString(this.font, "Pitch:", contentX + 104, y2 + 5, TEXT_LABEL, false);
-                guiGraphics.drawString(this.font, "Cinematic 3rd-person shoulder tracking", contentX + 196, y2 + 5, TEXT_MUTED, false);
+                guiGraphics.drawString(this.font, "Cinematic 3rd-person shoulder tracking", contentX + 196, y2 + 5,
+                        TEXT_MUTED, false);
             }
 
             // 3. Timing Section Card (Height = 28)
@@ -3302,29 +3683,37 @@ public class EditMusicEntryModalScreen extends Screen {
 
             // 4. Description Label
             int descLabelY = panelTop + 160;
-            guiGraphics.drawString(this.font, "Timeline Label / Note (Optional):", contentX, descLabelY, TEXT_LABEL, false);
+            guiGraphics.drawString(this.font, "Timeline Label / Note (Optional):", contentX, descLabelY, TEXT_LABEL,
+                    false);
         }
 
         // 5. Render All Widgets, Buttons, and Inputs
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
-    private void renderPuppetScreen(GuiGraphics guiGraphics, int panelLeft, int panelTop, int panelWidth, int panelHeight,
-                                    int mouseX, int mouseY, float partialTick) {
+    private void renderPuppetScreen(GuiGraphics guiGraphics, int panelLeft, int panelTop, int panelWidth,
+            int panelHeight,
+            int mouseX, int mouseY, float partialTick) {
         // 1. Header & Actor Info Banner
         boolean isSub = channel != null && channel.isSubChannel();
         int titleColor = isSub ? MusicSequenceChannel.COLOR_PUPPET_SUB : CYAN_MAIN;
-        guiGraphics.drawString(this.font, isSub ? "PUPPET ACTOR ACTION EDITOR (SUB-CHANNEL)" : "PUPPET ACTOR ACTION EDITOR", panelLeft + 16, panelTop + 10, titleColor, false);
+        guiGraphics.drawString(this.font,
+                isSub ? "PUPPET ACTOR ACTION EDITOR (SUB-CHANNEL)" : "PUPPET ACTOR ACTION EDITOR", panelLeft + 16,
+                panelTop + 10, titleColor, false);
 
-        String actorTag = (channel != null && !channel.getActorTag().isBlank()) ? channel.getActorTag() : (channel != null ? channel.getName() : "actor");
+        String actorTag = (channel != null && !channel.getActorTag().isBlank()) ? channel.getActorTag()
+                : (channel != null ? channel.getName() : "actor");
         String actorName = (channel != null) ? channel.getName() : "Puppet Actor";
-        String entityType = (channel != null && !channel.getEntityTypeId().isBlank()) ? channel.getEntityTypeId() : "fracturedutils:void_herald";
+        String entityType = (channel != null && !channel.getEntityTypeId().isBlank()) ? channel.getEntityTypeId()
+                : "fracturedutils:void_herald";
 
-        String actorBanner = (isSub ? "↳ 🎭 " : "🎭 ") + actorName + "  |  #" + actorTag + "  |  " + entityType + (isSub ? " [Linked Sub-Track]" : "");
+        String actorBanner = (isSub ? "↳ 🎭 " : "🎭 ") + actorName + "  |  #" + actorTag + "  |  " + entityType
+                + (isSub ? " [Linked Sub-Track]" : "");
         if (this.font.width(actorBanner) > panelWidth - 40) {
             actorBanner = this.font.plainSubstrByWidth(actorBanner, panelWidth - 46) + "..";
         }
-        guiGraphics.drawString(this.font, actorBanner, panelLeft + 16, panelTop + 24, isSub ? MusicSequenceChannel.COLOR_PUPPET_SUB : 0xFFAA55FF, false);
+        guiGraphics.drawString(this.font, actorBanner, panelLeft + 16, panelTop + 24,
+                isSub ? MusicSequenceChannel.COLOR_PUPPET_SUB : 0xFFAA55FF, false);
 
         int contentX = panelLeft + 16;
         int contentW = panelWidth - 32;
@@ -3343,9 +3732,12 @@ public class EditMusicEntryModalScreen extends Screen {
             guiGraphics.fill(contentX, despawnY, contentX + contentW, despawnY + 48, 0x33FF3355);
             guiGraphics.fill(contentX, despawnY, contentX + contentW, despawnY + 1, 0x88FF3355);
             guiGraphics.fill(contentX, despawnY + 47, contentX + contentW, despawnY + 48, 0x88FF3355);
-            guiGraphics.drawCenteredString(this.font, "✕ DESPAWN PUPPET ACTOR", contentX + (contentW / 2), despawnY + 8, 0xFFFF3355);
-            guiGraphics.drawCenteredString(this.font, "Target: @e[tag=" + actorTag + ",limit=1] (Command: /kill)", contentX + (contentW / 2), despawnY + 22, 0xFFAABBCC);
-            guiGraphics.drawCenteredString(this.font, "Removes and discards the spawned actor entity from the world", contentX + (contentW / 2), despawnY + 34, 0xFF8899AA);
+            guiGraphics.drawCenteredString(this.font, "✕ DESPAWN PUPPET ACTOR", contentX + (contentW / 2), despawnY + 8,
+                    0xFFFF3355);
+            guiGraphics.drawCenteredString(this.font, "Target: @e[tag=" + actorTag + ",limit=1] (Command: /kill)",
+                    contentX + (contentW / 2), despawnY + 22, 0xFFAABBCC);
+            guiGraphics.drawCenteredString(this.font, "Removes and discards the spawned actor entity from the world",
+                    contentX + (contentW / 2), despawnY + 34, 0xFF8899AA);
         } else if (activePuppetMode == PuppetSubAction.EXECUTE_ACTION) {
             int actionY = panelTop + 66;
             guiGraphics.drawString(this.font, "Puppet Action:", contentX, actionY, 0xFFAABBCC, false);
@@ -3378,7 +3770,9 @@ public class EditMusicEntryModalScreen extends Screen {
             drawPillBadge(guiGraphics, contentX + 132, cardY + 5, badgeText, 0xFFAA55FF, 0xFFAA55FF);
 
             if (paramCount == 0) {
-                guiGraphics.drawString(this.font, "No custom parameters configured. Click [+ ADD PARAM] to add overrides.", contentX + 10, cardY + 26, TEXT_MUTED, false);
+                guiGraphics.drawString(this.font,
+                        "No custom parameters configured. Click [+ ADD PARAM] to add overrides.", contentX + 10,
+                        cardY + 26, TEXT_MUTED, false);
             }
 
             for (Consumer<GuiGraphics> r : paramLabelRenderers) {
@@ -3391,7 +3785,8 @@ public class EditMusicEntryModalScreen extends Screen {
             guiGraphics.drawString(this.font, "Timestamp (ms):", contentX, timestampBox.getY() - 10, 0xFFAABBCC, false);
         }
         if (descriptionBox != null) {
-            guiGraphics.drawString(this.font, "Description / Note:", contentX, descriptionBox.getY() - 10, 0xFFAABBCC, false);
+            guiGraphics.drawString(this.font, "Description / Note:", contentX, descriptionBox.getY() - 10, 0xFFAABBCC,
+                    false);
         }
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
@@ -3467,16 +3862,21 @@ public class EditMusicEntryModalScreen extends Screen {
         // Total & Timing badge text
         long startMs = entry.getTimestampMs();
         if (this.timestampBox != null) {
-            try { startMs = Math.max(0L, Long.parseLong(this.timestampBox.getValue().trim())); } catch (Exception ignored) {}
+            try {
+                startMs = Math.max(0L, Long.parseLong(this.timestampBox.getValue().trim()));
+            } catch (Exception ignored) {
+            }
         }
         long execOffset = 0;
         for (ActionTimingPhase phase : phases) {
-            if (phase.isExecutionPoint()) break;
+            if (phase.isExecutionPoint())
+                break;
             execOffset += getPhaseMs(phase);
         }
         long execTotalTime = startMs + execOffset;
         String execLabel = actType.getExecutionLabel();
-        String timingDetail = String.format(Locale.ROOT, "Start: %dms  |  💥 %s: %dms  |  Total: %dms", startMs, execLabel, execTotalTime, totalMs);
+        String timingDetail = String.format(Locale.ROOT, "Start: %dms  |  💥 %s: %dms  |  Total: %dms", startMs,
+                execLabel, execTotalTime, totalMs);
         int textW = this.font.width(timingDetail);
         guiGraphics.fill(x, y - 12, x + textW + 8, y - 1, 0xEE060C12);
         guiGraphics.drawString(this.font, timingDetail, x + 4, y - 10, CYAN_MAIN, false);
@@ -3490,8 +3890,9 @@ public class EditMusicEntryModalScreen extends Screen {
         return luma > 150;
     }
 
-    private void renderStandardScreen(GuiGraphics guiGraphics, int panelLeft, int panelTop, int panelWidth, int panelHeight,
-                                      int mouseX, int mouseY, float partialTick) {
+    private void renderStandardScreen(GuiGraphics guiGraphics, int panelLeft, int panelTop, int panelWidth,
+            int panelHeight,
+            int mouseX, int mouseY, float partialTick) {
         int contentX = panelLeft + 16;
         int contentW = panelWidth - 32;
 
@@ -3507,11 +3908,15 @@ public class EditMusicEntryModalScreen extends Screen {
         if (channel != null) {
             String chTag = "TRACK: " + channel.getName().toUpperCase(Locale.ROOT);
             int chTagW = this.font.width(chTag);
-            drawPillBadge(guiGraphics, panelLeft + panelWidth - 16 - chTagW - 8, panelTop + 6, chTag, channel.getColor(), channel.getColor());
+            drawPillBadge(guiGraphics, panelLeft + panelWidth - 16 - chTagW - 8, panelTop + 6, chTag,
+                    channel.getColor(), channel.getColor());
         } else {
-            String catBadge = isCmd ? "SYS::CONSOLE" : ("SYS::" + (entry.getActionType() != null ? entry.getActionType().toUpperCase(Locale.ROOT) : "ACTION"));
+            String catBadge = isCmd ? "SYS::CONSOLE"
+                    : ("SYS::" + (entry.getActionType() != null ? entry.getActionType().toUpperCase(Locale.ROOT)
+                            : "ACTION"));
             int cbW = this.font.width(catBadge);
-            guiGraphics.drawString(this.font, catBadge, panelLeft + panelWidth - 16 - cbW, panelTop + 8, TEXT_MUTED, false);
+            guiGraphics.drawString(this.font, catBadge, panelLeft + panelWidth - 16 - cbW, panelTop + 8, TEXT_MUTED,
+                    false);
         }
 
         // Row 1 Labels: "Type:" and "Time (ms):"
@@ -3521,13 +3926,18 @@ public class EditMusicEntryModalScreen extends Screen {
 
         long curTs = 0L;
         if (this.timestampBox != null) {
-            try { curTs = Math.max(0L, Long.parseLong(this.timestampBox.getValue().trim())); } catch (Exception ignored) {}
+            try {
+                curTs = Math.max(0L, Long.parseLong(this.timestampBox.getValue().trim()));
+            } catch (Exception ignored) {
+            }
         }
-        guiGraphics.drawString(this.font, "(" + formatTimestamp(curTs) + ")", contentX + 284, row1Y + 5, TEXT_MUTED, false);
+        guiGraphics.drawString(this.font, "(" + formatTimestamp(curTs) + ")", contentX + 284, row1Y + 5, TEXT_MUTED,
+                false);
 
         // Row 2: Command Label & Validation Status
         int cmdY = panelTop + 56;
-        guiGraphics.drawString(this.font, isCmd ? "Console Command:" : "Action Payload:", contentX, cmdY, CYAN_BRIGHT, false);
+        guiGraphics.drawString(this.font, isCmd ? "Console Command:" : "Action Payload:", contentX, cmdY, CYAN_BRIGHT,
+                false);
 
         if (isCmd) {
             String statusText = isCommandInvalid ? "⚠ UNKNOWN COMMAND" : "• SYNTAX VALID";
@@ -3536,7 +3946,8 @@ public class EditMusicEntryModalScreen extends Screen {
             drawPillBadge(guiGraphics, contentX + contentW - stW - 8, cmdY - 2, statusText, statusColor, statusColor);
 
             // Substitutions helper note directly under commandBox
-            guiGraphics.drawString(this.font, "Supports Minecraft commands & selectors. Variables: %player%, %uuid%", contentX, panelTop + 92, TEXT_MUTED, false);
+            guiGraphics.drawString(this.font, "Supports Minecraft commands & selectors. Variables: %player%, %uuid%",
+                    contentX, panelTop + 92, TEXT_MUTED, false);
         }
 
         // Row 3: Description Label
@@ -3544,7 +3955,8 @@ public class EditMusicEntryModalScreen extends Screen {
         guiGraphics.drawString(this.font, "Timeline Label (Optional):", contentX, descY, TEXT_LABEL, false);
 
         // Operator permissions note
-        guiGraphics.drawString(this.font, "ⓘ Runs as server console with operator permissions.", contentX, panelTop + 148, TEXT_MUTED, false);
+        guiGraphics.drawString(this.font, "ⓘ Runs as server console with operator permissions.", contentX,
+                panelTop + 148, TEXT_MUTED, false);
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
@@ -3556,8 +3968,9 @@ public class EditMusicEntryModalScreen extends Screen {
         }
     }
 
-    private void renderDialogScreen(GuiGraphics guiGraphics, int panelLeft, int panelTop, int panelWidth, int panelHeight,
-                                    int mouseX, int mouseY, float partialTick) {
+    private void renderDialogScreen(GuiGraphics guiGraphics, int panelLeft, int panelTop, int panelWidth,
+            int panelHeight,
+            int mouseX, int mouseY, float partialTick) {
         // Update real-time typing animation test
         if (isTypingTestActive) {
             long now = System.currentTimeMillis();
@@ -3565,7 +3978,10 @@ public class EditMusicEntryModalScreen extends Screen {
                 lastTypingTickTime = now;
                 int speed = 1;
                 if (dialogSpeedBox != null) {
-                    try { speed = Math.max(0, Integer.parseInt(dialogSpeedBox.getValue().trim())); } catch (Exception ignored) {}
+                    try {
+                        speed = Math.max(0, Integer.parseInt(dialogSpeedBox.getValue().trim()));
+                    } catch (Exception ignored) {
+                    }
                 }
 
                 if (speed == 0) {
@@ -3588,10 +4004,14 @@ public class EditMusicEntryModalScreen extends Screen {
 
         // Header Title
         if (typeDropdown != null) {
-            guiGraphics.drawString(this.font, Component.literal("DIALOG ACTION STUDIO").withStyle(ChatFormatting.BOLD), panelLeft + 118, panelTop + 11, 0xFFFFD700);
+            guiGraphics.drawString(this.font, Component.literal("DIALOG ACTION STUDIO").withStyle(ChatFormatting.BOLD),
+                    panelLeft + 118, panelTop + 11, 0xFFFFD700);
         } else {
-            String chTitle = (channel != null && !channel.getName().isBlank()) ? ("💬 DIALOG STUDIO: " + channel.getName().toUpperCase(Locale.ROOT)) : "💬 DIALOG ACTION STUDIO EDITOR";
-            guiGraphics.drawString(this.font, Component.literal(chTitle).withStyle(ChatFormatting.BOLD), panelLeft + 16, panelTop + 11, 0xFFFFD700);
+            String chTitle = (channel != null && !channel.getName().isBlank())
+                    ? ("💬 DIALOG STUDIO: " + channel.getName().toUpperCase(Locale.ROOT))
+                    : "💬 DIALOG ACTION STUDIO EDITOR";
+            guiGraphics.drawString(this.font, Component.literal(chTitle).withStyle(ChatFormatting.BOLD), panelLeft + 16,
+                    panelTop + 11, 0xFFFFD700);
         }
 
         int tsX = panelLeft + panelWidth - 16 - 130;
@@ -3651,7 +4071,8 @@ public class EditMusicEntryModalScreen extends Screen {
             guiGraphics.fill(badgeX, badgeY, badgeX + 1, badgeY + badgeH, borderColor);
             guiGraphics.fill(badgeX + badgeW - 1, badgeY, badgeX + badgeW, badgeY + badgeH, borderColor);
 
-            DialogFormatUtil.renderAnimatedText(guiGraphics, this.font, speakerVal, badgeX + 6, badgeY + 3, badgeW, 0xFFFFFFFF);
+            ClientDialogTextRenderer.renderAnimatedText(guiGraphics, this.font, speakerVal, badgeX + 6, badgeY + 3,
+                    badgeW, 0xFFFFFFFF);
             currentTextY += 2;
         }
 
@@ -3662,22 +4083,29 @@ public class EditMusicEntryModalScreen extends Screen {
             displayText = DialogFormatUtil.getRevealedText(rawText, typingRevealedChars);
         }
 
-        DialogFormatUtil.renderAnimatedText(guiGraphics, this.font, displayText, contentX, currentTextY, maxTextWidth, 0xFFFFFFFF);
+        ClientDialogTextRenderer.renderAnimatedText(guiGraphics, this.font, displayText, contentX, currentTextY,
+                maxTextWidth, 0xFFFFFFFF);
 
         // State Badge in bottom-right corner of preview
         int dTicks = 40;
         if (dialogDelayBox != null) {
-            try { dTicks = Math.max(1, Integer.parseInt(dialogDelayBox.getValue().trim())); } catch (Exception ignored) {}
+            try {
+                dTicks = Math.max(1, Integer.parseInt(dialogDelayBox.getValue().trim()));
+            } catch (Exception ignored) {
+            }
         }
         String durPreview = String.format(Locale.ROOT, "⏱ %dt (%.1fs)", dTicks, dTicks * 0.05f);
-        guiGraphics.drawString(this.font, Component.literal(durPreview), boxX + boxW - this.font.width(durPreview) - 8, boxY + boxH - 14, 0xFFFFD700, false);
+        guiGraphics.drawString(this.font, Component.literal(durPreview), boxX + boxW - this.font.width(durPreview) - 8,
+                boxY + boxH - 14, 0xFFFFD700, false);
 
         // Form labels
         int formY = panelTop + 96;
-        guiGraphics.drawString(this.font, Component.literal("Speaker Tag (supports color & custom FX):"), panelLeft + 16, formY, 0xAAAAAA);
+        guiGraphics.drawString(this.font, Component.literal("Speaker Tag (supports color & custom FX):"),
+                panelLeft + 16, formY, 0xAAAAAA);
         formY += 32;
 
-        guiGraphics.drawString(this.font, Component.literal("Dialog Text (supports color & custom FX):"), panelLeft + 16, formY, 0xAAAAAA);
+        guiGraphics.drawString(this.font, Component.literal("Dialog Text (supports color & custom FX):"),
+                panelLeft + 16, formY, 0xAAAAAA);
 
         // Overflow & char count
         Component textComp = DialogFormatUtil.formatText(rawText);
@@ -3688,16 +4116,20 @@ public class EditMusicEntryModalScreen extends Screen {
         String countStr;
         int countColor;
         if (isOverflow) {
-            countStr = "⚠ OVERFLOW: " + visibleChars + " chars (" + rpgLines.size() + "/4 Lines - text will cut off in-game!)";
+            countStr = "⚠ OVERFLOW: " + visibleChars + " chars (" + rpgLines.size()
+                    + "/4 Lines - text will cut off in-game!)";
             countColor = 0xFFFF3355;
         } else {
             countStr = "Chars: " + visibleChars + " (Line " + Math.max(1, rpgLines.size()) + "/4)";
             countColor = 0xFF00FF55;
         }
-        guiGraphics.drawString(this.font, Component.literal(countStr).withStyle(isOverflow ? ChatFormatting.BOLD : ChatFormatting.RESET), panelLeft + panelWidth - 16 - this.font.width(countStr), formY, countColor, false);
+        guiGraphics.drawString(this.font,
+                Component.literal(countStr).withStyle(isOverflow ? ChatFormatting.BOLD : ChatFormatting.RESET),
+                panelLeft + panelWidth - 16 - this.font.width(countStr), formY, countColor, false);
         formY += 68;
 
-        guiGraphics.drawString(this.font, Component.literal("Standard Formatting & Custom Animated FX Palette:"), panelLeft + 16, formY, 0xFFFFD700);
+        guiGraphics.drawString(this.font, Component.literal("Standard Formatting & Custom Animated FX Palette:"),
+                panelLeft + 16, formY, 0xFFFFD700);
         formY += 66;
 
         // Secondary controls labels
@@ -3715,13 +4147,18 @@ public class EditMusicEntryModalScreen extends Screen {
 
         int speed = 1;
         if (dialogSpeedBox != null) {
-            try { speed = Math.max(0, Integer.parseInt(dialogSpeedBox.getValue().trim())); } catch (Exception ignored) {}
+            try {
+                speed = Math.max(0, Integer.parseInt(dialogSpeedBox.getValue().trim()));
+            } catch (Exception ignored) {
+            }
         }
         int totTicks = visibleChars * speed + dTicks;
-        String totDurationStr = String.format(Locale.ROOT, "Total Duration: %.2fs (%dt) - auto advances", totTicks * 0.05f, totTicks);
+        String totDurationStr = String.format(Locale.ROOT, "Total Duration: %.2fs (%dt) - auto advances",
+                totTicks * 0.05f, totTicks);
         guiGraphics.drawString(this.font, Component.literal(totDurationStr), col2X, gridY + 22, 0xFF00FFCC, false);
 
-        guiGraphics.drawString(this.font, Component.literal("Line Sound ID (triggers on start):"), col2X, gridY + 46, 0xAAAAAA);
+        guiGraphics.drawString(this.font, Component.literal("Line Sound ID (triggers on start):"), col2X, gridY + 46,
+                0xAAAAAA);
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 

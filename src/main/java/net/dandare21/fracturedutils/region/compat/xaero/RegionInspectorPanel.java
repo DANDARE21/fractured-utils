@@ -265,12 +265,12 @@ public class RegionInspectorPanel {
             return false;
 
         if (idBox.keyPressed(keyCode, scanCode, modifiers) ||
-                nameBox.keyPressed(keyCode, scanCode, modifiers) ||
-                subtitleBox.keyPressed(keyCode, scanCode, modifiers) ||
-                parentBox.keyPressed(keyCode, scanCode, modifiers) ||
-                flagBox.keyPressed(keyCode, scanCode, modifiers) ||
-                deniedBox.keyPressed(keyCode, scanCode, modifiers) ||
-                colorBox.keyPressed(keyCode, scanCode, modifiers)) {
+            nameBox.keyPressed(keyCode, scanCode, modifiers) ||
+            subtitleBox.keyPressed(keyCode, scanCode, modifiers) ||
+            parentBox.keyPressed(keyCode, scanCode, modifiers) ||
+            flagBox.keyPressed(keyCode, scanCode, modifiers) ||
+            deniedBox.keyPressed(keyCode, scanCode, modifiers) ||
+            colorBox.keyPressed(keyCode, scanCode, modifiers)) {
             return true;
         }
 
@@ -289,12 +289,12 @@ public class RegionInspectorPanel {
         if (!active)
             return false;
         return idBox.charTyped(codePoint, modifiers) ||
-                nameBox.charTyped(codePoint, modifiers) ||
-                subtitleBox.charTyped(codePoint, modifiers) ||
-                parentBox.charTyped(codePoint, modifiers) ||
-                flagBox.charTyped(codePoint, modifiers) ||
-                deniedBox.charTyped(codePoint, modifiers) ||
-                colorBox.charTyped(codePoint, modifiers);
+               nameBox.charTyped(codePoint, modifiers) ||
+               subtitleBox.charTyped(codePoint, modifiers) ||
+               parentBox.charTyped(codePoint, modifiers) ||
+               flagBox.charTyped(codePoint, modifiers) ||
+               deniedBox.charTyped(codePoint, modifiers) ||
+               colorBox.charTyped(codePoint, modifiers);
     }
 
     private void commitSave() {
@@ -317,9 +317,7 @@ public class RegionInspectorPanel {
                 ? selectedRegion.getPolygon()
                 : new Polygon2D(java.util.List.of());
 
-        String ambientMusic = (selectedRegion != null && selectedRegion.getAmbientMusic() != null)
-                ? selectedRegion.getAmbientMusic()
-                : "";
+        String ambientMusic = (selectedRegion != null && selectedRegion.getAmbientMusic() != null) ? selectedRegion.getAmbientMusic() : "";
 
         Region updated = new Region(id, name, selectedType, parent, polygon, isLocked, flag, denied, color, subtitle,
                 ambientMusic, mobSpawning);
@@ -380,8 +378,7 @@ public class RegionInspectorPanel {
         // Locked checkbox (Left toggle)
         boolean hoverLock = mouseX >= x + 10 && mouseX <= x + 92 && mouseY >= y + 153 && mouseY <= y + 167;
         int lockBg = isLocked ? 0x44FF2222 : 0x22FFFFFF;
-        if (hoverLock)
-            lockBg = isLocked ? 0x66FF3333 : 0x44FFFFFF;
+        if (hoverLock) lockBg = isLocked ? 0x66FF3333 : 0x44FFFFFF;
         guiGraphics.fill(x + 10, y + 153, x + 92, y + 167, lockBg);
         guiGraphics.fill(x + 10, y + 153, x + 92, y + 154, hoverLock ? 0xFFAAAAAA : 0xFF444455);
         guiGraphics.fill(x + 10, y + 166, x + 92, y + 167, hoverLock ? 0xFFAAAAAA : 0xFF444455);
@@ -394,8 +391,7 @@ public class RegionInspectorPanel {
         // Mob Spawning checkbox (Right toggle)
         boolean hoverMobs = mouseX >= x + 98 && mouseX <= x + width - 10 && mouseY >= y + 153 && mouseY <= y + 167;
         int mobsBg = mobSpawning ? 0x3322AA44 : 0x44FF2222;
-        if (hoverMobs)
-            mobsBg = mobSpawning ? 0x5533CC55 : 0x66FF3333;
+        if (hoverMobs) mobsBg = mobSpawning ? 0x5533CC55 : 0x66FF3333;
         guiGraphics.fill(x + 98, y + 153, x + width - 10, y + 167, mobsBg);
         guiGraphics.fill(x + 98, y + 153, x + width - 10, y + 154, hoverMobs ? 0xFFAAAAAA : 0xFF444455);
         guiGraphics.fill(x + 98, y + 153, x + width - 10, y + 167, hoverMobs ? 0xFFAAAAAA : 0xFF444455);
@@ -477,15 +473,9 @@ public class RegionInspectorPanel {
 
         // Tooltips (rendered on top of all elements)
         if (hoverLock) {
-            guiGraphics.renderTooltip(font,
-                    Component.literal(isLocked ? "Barrier Active: Prevents unauthorized players from entering."
-                            : "Unlocked: Free player access."),
-                    mouseX, mouseY);
+            guiGraphics.renderTooltip(font, Component.literal(isLocked ? "Barrier Active: Prevents unauthorized players from entering." : "Unlocked: Free player access."), mouseX, mouseY);
         } else if (hoverMobs) {
-            guiGraphics.renderTooltip(font,
-                    Component.literal(mobSpawning ? "Mob Spawning: Allowed (natural & spawner mobs can spawn)"
-                            : "Mob Spawning: Blocked (prevents mobs from spawning)"),
-                    mouseX, mouseY);
+            guiGraphics.renderTooltip(font, Component.literal(mobSpawning ? "Mob Spawning: Allowed (natural & spawner mobs can spawn)" : "Mob Spawning: Blocked (prevents mobs from spawning)"), mouseX, mouseY);
         }
     }
 }

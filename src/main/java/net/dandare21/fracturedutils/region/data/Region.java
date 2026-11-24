@@ -23,15 +23,14 @@ public class Region {
     private boolean mobSpawning = true;
 
     public Region(String id, String name, RegionType type, String parentId, Polygon2D polygon,
-            boolean locked, String requiredFlag, String deniedMessage, int color,
-            String subtitle, String ambientMusic) {
-        this(id, name, type, parentId, polygon, locked, requiredFlag, deniedMessage, color, subtitle, ambientMusic,
-                true);
+                  boolean locked, String requiredFlag, String deniedMessage, int color,
+                  String subtitle, String ambientMusic) {
+        this(id, name, type, parentId, polygon, locked, requiredFlag, deniedMessage, color, subtitle, ambientMusic, true);
     }
 
     public Region(String id, String name, RegionType type, String parentId, Polygon2D polygon,
-            boolean locked, String requiredFlag, String deniedMessage, int color,
-            String subtitle, String ambientMusic, boolean mobSpawning) {
+                  boolean locked, String requiredFlag, String deniedMessage, int color,
+                  String subtitle, String ambientMusic, boolean mobSpawning) {
         this.id = id;
         this.name = name != null ? name : id;
         this.type = type != null ? type : RegionType.MAP_ZONE;
@@ -155,8 +154,7 @@ public class Region {
     }
 
     public Region copy() {
-        Region copy = new Region(id, name, type, parentId,
-                polygon != null ? polygon.copy() : new Polygon2D(java.util.List.of()),
+        Region copy = new Region(id, name, type, parentId, polygon != null ? polygon.copy() : new Polygon2D(java.util.List.of()),
                 locked, requiredFlag, deniedMessage, color, subtitle, ambientMusic, mobSpawning);
         copy.setCitizenCap(citizenCap);
         return copy;
@@ -187,19 +185,16 @@ public class Region {
         String name = tag.getString("name");
         RegionType type = RegionType.fromString(tag.getString("type"));
         String parentId = tag.getString("parentId");
-        Polygon2D polygon = tag.contains("polygon") ? Polygon2D.fromNbt(tag.getCompound("polygon"))
-                : new Polygon2D(java.util.List.of());
+        Polygon2D polygon = tag.contains("polygon") ? Polygon2D.fromNbt(tag.getCompound("polygon")) : new Polygon2D(java.util.List.of());
         boolean locked = tag.getBoolean("locked");
         String requiredFlag = tag.getString("requiredFlag");
-        String deniedMsg = tag.contains("deniedMessage") ? tag.getString("deniedMessage")
-                : "A magical barrier bars your passage.";
+        String deniedMsg = tag.contains("deniedMessage") ? tag.getString("deniedMessage") : "A magical barrier bars your passage.";
         int color = tag.getInt("color");
         String subtitle = tag.getString("subtitle");
         String ambientMusic = tag.getString("ambientMusic");
         boolean mobSpawning = !tag.contains("mobSpawning") || tag.getBoolean("mobSpawning");
 
-        Region region = new Region(id, name, type, parentId, polygon, locked, requiredFlag, deniedMsg, color, subtitle,
-                ambientMusic, mobSpawning);
+        Region region = new Region(id, name, type, parentId, polygon, locked, requiredFlag, deniedMsg, color, subtitle, ambientMusic, mobSpawning);
         if (tag.contains("citizenCap")) {
             region.setCitizenCap(tag.getInt("citizenCap"));
         }
@@ -241,9 +236,9 @@ public class Region {
         int citizenCap = buf.readInt();
         boolean mobSpawning = buf.readBoolean();
 
-        Region region = new Region(id, name, type, parentId, polygon, locked, requiredFlag, deniedMsg, color, subtitle,
-                ambientMusic, mobSpawning);
+        Region region = new Region(id, name, type, parentId, polygon, locked, requiredFlag, deniedMsg, color, subtitle, ambientMusic, mobSpawning);
         region.setCitizenCap(citizenCap);
         return region;
     }
 }
+

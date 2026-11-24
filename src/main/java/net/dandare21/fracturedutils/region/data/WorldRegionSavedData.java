@@ -120,6 +120,16 @@ public class WorldRegionSavedData extends SavedData {
         return false;
     }
 
+    public boolean setRegionMobSpawning(String id, boolean allowed) {
+        Region r = regions.get(id);
+        if (r != null) {
+            r.setMobSpawning(allowed);
+            setDirty();
+            return true;
+        }
+        return false;
+    }
+
     public boolean isRegionLocked(Region region) {
         if (region == null) return false;
         if (region.isLocked()) {
@@ -227,6 +237,18 @@ public class WorldRegionSavedData extends SavedData {
             return Double.compare(areaA, areaB);
         });
         return result;
+    }
+
+    /**
+     * Checks if mob spawning is allowed at (x, z) according to the enclosing region hierarchy.
+     * Returns true if no region is present or if the innermost region allows mob spawning.
+     */
+    public boolean isMobSpawningAllowedAt(double x, double z) {
+        List<Region> atPos = findAllRegionsAt(x, z);
+        if (!atPos.isEmpty()) {
+            return atPos.get(0).isMobSpawningAllowed();
+        }
+        return true;
     }
 
     /**

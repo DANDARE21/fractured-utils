@@ -42,61 +42,55 @@ public class RegionCommands {
                 .then(Commands.literal("lock")
                         .then(Commands.argument("id", StringArgumentType.word())
                                 .suggests(SUGGEST_REGION_IDS)
-                                .executes(ctx -> setLock(ctx, StringArgumentType.getString(ctx, "id"), true))
-                        )
-                )
+                                .executes(ctx -> setLock(ctx, StringArgumentType.getString(ctx, "id"), true))))
                 .then(Commands.literal("unlock")
                         .then(Commands.argument("id", StringArgumentType.word())
                                 .suggests(SUGGEST_REGION_IDS)
-                                .executes(ctx -> setLock(ctx, StringArgumentType.getString(ctx, "id"), false))
-                        )
-                )
+                                .executes(ctx -> setLock(ctx, StringArgumentType.getString(ctx, "id"), false))))
                 .then(Commands.literal("flag")
                         .then(Commands.literal("set")
                                 .then(Commands.argument("flag", StringArgumentType.word())
                                         .suggests(SUGGEST_FLAGS)
                                         .then(Commands.argument("value", BoolArgumentType.bool())
-                                                .executes(ctx -> setFlag(ctx, StringArgumentType.getString(ctx, "flag"), BoolArgumentType.getBool(ctx, "value")))
-                                        )
-                                )
-                        )
+                                                .executes(ctx -> setFlag(ctx, StringArgumentType.getString(ctx, "flag"),
+                                                        BoolArgumentType.getBool(ctx, "value"))))))
                         .then(Commands.literal("list")
-                                .executes(RegionCommands::listFlags)
-                        )
+                                .executes(RegionCommands::listFlags))
                         .then(Commands.literal("clear")
-                                .executes(RegionCommands::clearFlags)
-                        )
-                )
+                                .executes(RegionCommands::clearFlags)))
                 .then(Commands.literal("list")
-                        .executes(RegionCommands::listRegions)
-                )
+                        .executes(RegionCommands::listRegions))
                 .then(Commands.literal("info")
                         .then(Commands.argument("id", StringArgumentType.word())
                                 .suggests(SUGGEST_REGION_IDS)
-                                .executes(ctx -> showInfo(ctx, StringArgumentType.getString(ctx, "id")))
-                        )
-                )
+                                .executes(ctx -> showInfo(ctx, StringArgumentType.getString(ctx, "id")))))
                 .then(Commands.literal("delete")
                         .then(Commands.argument("id", StringArgumentType.word())
                                 .suggests(SUGGEST_REGION_IDS)
-                                .executes(ctx -> deleteRegion(ctx, StringArgumentType.getString(ctx, "id")))
-                        )
-                )
+                                .executes(ctx -> deleteRegion(ctx, StringArgumentType.getString(ctx, "id")))))
                 .then(Commands.literal("tp")
                         .then(Commands.argument("id", StringArgumentType.word())
                                 .suggests(SUGGEST_REGION_IDS)
-                                .executes(ctx -> teleportToRegion(ctx, StringArgumentType.getString(ctx, "id")))
-                        )
-                )
+                                .executes(ctx -> teleportToRegion(ctx, StringArgumentType.getString(ctx, "id")))))
+                .then(Commands.literal("mobspawning")
+                        .then(Commands.argument("id", StringArgumentType.word())
+                                .suggests(SUGGEST_REGION_IDS)
+                                .then(Commands.argument("enabled", BoolArgumentType.bool())
+                                        .executes(ctx -> setMobSpawning(ctx, StringArgumentType.getString(ctx, "id"),
+                                                BoolArgumentType.getBool(ctx, "enabled"))))))
+                .then(Commands.literal("mobspawn")
+                        .then(Commands.argument("id", StringArgumentType.word())
+                                .suggests(SUGGEST_REGION_IDS)
+                                .then(Commands.argument("enabled", BoolArgumentType.bool())
+                                        .executes(ctx -> setMobSpawning(ctx, StringArgumentType.getString(ctx, "id"),
+                                                BoolArgumentType.getBool(ctx, "enabled"))))))
                 .then(Commands.literal("subtitle")
                         .then(Commands.argument("id", StringArgumentType.word())
                                 .suggests(SUGGEST_REGION_IDS)
                                 .then(Commands.argument("text", StringArgumentType.greedyString())
-                                        .executes(ctx -> setSubtitle(ctx, StringArgumentType.getString(ctx, "id"), StringArgumentType.getString(ctx, "text")))
-                                )
-                                .executes(ctx -> setSubtitle(ctx, StringArgumentType.getString(ctx, "id"), ""))
-                        )
-                );
+                                        .executes(ctx -> setSubtitle(ctx, StringArgumentType.getString(ctx, "id"),
+                                                StringArgumentType.getString(ctx, "text"))))
+                                .executes(ctx -> setSubtitle(ctx, StringArgumentType.getString(ctx, "id"), ""))));
 
         dispatcher.register(regionCmd);
     }
@@ -112,9 +106,35 @@ public class RegionCommands {
 
         RegionManager.getInstance().setRegionLocked(id, locked);
         if (locked) {
-            src.sendSuccess(() -> Component.literal("§c[Region] Locked region: §f" + r.getName() + " §7(" + id + ")"), true);
+            src.sendSuccess(() -> Component.literal("§c[Region] Locked region: §f" + r.getName() + " §7(" + id + ")"),
+                    true);
         } else {
-            src.sendSuccess(() -> Component.literal("§a[Region] Unlocked region: §f" + r.getName() + " §7(" + id + ")"), true);
+            src.sendSuccess(() -> Component.literal("§a[Region] Unlocked region: §f" + r.getName() + " §7(" + id + ")"),
+                    true);
+        }
+        return 1;
+    }
+
+    private static int setMobSpawning(CommandContext<CommandSourceStack> ctx, String id, boolean enabled) {
+        CommandSourceStack src = ctx.getSource();
+        WorldRegionSavedData data = WorldRegionSavedData.get(src.getServer());
+        Region r = data.getRegion(id);
+        if (r == null) {
+            src.sendFailure(Component.literal("Region not found: " + id));
+            return 0;
+        }
+
+        RegionManager.getInstance().setRegionMobSpawning(id, enabled);
+        if (enabled) {
+            src.sendSuccess(
+                    () -> Component
+                            .literal("§a[Region] Mob spawning enabled for: §f" + r.getName() + " §7(" + id + ")"),
+                    true);
+        } else {
+            src.sendSuccess(
+                    () -> Component
+                            .literal("§c[Region] Mob spawning disabled for: §f" + r.getName() + " §7(" + id + ")"),
+                    true);
         }
         return 1;
     }
@@ -160,7 +180,8 @@ public class RegionCommands {
         WorldRegionSavedData data = WorldRegionSavedData.get(src.getServer());
         Collection<Region> regions = data.getAllRegions();
         if (regions.isEmpty()) {
-            src.sendSuccess(() -> Component.literal("§7No regions configured. Create them in Xaero's World Map!"), false);
+            src.sendSuccess(() -> Component.literal("§7No regions configured. Create them in Xaero's World Map!"),
+                    false);
             return 1;
         }
 
@@ -168,12 +189,18 @@ public class RegionCommands {
         for (RegionType type : RegionType.values()) {
             List<Region> ofType = regions.stream().filter(r -> r.getType() == type).toList();
             if (!ofType.isEmpty()) {
-                src.sendSuccess(() -> Component.literal("§e[" + type.getDisplayName() + "] (" + ofType.size() + "):"), false);
+                src.sendSuccess(() -> Component.literal("§e[" + type.getDisplayName() + "] (" + ofType.size() + "):"),
+                        false);
                 for (Region r : ofType) {
                     boolean locked = data.isRegionLocked(r);
                     String lockText = locked ? "§c[LOCKED]" : "§a[OPEN]";
-                    String flagText = (r.getRequiredFlag() != null && !r.getRequiredFlag().isEmpty()) ? " §7(Flag: §e" + r.getRequiredFlag() + "§7)" : "";
-                    src.sendSuccess(() -> Component.literal("  §f" + r.getName() + " §8(§7" + r.getId() + "§8) " + lockText + flagText), false);
+                    String flagText = (r.getRequiredFlag() != null && !r.getRequiredFlag().isEmpty())
+                            ? " §7(Flag: §e" + r.getRequiredFlag() + "§7)"
+                            : "";
+                    String mobText = r.isMobSpawningAllowed() ? "" : " §c[NO MOBS]";
+                    src.sendSuccess(() -> Component.literal(
+                            "  §f" + r.getName() + " §8(§7" + r.getId() + "§8) " + lockText + flagText + mobText),
+                            false);
                 }
             }
         }
@@ -195,14 +222,26 @@ public class RegionCommands {
 
         src.sendSuccess(() -> Component.literal("§6=== Region Info: §f" + r.getName() + " §6==="), false);
         src.sendSuccess(() -> Component.literal(" §7ID: §f" + r.getId()), false);
-        src.sendSuccess(() -> Component.literal(" §7Type: §e" + r.getType().getDisplayName() + " §8(Tier " + r.getType().getTier() + ")"), false);
-        src.sendSuccess(() -> Component.literal(" §7Parent: §f" + (r.getParentId().isEmpty() ? "None" : r.getParentId())), false);
-        src.sendSuccess(() -> Component.literal(" §7Status: " + (isLocked ? "§cLocked" : "§aUnlocked") + " §8(Direct lock: " + r.isLocked() + ")"), false);
+        src.sendSuccess(
+                () -> Component.literal(
+                        " §7Type: §e" + r.getType().getDisplayName() + " §8(Tier " + r.getType().getTier() + ")"),
+                false);
+        src.sendSuccess(
+                () -> Component.literal(" §7Parent: §f" + (r.getParentId().isEmpty() ? "None" : r.getParentId())),
+                false);
+        src.sendSuccess(() -> Component.literal(
+                " §7Status: " + (isLocked ? "§cLocked" : "§aUnlocked") + " §8(Direct lock: " + r.isLocked() + ")"),
+                false);
+        src.sendSuccess(
+                () -> Component.literal(" §7Mob Spawning: " + (r.isMobSpawningAllowed() ? "§aEnabled" : "§cDisabled")),
+                false);
         if (!r.getRequiredFlag().isEmpty()) {
             boolean flagActive = data.isFlagActive(r.getRequiredFlag());
-            src.sendSuccess(() -> Component.literal(" §7Required Flag: §e" + r.getRequiredFlag() + " §8(Active: " + (flagActive ? "§aYes" : "§cNo") + "§8)"), false);
+            src.sendSuccess(() -> Component.literal(" §7Required Flag: §e" + r.getRequiredFlag() + " §8(Active: "
+                    + (flagActive ? "§aYes" : "§cNo") + "§8)"), false);
         }
-        src.sendSuccess(() -> Component.literal(" §7Vertices: §f" + vertexCount + " §7| Centroid: §f(" + (int)centroid.x() + ", " + (int)centroid.z() + ")"), false);
+        src.sendSuccess(() -> Component.literal(" §7Vertices: §f" + vertexCount + " §7| Centroid: §f("
+                + (int) centroid.x() + ", " + (int) centroid.z() + ")"), false);
         if (!r.getSubtitle().isEmpty()) {
             src.sendSuccess(() -> Component.literal(" §7Subtitle: §f" + r.getSubtitle()), false);
         }
@@ -241,7 +280,8 @@ public class RegionCommands {
         Vec2d centroid = r.getPolygon().getCentroid();
         double targetY = player.getY();
         player.teleportTo(centroid.x(), targetY, centroid.z());
-        src.sendSuccess(() -> Component.literal("§a[Region] Teleported to center of §f" + r.getName() + " §7(" + (int)centroid.x() + ", " + (int)centroid.z() + ")"), false);
+        src.sendSuccess(() -> Component.literal("§a[Region] Teleported to center of §f" + r.getName() + " §7("
+                + (int) centroid.x() + ", " + (int) centroid.z() + ")"), false);
         return 1;
     }
 
@@ -260,9 +300,10 @@ public class RegionCommands {
         if (subtitle.isEmpty()) {
             src.sendSuccess(() -> Component.literal("§a[Region] Cleared subtitle for: §f" + r.getName()), true);
         } else {
-            src.sendSuccess(() -> Component.literal("§a[Region] Set subtitle for §f" + r.getName() + " §ato: §e" + subtitle), true);
+            src.sendSuccess(
+                    () -> Component.literal("§a[Region] Set subtitle for §f" + r.getName() + " §ato: §e" + subtitle),
+                    true);
         }
         return 1;
     }
 }
-

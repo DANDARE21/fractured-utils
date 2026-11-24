@@ -125,11 +125,7 @@ public class XaeroMapIntegration {
     public static void copyLiveToDraft() {
         draftRegions.clear();
         for (Region r : ClientRegionData.getInstance().getAllRegions()) {
-            draftRegions.add(new Region(
-                    r.getId(), r.getName(), r.getType(), r.getParentId(),
-                    r.getPolygon() != null ? r.getPolygon().copy() : new Polygon2D(List.of()),
-                    r.isLocked(), r.getRequiredFlag(), r.getDeniedMessage(),
-                    r.getColor(), r.getSubtitle(), r.getAmbientMusic()));
+            draftRegions.add(r.copy());
         }
     }
 
@@ -142,11 +138,7 @@ public class XaeroMapIntegration {
     private static void pushUndo() {
         List<Region> snapshot = new ArrayList<>();
         for (Region r : draftRegions) {
-            snapshot.add(new Region(
-                    r.getId(), r.getName(), r.getType(), r.getParentId(),
-                    r.getPolygon() != null ? r.getPolygon().copy() : new Polygon2D(List.of()),
-                    r.isLocked(), r.getRequiredFlag(), r.getDeniedMessage(),
-                    r.getColor(), r.getSubtitle(), r.getAmbientMusic()));
+            snapshot.add(r.copy());
         }
         undoStack.push(snapshot);
         if (undoStack.size() > 30)

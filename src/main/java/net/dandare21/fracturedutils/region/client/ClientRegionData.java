@@ -117,6 +117,14 @@ public class ClientRegionData {
         return null;
     }
 
+    public synchronized boolean isMobSpawningAllowedAt(double x, double z) {
+        List<Region> atPos = findAllRegionsAt(x, z);
+        if (!atPos.isEmpty()) {
+            return atPos.get(0).isMobSpawningAllowed();
+        }
+        return true;
+    }
+
     public synchronized Vec2d snapVertex(double x, double z, double threshold) {
         for (Region r : regions.values()) {
             if (r.getPolygon() != null) {

@@ -7,14 +7,18 @@ import net.dandare21.fracturedutils.region.data.Region;
 import net.dandare21.fracturedutils.region.data.Vec2d;
 import net.dandare21.fracturedutils.region.data.WorldRegionSavedData;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityTeleportEvent;
+import net.minecraftforge.event.entity.living.MobSpawnEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.level.BlockEvent;
+import net.minecraftforge.eventbus.api.Event;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -164,6 +168,70 @@ public class RegionServerEventHandler {
     @SubscribeEvent
     public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         LAST_DENIAL_MSG_TIME.remove(event.getEntity().getUUID());
+    }
+
+    @SubscribeEvent
+    public static void onSpawnPlacementCheck(MobSpawnEvent.SpawnPlacementCheck event) {
+        if (event.getLevel() == null || event.getLevel().isClientSide()) return;
+        MobSpawnType spawnType = event.getSpawnType();
+        if (spawnType == MobSpawnType.COMMAND ||
+            spawnType == MobSpawnType.SPAWN_EGG ||
+            spawnType == MobSpawnType.BUCKET ||
+            spawnType == MobSpawnType.BREEDING ||
+            spawnType == MobSpawnType.CONVERSION) {
+            return;
+        }
+
+        ServerLevel level = event.getLevel().getLevel();
+        if (level == null || level.getServer() == null) return;
+
+        WorldRegionSavedData data = WorldRegionSavedData.get(level.getServer());
+        if (!data.isMobSpawningAllowedAt(event.getPos().getX() + 0.5D, event.getPos().getZ() + 0.5D)) {
+            event.setResult(Event.Result.DENY);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onCheckSpawnPosition(MobSpawnEvent.PositionCheck event) {
+        if (event.getLevel() == null || event.getLevel().isClientSide()) return;
+        MobSpawnType spawnType = event.getSpawnType();
+        if (spawnType == MobSpawnType.COMMAND ||
+            spawnType == MobSpawnType.SPAWN_EGG ||
+            spawnType == MobSpawnType.BUCKET ||
+            spawnType == MobSpawnType.BREEDING ||
+            spawnType == MobSpawnType.CONVERSION) {
+            return;
+        }
+
+        ServerLevel level = event.getLevel().getLevel();
+        if (level == null || level.getServer() == null) return;
+
+        WorldRegionSavedData data = WorldRegionSavedData.get(level.getServer());
+        if (!data.isMobSpawningAllowedAt(event.getX(), event.getZ())) {
+            event.setResult(Event.Result.DENY);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onFinalizeSpawn(MobSpawnEvent.FinalizeSpawn event) {
+        if (event.getLevel() == null || event.getLevel().isClientSide()) return;
+        MobSpawnType spawnType = event.getSpawnType();
+        if (spawnType == MobSpawnType.COMMAND ||
+            spawnType == MobSpawnType.SPAWN_EGG ||
+            spawnType == MobSpawnType.BUCKET ||
+            spawnType == MobSpawnType.BREEDING ||
+            spawnType == MobSpawnType.CONVERSION) {
+            return;
+        }
+
+        ServerLevel level = event.getLevel().getLevel();
+        if (level == null || level.getServer() == null) return;
+
+        WorldRegionSavedData data = WorldRegionSavedData.get(level.getServer());
+        if (!data.isMobSpawningAllowedAt(event.getX(), event.getZ())) {
+            event.setSpawnCancelled(true);
+            event.setCanceled(true);
+        }
     }
 }
 

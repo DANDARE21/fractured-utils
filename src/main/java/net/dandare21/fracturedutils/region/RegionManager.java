@@ -87,6 +87,22 @@ public class RegionManager {
         return changed;
     }
 
+    public boolean setRegionMobSpawning(String id, boolean allowed) {
+        if (server == null) return false;
+        WorldRegionSavedData data = WorldRegionSavedData.get(server);
+        boolean changed = data.setRegionMobSpawning(id, allowed);
+        if (changed) {
+            syncToAll();
+        }
+        return changed;
+    }
+
+    public boolean isMobSpawningAllowedAt(double x, double z) {
+        if (server == null) return true;
+        WorldRegionSavedData data = WorldRegionSavedData.get(server);
+        return data.isMobSpawningAllowedAt(x, z);
+    }
+
     public void setFlag(String flag, boolean active) {
         if (server == null) return;
         WorldRegionSavedData data = WorldRegionSavedData.get(server);

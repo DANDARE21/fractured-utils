@@ -43,11 +43,16 @@ public class FracturedUtils {
     private void entityAttributeSetup(net.minecraftforge.event.entity.EntityAttributeCreationEvent event) {
         event.put(net.dandare21.fracturedutils.puppet.registry.ModEntities.VOID_HERALD.get(),
                 net.dandare21.fracturedutils.puppet.boss.VoidHeraldBoss.createAttributes().build());
+        event.put(net.dandare21.fracturedutils.puppet.registry.ModEntities.CUSTOM_NPC.get(),
+                net.dandare21.fracturedutils.npc.entity.CustomNpcEntity.createAttributes().build());
     }
 
     private void addCreative(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey() == net.minecraft.world.item.CreativeModeTabs.SPAWN_EGGS) {
             event.accept(net.dandare21.fracturedutils.puppet.registry.ModItems.VOID_HERALD_SPAWN_EGG);
+        }
+        if (event.getTabKey() == net.minecraft.world.item.CreativeModeTabs.TOOLS_AND_UTILITIES) {
+            event.accept(net.dandare21.fracturedutils.puppet.registry.ModItems.NPC_WAND);
         }
     }
 
@@ -56,6 +61,7 @@ public class FracturedUtils {
         net.dandare21.fracturedutils.sound.event.EventAudioManager.getInstance().onServerStarting(event.getServer());
         net.dandare21.fracturedutils.bossbar.BossHealthBarManager.getInstance().onServerStarting(event.getServer());
         net.dandare21.fracturedutils.region.RegionManager.getInstance().onServerStarting(event.getServer());
+        net.dandare21.fracturedutils.npc.NpcDefinitionManager.getInstance().setServer(event.getServer());
     }
 
     @SubscribeEvent

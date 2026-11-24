@@ -129,6 +129,7 @@ public class DialogSequenceInstance {
                 List<ServerPlayer> targets = resolvePlayers(server, targetedPlayerUUIDs);
                 removeSoftInputLock(targets);
                 ModMessages.sendToPlayers(new S2CDialogClearPacket(), targets);
+                net.dandare21.fracturedutils.npc.pipeline.NpcTriggerEvents.onDialogEnd(server, sequenceId, targets);
             }
         }
     }
@@ -169,6 +170,7 @@ public class DialogSequenceInstance {
             List<ServerPlayer> targets = resolvePlayers(server, targetedPlayerUUIDs);
             removeSoftInputLock(targets);
             ModMessages.sendToPlayers(new S2CDialogClearPacket(), targets);
+            net.dandare21.fracturedutils.npc.pipeline.NpcTriggerEvents.onDialogEnd(server, sequenceId, targets);
             return;
         }
 
@@ -221,6 +223,11 @@ public class DialogSequenceInstance {
         CameraTarget camTarget = line.getCameraTarget();
         String anchor = camTarget != null ? camTarget.anchor().name().toLowerCase(Locale.ROOT) : "eyes";
         Vec3 offset = camTarget != null ? camTarget.offset() : Vec3.ZERO;
+        if (targetEntity instanceof net.dandare21.fracturedutils.npc.entity.CustomNpcEntity npc) {
+            if (offset.equals(Vec3.ZERO)) {
+                offset = npc.getCameraOffset();
+            }
+        }
         boolean lookAt = camTarget != null ? camTarget.lookAtTarget() : true;
         float fixedYaw = camTarget != null ? camTarget.fixedYaw() : line.getCameraYaw();
         float fixedPitch = camTarget != null ? camTarget.fixedPitch() : line.getCameraPitch();

@@ -96,7 +96,13 @@ public class SequencerRightPanel {
         @Override
         protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
             Component msg = (textSupplier != null) ? textSupplier.get() : getMessage();
-            graphics.drawString(Minecraft.getInstance().font, msg, getX(), getY() + (getHeight() - 8) / 2, color, false);
+            int maxW = getWidth();
+            if (maxW > 0 && Minecraft.getInstance().font.width(msg) > maxW) {
+                String str = Minecraft.getInstance().font.substrByWidth(msg, Math.max(10, maxW - 4)).getString() + "..";
+                graphics.drawString(Minecraft.getInstance().font, str, getX(), getY() + (getHeight() - 8) / 2, color, false);
+            } else {
+                graphics.drawString(Minecraft.getInstance().font, msg, getX(), getY() + (getHeight() - 8) / 2, color, false);
+            }
         }
 
         @Override

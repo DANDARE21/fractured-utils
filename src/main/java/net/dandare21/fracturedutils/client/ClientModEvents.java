@@ -26,6 +26,10 @@ public class ClientModEvents {
                 net.dandare21.fracturedutils.puppet.registry.ModEntities.VOID_HERALD.get(),
                 net.dandare21.fracturedutils.puppet.client.VoidHeraldRenderer::new
         );
+        event.registerEntityRenderer(
+                net.dandare21.fracturedutils.puppet.registry.ModEntities.CUSTOM_NPC.get(),
+                net.dandare21.fracturedutils.npc.client.CustomNpcRenderer::new
+        );
     }
 
     @SubscribeEvent

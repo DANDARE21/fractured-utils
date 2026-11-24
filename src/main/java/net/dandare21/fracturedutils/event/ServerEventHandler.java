@@ -30,6 +30,7 @@ public class ServerEventHandler {
     public static void onAddReloadListeners(net.minecraftforge.event.AddReloadListenerEvent event) {
         event.addListener(new net.dandare21.fracturedutils.dialog.data.DialogSequenceReloadListener());
         event.addListener(new net.dandare21.fracturedutils.dialog.style.DialogStyleReloadListener());
+        event.addListener(net.dandare21.fracturedutils.npc.NpcDefinitionManager.getInstance());
     }
 
     @SubscribeEvent
@@ -48,6 +49,7 @@ public class ServerEventHandler {
         net.dandare21.fracturedutils.command.BossHealthBarCommand.register(event.getDispatcher());
         net.dandare21.fracturedutils.command.HealthThresholdCommand.register(event.getDispatcher());
         net.dandare21.fracturedutils.region.command.RegionCommands.register(event.getDispatcher());
+        net.dandare21.fracturedutils.command.NpcCommand.register(event.getDispatcher());
     }
 
     @SubscribeEvent
@@ -241,6 +243,7 @@ public class ServerEventHandler {
         if (event.getEntity() instanceof ServerPlayer player) {
             MaintenanceManager.getInstance().checkAndKickOnJoin(player);
             net.dandare21.fracturedutils.ping.PingManager.getInstance().syncToPlayer(player);
+            net.dandare21.fracturedutils.npc.NpcDefinitionManager.getInstance().syncToPlayer(player);
             net.dandare21.fracturedutils.sound.event.EventAudioManager.getInstance().onPlayerJoin(player);
             net.dandare21.fracturedutils.sound.sequence.MusicSequenceManager.getInstance().onPlayerJoin(player);
             net.dandare21.fracturedutils.bossbar.BossHealthBarManager.getInstance().onPlayerJoin(player);

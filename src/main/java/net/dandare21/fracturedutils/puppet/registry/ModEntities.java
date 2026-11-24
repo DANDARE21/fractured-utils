@@ -22,6 +22,14 @@ public class ModEntities {
                             .build(new ResourceLocation(FracturedUtils.MOD_ID, "void_herald").toString())
             );
 
+    public static final RegistryObject<EntityType<net.dandare21.fracturedutils.npc.entity.CustomNpcEntity>> CUSTOM_NPC =
+            ENTITY_TYPES.register("custom_npc", () ->
+                    EntityType.Builder.of(net.dandare21.fracturedutils.npc.entity.CustomNpcEntity::new, MobCategory.MISC)
+                            .sized(0.6F, 1.8F)
+                            .clientTrackingRange(10)
+                            .build(new ResourceLocation(FracturedUtils.MOD_ID, "custom_npc").toString())
+            );
+
     public static void register(IEventBus eventBus) {
         ENTITY_TYPES.register(eventBus);
     }

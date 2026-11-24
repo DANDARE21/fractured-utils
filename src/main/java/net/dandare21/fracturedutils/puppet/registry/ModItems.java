@@ -17,6 +17,11 @@ public class ModItems {
                     new ForgeSpawnEggItem(ModEntities.VOID_HERALD, 0x180B29, 0x7B2CBF, new Item.Properties())
             );
 
+    public static final RegistryObject<Item> NPC_WAND =
+            ITEMS.register("npc_wand", () ->
+                    new net.dandare21.fracturedutils.npc.item.NpcWandItem(new Item.Properties().stacksTo(1))
+            );
+
     public static void register(IEventBus eventBus) {
         ITEMS.register(eventBus);
     }

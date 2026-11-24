@@ -55,6 +55,7 @@ public class DialogHudOverlay {
     // Multiplayer consensus player readiness state
     private static final List<UUID> readyPlayerUUIDs = new ArrayList<>();
     private static boolean dialogSetCamera = false;
+    private static int currentTargetEntityId = -1;
 
     // Render Performance Caching
     private static int lastRenderGuiTicks = -1;
@@ -104,6 +105,7 @@ public class DialogHudOverlay {
         }
 
         readyPlayerUUIDs.clear();
+        currentTargetEntityId = targetEntityId;
         active = true;
 
         if (useCamera) {
@@ -142,6 +144,8 @@ public class DialogHudOverlay {
     }
 
     public static void clearActiveDialog() {
+        updateSpeakingEntity(false);
+        currentTargetEntityId = -1;
         active = false;
         activeSpeaker = "";
         activeText = "";
@@ -194,6 +198,9 @@ public class DialogHudOverlay {
     public static void tick() {
         if (!active)
             return;
+
+        boolean isSpeaking = (revealedCharCount < totalCharCount && pauseTicksRemaining == 0);
+        updateSpeakingEntity(isSpeaking);
 
         if (revealedCharCount < totalCharCount) {
             if (charSpeedTicks == 0) {
@@ -374,6 +381,15 @@ public class DialogHudOverlay {
                         headX -= (headSize + 4);
                     }
                 }
+            }
+        }
+    }
+
+    private static void updateSpeakingEntity(boolean speaking) {
+        if (currentTargetEntityId >= 0 && Minecraft.getInstance().level != null) {
+            Entity target = Minecraft.getInstance().level.getEntity(currentTargetEntityId);
+            if (target instanceof net.dandare21.fracturedutils.npc.entity.CustomNpcEntity npc) {
+                npc.setClientSpeaking(speaking);
             }
         }
     }

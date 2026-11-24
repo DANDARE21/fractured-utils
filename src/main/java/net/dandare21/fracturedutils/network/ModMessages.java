@@ -53,6 +53,9 @@ import net.dandare21.fracturedutils.bossbar.network.S2CSyncBossBarsPacket;
 import net.dandare21.fracturedutils.region.network.S2CSyncRegionsPacket;
 import net.dandare21.fracturedutils.region.network.C2SSaveRegionPacket;
 import net.dandare21.fracturedutils.region.network.C2SDeleteRegionPacket;
+import net.dandare21.fracturedutils.npc.network.S2CSyncNpcDefinitionsPacket;
+import net.dandare21.fracturedutils.npc.network.S2COpenNpcStudioPacket;
+import net.dandare21.fracturedutils.npc.network.C2SSaveNpcPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -388,6 +391,24 @@ public class ModMessages {
                 .decoder(C2SDeleteRegionPacket::new)
                 .encoder(C2SDeleteRegionPacket::encode)
                 .consumerMainThread(C2SDeleteRegionPacket::handle)
+                .add();
+
+        net.messageBuilder(S2CSyncNpcDefinitionsPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(S2CSyncNpcDefinitionsPacket::new)
+                .encoder(S2CSyncNpcDefinitionsPacket::encode)
+                .consumerMainThread(S2CSyncNpcDefinitionsPacket::handle)
+                .add();
+
+        net.messageBuilder(S2COpenNpcStudioPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(S2COpenNpcStudioPacket::new)
+                .encoder(S2COpenNpcStudioPacket::encode)
+                .consumerMainThread(S2COpenNpcStudioPacket::handle)
+                .add();
+
+        net.messageBuilder(C2SSaveNpcPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(C2SSaveNpcPacket::new)
+                .encoder(C2SSaveNpcPacket::encode)
+                .consumerMainThread(C2SSaveNpcPacket::handle)
                 .add();
     }
 

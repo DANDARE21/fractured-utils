@@ -130,6 +130,16 @@ public class WorldRegionSavedData extends SavedData {
         return false;
     }
 
+    public boolean setRegionBlockPlacingAndBreaking(String id, boolean allowed) {
+        Region r = regions.get(id);
+        if (r != null) {
+            r.setBlockPlacingAndBreaking(allowed);
+            setDirty();
+            return true;
+        }
+        return false;
+    }
+
     public boolean isRegionLocked(Region region) {
         if (region == null) return false;
         if (region.isLocked()) {
@@ -249,6 +259,41 @@ public class WorldRegionSavedData extends SavedData {
             return atPos.get(0).isMobSpawningAllowed();
         }
         return true;
+    }
+
+    /**
+     * Checks if block placing and breaking is allowed at (x, z) according to the enclosing region hierarchy.
+     * Returns true if no region is present or if the innermost region allows block placing and breaking.
+     */
+    public boolean isBlockPlacingAndBreakingAllowedAt(double x, double z) {
+        List<Region> atPos = findAllRegionsAt(x, z);
+        if (!atPos.isEmpty()) {
+            return atPos.get(0).isBlockPlacingAndBreakingAllowed();
+        }
+        return true;
+    }
+
+    public boolean isBlockPlacingAndBreakingAllowedAt(BlockPos pos) {
+        return isBlockPlacingAndBreakingAllowedAt(pos.getX() + 0.5D, pos.getZ() + 0.5D);
+    }
+
+    /**
+     * Resolves the protecting region if block placing and breaking is disabled at (x, z).
+     * Returns the innermost region if it disallows block placement and breaking, otherwise null.
+     */
+    public Region findBlockProtectionZoneAt(double x, double z) {
+        List<Region> atPos = findAllRegionsAt(x, z);
+        if (!atPos.isEmpty()) {
+            Region innermost = atPos.get(0);
+            if (!innermost.isBlockPlacingAndBreakingAllowed()) {
+                return innermost;
+            }
+        }
+        return null;
+    }
+
+    public Region findBlockProtectionZoneAt(BlockPos pos) {
+        return findBlockProtectionZoneAt(pos.getX() + 0.5D, pos.getZ() + 0.5D);
     }
 
     /**

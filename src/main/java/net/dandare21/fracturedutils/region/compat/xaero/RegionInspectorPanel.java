@@ -62,6 +62,7 @@ public class RegionInspectorPanel {
     private RegionType selectedType = RegionType.MAP_ZONE;
     private boolean isLocked = false;
     private boolean mobSpawning = true;
+    private boolean blockPlacingAndBreaking = true;
     private boolean active = false;
 
     public RegionInspectorPanel(BiConsumer<Region, String> onSaveCallback, Consumer<String> onDeleteCallback,
@@ -168,6 +169,7 @@ public class RegionInspectorPanel {
         parentBox.setValue(r.getParentId() != null ? r.getParentId() : "");
         isLocked = r.isLocked();
         mobSpawning = r.isMobSpawningAllowed();
+        blockPlacingAndBreaking = r.isBlockPlacingAndBreakingAllowed();
         flagBox.setValue(r.getRequiredFlag() != null ? r.getRequiredFlag() : "");
         deniedBox.setValue(r.getDeniedMessage() != null ? r.getDeniedMessage() : "");
         colorBox.setValue(String.format("0x%06X", (r.getColor() & 0x00FFFFFF)));
@@ -211,14 +213,20 @@ public class RegionInspectorPanel {
         }
 
         // Locked checkbox button (left)
-        if (mouseY >= y + 153 && mouseY <= y + 167 && mouseX >= x + 10 && mouseX <= x + 92) {
+        if (mouseY >= y + 153 && mouseY <= y + 167 && mouseX >= x + 10 && mouseX <= x + 65) {
             isLocked = !isLocked;
             return true;
         }
 
-        // Mob Spawning checkbox button (right)
-        if (mouseY >= y + 153 && mouseY <= y + 167 && mouseX >= x + 98 && mouseX <= x + width - 10) {
+        // Mob Spawning checkbox button (middle)
+        if (mouseY >= y + 153 && mouseY <= y + 167 && mouseX >= x + 69 && mouseX <= x + 124) {
             mobSpawning = !mobSpawning;
+            return true;
+        }
+
+        // Block Placement & Breaking checkbox button (right)
+        if (mouseY >= y + 153 && mouseY <= y + 167 && mouseX >= x + 128 && mouseX <= x + width - 10) {
+            blockPlacingAndBreaking = !blockPlacingAndBreaking;
             return true;
         }
 
@@ -322,7 +330,7 @@ public class RegionInspectorPanel {
                 : "";
 
         Region updated = new Region(id, name, selectedType, parent, polygon, isLocked, flag, denied, color, subtitle,
-                ambientMusic, mobSpawning);
+                ambientMusic, mobSpawning, blockPlacingAndBreaking);
         if (selectedRegion != null) {
             updated.setCitizenCap(selectedRegion.getCitizenCap());
         }
@@ -378,32 +386,46 @@ public class RegionInspectorPanel {
         parentBox.render(guiGraphics, mouseX, mouseY, partialTick);
 
         // Locked checkbox (Left toggle)
-        boolean hoverLock = mouseX >= x + 10 && mouseX <= x + 92 && mouseY >= y + 153 && mouseY <= y + 167;
+        boolean hoverLock = mouseX >= x + 10 && mouseX <= x + 65 && mouseY >= y + 153 && mouseY <= y + 167;
         int lockBg = isLocked ? 0x44FF2222 : 0x22FFFFFF;
         if (hoverLock)
             lockBg = isLocked ? 0x66FF3333 : 0x44FFFFFF;
-        guiGraphics.fill(x + 10, y + 153, x + 92, y + 167, lockBg);
-        guiGraphics.fill(x + 10, y + 153, x + 92, y + 154, hoverLock ? 0xFFAAAAAA : 0xFF444455);
-        guiGraphics.fill(x + 10, y + 166, x + 92, y + 167, hoverLock ? 0xFFAAAAAA : 0xFF444455);
+        guiGraphics.fill(x + 10, y + 153, x + 65, y + 167, lockBg);
+        guiGraphics.fill(x + 10, y + 153, x + 65, y + 154, hoverLock ? 0xFFAAAAAA : 0xFF444455);
+        guiGraphics.fill(x + 10, y + 166, x + 65, y + 167, hoverLock ? 0xFFAAAAAA : 0xFF444455);
         guiGraphics.fill(x + 10, y + 153, x + 11, y + 167, hoverLock ? 0xFFAAAAAA : 0xFF444455);
-        guiGraphics.fill(x + 91, y + 153, x + 92, y + 167, hoverLock ? 0xFFAAAAAA : 0xFF444455);
+        guiGraphics.fill(x + 64, y + 153, x + 65, y + 167, hoverLock ? 0xFFAAAAAA : 0xFF444455);
 
-        String lockLabel = isLocked ? "§c[✔] Locked" : "§a[ ] Locked";
-        guiGraphics.drawCenteredString(font, lockLabel, x + 51, y + 156, 0xFFFFFFFF);
+        String lockLabel = isLocked ? "§c[✔] Lock" : "§a[ ] Lock";
+        guiGraphics.drawCenteredString(font, lockLabel, x + 37, y + 156, 0xFFFFFFFF);
 
-        // Mob Spawning checkbox (Right toggle)
-        boolean hoverMobs = mouseX >= x + 98 && mouseX <= x + width - 10 && mouseY >= y + 153 && mouseY <= y + 167;
+        // Mob Spawning checkbox (Middle toggle)
+        boolean hoverMobs = mouseX >= x + 69 && mouseX <= x + 124 && mouseY >= y + 153 && mouseY <= y + 167;
         int mobsBg = mobSpawning ? 0x3322AA44 : 0x44FF2222;
         if (hoverMobs)
             mobsBg = mobSpawning ? 0x5533CC55 : 0x66FF3333;
-        guiGraphics.fill(x + 98, y + 153, x + width - 10, y + 167, mobsBg);
-        guiGraphics.fill(x + 98, y + 153, x + width - 10, y + 154, hoverMobs ? 0xFFAAAAAA : 0xFF444455);
-        guiGraphics.fill(x + 98, y + 153, x + width - 10, y + 167, hoverMobs ? 0xFFAAAAAA : 0xFF444455);
-        guiGraphics.fill(x + 98, y + 153, x + 99, y + 167, hoverMobs ? 0xFFAAAAAA : 0xFF444455);
-        guiGraphics.fill(x + width - 11, y + 153, x + width - 10, y + 167, hoverMobs ? 0xFFAAAAAA : 0xFF444455);
+        guiGraphics.fill(x + 69, y + 153, x + 124, y + 167, mobsBg);
+        guiGraphics.fill(x + 69, y + 153, x + 124, y + 154, hoverMobs ? 0xFFAAAAAA : 0xFF444455);
+        guiGraphics.fill(x + 69, y + 166, x + 124, y + 167, hoverMobs ? 0xFFAAAAAA : 0xFF444455);
+        guiGraphics.fill(x + 69, y + 153, x + 70, y + 167, hoverMobs ? 0xFFAAAAAA : 0xFF444455);
+        guiGraphics.fill(x + 123, y + 153, x + 124, y + 167, hoverMobs ? 0xFFAAAAAA : 0xFF444455);
 
         String mobLabel = mobSpawning ? "§a[✔] Mobs" : "§c[✖] Mobs";
-        guiGraphics.drawCenteredString(font, mobLabel, x + 141, y + 156, 0xFFFFFFFF);
+        guiGraphics.drawCenteredString(font, mobLabel, x + 96, y + 156, 0xFFFFFFFF);
+
+        // Block Placement & Breaking checkbox (Right toggle)
+        boolean hoverBuild = mouseX >= x + 128 && mouseX <= x + width - 10 && mouseY >= y + 153 && mouseY <= y + 167;
+        int buildBg = blockPlacingAndBreaking ? 0x3322AA44 : 0x44FF2222;
+        if (hoverBuild)
+            buildBg = blockPlacingAndBreaking ? 0x5533CC55 : 0x66FF3333;
+        guiGraphics.fill(x + 128, y + 153, x + width - 10, y + 167, buildBg);
+        guiGraphics.fill(x + 128, y + 153, x + width - 10, y + 154, hoverBuild ? 0xFFAAAAAA : 0xFF444455);
+        guiGraphics.fill(x + 128, y + 166, x + width - 10, y + 167, hoverBuild ? 0xFFAAAAAA : 0xFF444455);
+        guiGraphics.fill(x + 128, y + 153, x + 129, y + 167, hoverBuild ? 0xFFAAAAAA : 0xFF444455);
+        guiGraphics.fill(x + width - 11, y + 153, x + width - 10, y + 167, hoverBuild ? 0xFFAAAAAA : 0xFF444455);
+
+        String buildLabel = blockPlacingAndBreaking ? "§a[✔] Build" : "§c[✖] Build";
+        guiGraphics.drawCenteredString(font, buildLabel, x + 156, y + 156, 0xFFFFFFFF);
 
         guiGraphics.drawString(font, "§7Required Global Flag:", x + 10, y + 172, 0xFFCCCCCC, false);
         flagBox.render(guiGraphics, mouseX, mouseY, partialTick);
@@ -485,6 +507,12 @@ public class RegionInspectorPanel {
             guiGraphics.renderTooltip(font,
                     Component.literal(mobSpawning ? "Mob Spawning: Allowed (natural & spawner mobs can spawn)"
                             : "Mob Spawning: Blocked (prevents mobs from spawning)"),
+                    mouseX, mouseY);
+        } else if (hoverBuild) {
+            guiGraphics.renderTooltip(font,
+                    Component.literal(blockPlacingAndBreaking
+                            ? "Block Placement & Breaking: Allowed"
+                            : "Block Placement & Breaking: Blocked (interactions like chests/levers kept)"),
                     mouseX, mouseY);
         }
     }

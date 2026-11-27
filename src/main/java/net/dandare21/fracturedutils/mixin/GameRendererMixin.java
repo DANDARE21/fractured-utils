@@ -3,33 +3,21 @@ package net.dandare21.fracturedutils.mixin;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.dandare21.fracturedutils.client.camera.SequencerViewportManager;
 import net.minecraft.client.renderer.GameRenderer;
-import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
 
-    @Shadow private float zoom;
-    @Shadow private float zoomX;
-    @Shadow private float zoomY;
-    @Shadow private float renderDistance;
-
-    @Inject(method = "getProjectionMatrix", at = @At("HEAD"), cancellable = true)
-    private void onGetProjectionMatrix(double fov, CallbackInfoReturnable<Matrix4f> cir) {
+    @ModifyArg(method = "getProjectionMatrix", at = @At(value = "INVOKE", target = "Lorg/joml/Matrix4f;setPerspective(FFFF)Lorg/joml/Matrix4f;", remap = false), index = 1)
+    private float modifyProjectionMatrixAspectRatio(float originalAspectRatio) {
         if (SequencerViewportManager.isActive()) {
-            Matrix4f matrix4f = new Matrix4f();
-            if (this.zoom != 1.0F) {
-                matrix4f.translate(this.zoomX, -this.zoomY, 0.0F);
-                matrix4f.scale(this.zoom, this.zoom, 1.0F);
-            }
-            matrix4f.perspective((float) (fov * (Math.PI / 180.0)), SequencerViewportManager.getAspectRatio(), 0.05F, this.renderDistance * 4.0F);
-            cir.setReturnValue(matrix4f);
+            return SequencerViewportManager.getAspectRatio();
         }
+        return originalAspectRatio;
     }
 
     @Inject(method = "renderLevel", at = @At("HEAD"))

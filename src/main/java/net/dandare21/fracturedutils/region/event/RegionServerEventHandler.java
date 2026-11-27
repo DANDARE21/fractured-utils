@@ -124,10 +124,16 @@ public class RegionServerEventHandler {
         if (event.getPlayer() instanceof ServerPlayer player) {
             if (player.hasPermissions(2) || player.getServer() == null) return;
             WorldRegionSavedData data = WorldRegionSavedData.get(player.getServer());
-            Region locked = data.findLockedZoneAt(event.getPos().getX(), event.getPos().getZ());
+            Region locked = data.findLockedZoneAt(event.getPos().getX() + 0.5D, event.getPos().getZ() + 0.5D);
             if (locked != null) {
                 event.setCanceled(true);
                 player.displayClientMessage(Component.literal("§c[Locked] You cannot break blocks inside " + locked.getName()), true);
+                return;
+            }
+            Region protectedRegion = data.findBlockProtectionZoneAt(event.getPos().getX() + 0.5D, event.getPos().getZ() + 0.5D);
+            if (protectedRegion != null) {
+                event.setCanceled(true);
+                player.displayClientMessage(Component.literal("§c[Protected] You cannot break blocks inside " + protectedRegion.getName()), true);
             }
         }
     }
@@ -137,10 +143,16 @@ public class RegionServerEventHandler {
         if (event.getEntity() instanceof ServerPlayer player) {
             if (player.hasPermissions(2) || player.getServer() == null) return;
             WorldRegionSavedData data = WorldRegionSavedData.get(player.getServer());
-            Region locked = data.findLockedZoneAt(event.getPos().getX(), event.getPos().getZ());
+            Region locked = data.findLockedZoneAt(event.getPos().getX() + 0.5D, event.getPos().getZ() + 0.5D);
             if (locked != null) {
                 event.setCanceled(true);
                 player.displayClientMessage(Component.literal("§c[Locked] You cannot place blocks inside " + locked.getName()), true);
+                return;
+            }
+            Region protectedRegion = data.findBlockProtectionZoneAt(event.getPos().getX() + 0.5D, event.getPos().getZ() + 0.5D);
+            if (protectedRegion != null) {
+                event.setCanceled(true);
+                player.displayClientMessage(Component.literal("§c[Protected] You cannot place blocks inside " + protectedRegion.getName()), true);
             }
         }
     }

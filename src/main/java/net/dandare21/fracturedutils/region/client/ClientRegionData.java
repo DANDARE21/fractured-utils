@@ -125,6 +125,25 @@ public class ClientRegionData {
         return true;
     }
 
+    public synchronized boolean isBlockPlacingAndBreakingAllowedAt(double x, double z) {
+        List<Region> atPos = findAllRegionsAt(x, z);
+        if (!atPos.isEmpty()) {
+            return atPos.get(0).isBlockPlacingAndBreakingAllowed();
+        }
+        return true;
+    }
+
+    public synchronized Region findBlockProtectionZoneAt(double x, double z) {
+        List<Region> atPos = findAllRegionsAt(x, z);
+        if (!atPos.isEmpty()) {
+            Region innermost = atPos.get(0);
+            if (!innermost.isBlockPlacingAndBreakingAllowed()) {
+                return innermost;
+            }
+        }
+        return null;
+    }
+
     public synchronized Vec2d snapVertex(double x, double z, double threshold) {
         for (Region r : regions.values()) {
             if (r.getPolygon() != null) {

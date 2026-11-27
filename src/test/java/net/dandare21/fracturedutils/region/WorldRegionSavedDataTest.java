@@ -1,10 +1,13 @@
 package net.dandare21.fracturedutils.region;
 
+import io.netty.buffer.Unpooled;
 import net.dandare21.fracturedutils.region.data.Polygon2D;
 import net.dandare21.fracturedutils.region.data.Region;
 import net.dandare21.fracturedutils.region.data.RegionType;
 import net.dandare21.fracturedutils.region.data.Vec2d;
 import net.dandare21.fracturedutils.region.data.WorldRegionSavedData;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.FriendlyByteBuf;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -173,6 +176,113 @@ public class WorldRegionSavedDataTest {
         Region selected = data.findPrimaryRegionAt(50, 50);
         assertNotNull(selected);
         assertEquals("inner_district", selected.getId(), "Smaller nested region within same tier must be prioritized");
+    }
+
+    @Test
+    public void testBlockPlacingAndBreakingHierarchy() {
+        WorldRegionSavedData data = new WorldRegionSavedData();
+
+        // 1. Macro-Region: 0..100, 0..100, block placement/breaking disabled
+        Region mapZone = new Region(
+                "ashen_coast", "The Ashen Coast", RegionType.MAP_ZONE, "",
+                new Polygon2D(List.of(
+                        new Vec2d(0, 0),
+                        new Vec2d(100, 0),
+                        new Vec2d(100, 100),
+                        new Vec2d(0, 100)
+                )),
+                false, "", "", 0x00D0FF, "", "", true, false
+        );
+        data.addOrUpdateRegion(mapZone);
+
+        // 2. City: 20..60, 20..60 (inside Map Zone), block placement/breaking enabled
+        Region city = new Region(
+                "harbor_city", "Harbor City", RegionType.CITY, "ashen_coast",
+                new Polygon2D(List.of(
+                        new Vec2d(20, 20),
+                        new Vec2d(60, 20),
+                        new Vec2d(60, 60),
+                        new Vec2d(20, 60)
+                )),
+                false, "", "", 0xFFBB00, "", "", true, true
+        );
+        data.addOrUpdateRegion(city);
+
+        // 3. Event Zone: 30..40, 30..40 (inside City), block placement/breaking disabled
+        Region eventZone = new Region(
+                "sunken_vault", "Sunken Vault", RegionType.EVENT_ZONE, "harbor_city",
+                new Polygon2D(List.of(
+                        new Vec2d(30, 30),
+                        new Vec2d(40, 30),
+                        new Vec2d(40, 40),
+                        new Vec2d(30, 40)
+                )),
+                false, "", "", 0xFF2255, "", "", true, false
+        );
+        data.addOrUpdateRegion(eventZone);
+
+        // Inside Event Zone (35, 35) -> innermost is eventZone, disallows block placing/breaking
+        assertFalse(data.isBlockPlacingAndBreakingAllowedAt(35, 35));
+        Region protEvent = data.findBlockProtectionZoneAt(35, 35);
+        assertNotNull(protEvent);
+        assertEquals("sunken_vault", protEvent.getId());
+
+        // Inside City but outside Event Zone (25, 25) -> innermost is city, allows block placing/breaking
+        assertTrue(data.isBlockPlacingAndBreakingAllowedAt(25, 25));
+        assertNull(data.findBlockProtectionZoneAt(25, 25));
+
+        // Inside Map Zone but outside City (5, 5) -> innermost is mapZone, disallows block placing/breaking
+        assertFalse(data.isBlockPlacingAndBreakingAllowedAt(5, 5));
+        Region protMap = data.findBlockProtectionZoneAt(5, 5);
+        assertNotNull(protMap);
+        assertEquals("ashen_coast", protMap.getId());
+
+        // Outside all regions (150, 150) -> allows block placing/breaking
+        assertTrue(data.isBlockPlacingAndBreakingAllowedAt(150, 150));
+        assertNull(data.findBlockProtectionZoneAt(150, 150));
+    }
+
+    @Test
+    public void testSetRegionBlockPlacingAndBreaking() {
+        WorldRegionSavedData data = new WorldRegionSavedData();
+        Region region = new Region(
+                "wilds", "Wilderness", RegionType.MAP_ZONE, "",
+                new Polygon2D(List.of(new Vec2d(0, 0), new Vec2d(10, 0), new Vec2d(10, 10), new Vec2d(0, 10))),
+                false, "", "", 0x00D0FF, "", ""
+        );
+        data.addOrUpdateRegion(region);
+
+        assertTrue(data.isBlockPlacingAndBreakingAllowedAt(5, 5));
+
+        boolean changed = data.setRegionBlockPlacingAndBreaking("wilds", false);
+        assertTrue(changed);
+        assertFalse(data.isBlockPlacingAndBreakingAllowedAt(5, 5));
+        assertNotNull(data.findBlockProtectionZoneAt(5, 5));
+
+        data.setRegionBlockPlacingAndBreaking("wilds", true);
+        assertTrue(data.isBlockPlacingAndBreakingAllowedAt(5, 5));
+        assertNull(data.findBlockProtectionZoneAt(5, 5));
+    }
+
+    @Test
+    public void testRegionSerializationWithBlockPlacingAndBreaking() {
+        Region r = new Region(
+                "test_r", "Test Region", RegionType.CITY, "",
+                new Polygon2D(List.of(new Vec2d(0, 0), new Vec2d(10, 0), new Vec2d(10, 10), new Vec2d(0, 10))),
+                false, "", "", 0xFFBB00, "Subtitle", "music:theme", true, false
+        );
+
+        // NBT
+        CompoundTag tag = r.toNbt();
+        Region fromNbt = Region.fromNbt(tag);
+        assertFalse(fromNbt.isBlockPlacingAndBreakingAllowed());
+
+        // FriendlyByteBuf
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        r.encode(buf);
+        Region fromBuf = Region.decode(buf);
+        assertFalse(fromBuf.isBlockPlacingAndBreakingAllowed());
+        assertEquals(r.getId(), fromBuf.getId());
     }
 }
 

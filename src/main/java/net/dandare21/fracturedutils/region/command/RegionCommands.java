@@ -84,6 +84,24 @@ public class RegionCommands {
                                 .then(Commands.argument("enabled", BoolArgumentType.bool())
                                         .executes(ctx -> setMobSpawning(ctx, StringArgumentType.getString(ctx, "id"),
                                                 BoolArgumentType.getBool(ctx, "enabled"))))))
+                .then(Commands.literal("build")
+                        .then(Commands.argument("id", StringArgumentType.word())
+                                .suggests(SUGGEST_REGION_IDS)
+                                .then(Commands.argument("enabled", BoolArgumentType.bool())
+                                        .executes(ctx -> setBlockPlacingAndBreaking(ctx, StringArgumentType.getString(ctx, "id"),
+                                                BoolArgumentType.getBool(ctx, "enabled"))))))
+                .then(Commands.literal("blockediting")
+                        .then(Commands.argument("id", StringArgumentType.word())
+                                .suggests(SUGGEST_REGION_IDS)
+                                .then(Commands.argument("enabled", BoolArgumentType.bool())
+                                        .executes(ctx -> setBlockPlacingAndBreaking(ctx, StringArgumentType.getString(ctx, "id"),
+                                                BoolArgumentType.getBool(ctx, "enabled"))))))
+                .then(Commands.literal("blockbreakplace")
+                        .then(Commands.argument("id", StringArgumentType.word())
+                                .suggests(SUGGEST_REGION_IDS)
+                                .then(Commands.argument("enabled", BoolArgumentType.bool())
+                                        .executes(ctx -> setBlockPlacingAndBreaking(ctx, StringArgumentType.getString(ctx, "id"),
+                                                BoolArgumentType.getBool(ctx, "enabled"))))))
                 .then(Commands.literal("subtitle")
                         .then(Commands.argument("id", StringArgumentType.word())
                                 .suggests(SUGGEST_REGION_IDS)
@@ -134,6 +152,30 @@ public class RegionCommands {
             src.sendSuccess(
                     () -> Component
                             .literal("§c[Region] Mob spawning disabled for: §f" + r.getName() + " §7(" + id + ")"),
+                    true);
+        }
+        return 1;
+    }
+
+    private static int setBlockPlacingAndBreaking(CommandContext<CommandSourceStack> ctx, String id, boolean enabled) {
+        CommandSourceStack src = ctx.getSource();
+        WorldRegionSavedData data = WorldRegionSavedData.get(src.getServer());
+        Region r = data.getRegion(id);
+        if (r == null) {
+            src.sendFailure(Component.literal("Region not found: " + id));
+            return 0;
+        }
+
+        RegionManager.getInstance().setRegionBlockPlacingAndBreaking(id, enabled);
+        if (enabled) {
+            src.sendSuccess(
+                    () -> Component
+                            .literal("§a[Region] Block placement & breaking enabled for: §f" + r.getName() + " §7(" + id + ")"),
+                    true);
+        } else {
+            src.sendSuccess(
+                    () -> Component
+                            .literal("§c[Region] Block placement & breaking disabled for: §f" + r.getName() + " §7(" + id + ") (interactions kept)"),
                     true);
         }
         return 1;
@@ -198,8 +240,9 @@ public class RegionCommands {
                             ? " §7(Flag: §e" + r.getRequiredFlag() + "§7)"
                             : "";
                     String mobText = r.isMobSpawningAllowed() ? "" : " §c[NO MOBS]";
+                    String buildText = r.isBlockPlacingAndBreakingAllowed() ? "" : " §c[NO BUILD]";
                     src.sendSuccess(() -> Component.literal(
-                            "  §f" + r.getName() + " §8(§7" + r.getId() + "§8) " + lockText + flagText + mobText),
+                            "  §f" + r.getName() + " §8(§7" + r.getId() + "§8) " + lockText + flagText + mobText + buildText),
                             false);
                 }
             }
@@ -234,6 +277,9 @@ public class RegionCommands {
                 false);
         src.sendSuccess(
                 () -> Component.literal(" §7Mob Spawning: " + (r.isMobSpawningAllowed() ? "§aEnabled" : "§cDisabled")),
+                false);
+        src.sendSuccess(
+                () -> Component.literal(" §7Block Placing & Breaking: " + (r.isBlockPlacingAndBreakingAllowed() ? "§aEnabled" : "§cDisabled")),
                 false);
         if (!r.getRequiredFlag().isEmpty()) {
             boolean flagActive = data.isFlagActive(r.getRequiredFlag());
